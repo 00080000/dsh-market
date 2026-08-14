@@ -35,6 +35,12 @@ const zh = {
   loadFail: '插件目录加载失败，请稍后重试',
   installFail: '安装失败',
   viewSource: '源码',
+  update: '更新',
+  updating: '更新中…',
+  updated: '✓ 已更新，重启后生效',
+  updateFail: '更新失败',
+  upToDate: '已是最新',
+  linkedDev: '本地开发链接',
 }
 
 const en = {
@@ -58,6 +64,12 @@ const en = {
   loadFail: 'Failed to load the plugin catalog, please retry later',
   installFail: 'Install failed',
   viewSource: 'Source',
+  update: 'Update',
+  updating: 'Updating…',
+  updated: '✓ Updated — restart to apply',
+  updateFail: 'Update failed',
+  upToDate: 'Up to date',
+  linkedDev: 'linked (dev)',
 }
 
 const CSS = `
@@ -93,6 +105,8 @@ const CSS = `
 .dshm-btn.busy{opacity:.65;cursor:default}
 .dshm-btn.done{background:transparent;color:var(--dsw-alias-state-success-primary,#16a34a);cursor:default}
 .dshm-btn.ghost{background:var(--dsw-alias-bg-layer-2,#f3f4f6);color:var(--dsw-alias-label-secondary,#6b7280)}
+.dshm-btn.upd{background:var(--dsw-alias-state-warn-primary,#ea580c);color:#fff}
+.dshm-dot{display:inline-block;width:7px;height:7px;border-radius:99px;background:var(--dsw-alias-state-error-primary,#ef4444);margin-left:5px;vertical-align:2px}
 .dshm-empty{color:var(--dsw-alias-label-secondary,#9ca3af);font-size:13px;padding:32px;text-align:center}
 .dshm-err{color:var(--dsw-alias-state-error-primary,#dc2626);font-size:12px;margin:8px 0;white-space:pre-wrap;word-break:break-all}
 .dshm-mask{position:fixed;inset:0;background:rgba(15,18,25,.4);display:flex;align-items:center;justify-content:center;z-index:1000}
@@ -152,6 +166,20 @@ function MarketSection(props) {
   const [busyUrl, setBusyUrl] = useState(null)
   const [doneUrls, setDoneUrls] = useState([])
   const [installError, setInstallError] = useState(null)
+  const [updates, setUpdates] = useState({})
+  const [updatingName, setUpdatingName] = useState(null)
+  const [updatedNames, setUpdatedNames] = useState([])
+
+  const refreshInstalled = useCallback(() => {
+    fetch('/dsh-market/installed', { cache: 'no-store' })
+      .then(res => res.json())
+      .then(body => setInstalled(body.installed || {}))
+      .catch(() => {})
+    fetch('/dsh-market/updates', { cache: 'no-store' })
+      .then(res => res.json())
+      .then(body => setUpdates(body.updates || {}))
+      .catch(() => {})
+  }, [])
 
   useEffect(() => {
     injectStyles()
@@ -160,14 +188,7 @@ function MarketSection(props) {
       .then(body => setData(body.registry))
       .catch(() => setLoadError(true))
     refreshInstalled()
-  }, [])
-
-  const refreshInstalled = useCallback(() => {
-    fetch('/dsh-market/installed', { cache: 'no-store' })
-      .then(res => res.json())
-      .then(body => setInstalled(body.installed || {}))
-      .catch(() => {})
-  }, [])
+  }, [refreshInstalled])
 
   const plugins = useMemo(() => {
     if (data === null) return []
@@ -206,6 +227,34 @@ function MarketSection(props) {
       .finally(() => setBusyUrl(null))
   }, [refreshInstalled, t])
 
+  const doUpdate = useCallback((name) => {
+    setInstallError(null)
+    setUpdatingName(name)
+    fetch('/dsh-market/update', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name }),
+    })
+      .then(res => res.json().then(body => ({ status: res.status, body })))
+      .then(({ status, body }) => {
+        if (status === 200 && body.ok) {
+          setUpdatedNames(names => names.concat(name))
+          refreshInstalled()
+        } else {
+          const text = v => typeof v === 'string' ? v : (v && typeof v.text === 'string') ? v.text : v == null ? '' : JSON.stringify(v)
+          const detail = text(body.error) || text(body.stderr) || text(body.stdout) || ('exit ' + body.exitCode)
+          setInstallError(t('updateFail') + ': ' + name + ' — ' + detail.trim().slice(-600))
+        }
+      })
+      .catch(error => setInstallError(t('updateFail') + ': ' + String(error)))
+      .finally(() => setUpdatingName(null))
+  }, [refreshInstalled, t])
+
+  const pendingRestart = doneUrls.length + updatedNames.length
+  const hasUpdates = Object.keys(installed).some(
+    name => !updatedNames.includes(name) && updates[name] && updates[name].updateAvailable,
+  )
+
   const categories = data === null ? [] : Object.keys(data.categories)
 
   return h('div', { className: 'dshm-root' },
@@ -217,10 +266,11 @@ function MarketSection(props) {
       h('div', { className: 'dshm-tabs' },
         h('button', { className: 'dshm-tab' + (tab === 'discover' ? ' on' : ''), onClick: () => setTab('discover') }, t('tabDiscover')),
         h('button', { className: 'dshm-tab' + (tab === 'installed' ? ' on' : ''), onClick: () => { setTab('installed'); refreshInstalled() } },
-          t('tabInstalled') + (Object.keys(installed).length > 0 ? ' (' + Object.keys(installed).length + ')' : ''))),
-      doneUrls.length > 0 && h('div', { className: 'dshm-restart' },
+          t('tabInstalled') + (Object.keys(installed).length > 0 ? ' (' + Object.keys(installed).length + ')' : ''),
+          hasUpdates && h('span', { className: 'dshm-dot' }))),
+      pendingRestart > 0 && h('div', { className: 'dshm-restart' },
         h('span', null, '🔄'),
-        h('span', { className: 'dshm-grow' }, h('b', null, doneUrls.length), ' ', t('restartBanner')),
+        h('span', { className: 'dshm-grow' }, h('b', null, pendingRestart), ' ', t('restartBanner')),
         h('span', { title: t('restartHint') }, 'ℹ️'))),
     installError !== null && h('div', { className: 'dshm-err' }, installError),
     h('div', { className: 'dshm-body' },
@@ -274,14 +324,29 @@ function MarketSection(props) {
           : Object.entries(installed).map(([name, spec]) => {
               const entry = data === null ? undefined : data.plugins.find(p => p.name === name
                 || (repoOf(p.url) !== null && String(spec).toLowerCase().includes(('github:' + repoOf(p.url)).toLowerCase())))
+              const status = updates[name]
+              const version = status && status.version ? 'v' + status.version : ''
               return h('div', { key: name, className: 'dshm-irow' },
                 h('div', { style: { minWidth: 0 } },
-                  h('div', { className: 'dshm-nm' }, name),
+                  h('div', { className: 'dshm-nm' }, name, version && h('span', { className: 'dshm-owner' }, ' ' + version)),
                   h('div', { className: 'dshm-spec' }, String(spec)),
                   entry !== undefined && h('div', { className: 'dshm-desc', style: { minHeight: 0 } },
                     (entry.description && (entry.description[lang] || entry.description.en)) || '')),
                 h('span', { className: 'dshm-grow' }),
-                entry !== undefined && h('a', { className: 'dshm-src', href: entry.url, target: '_blank', rel: 'noreferrer' }, t('viewSource')))
+                entry !== undefined && h('a', { className: 'dshm-src', href: entry.url, target: '_blank', rel: 'noreferrer' }, t('viewSource')),
+                updatedNames.includes(name)
+                  ? h('button', { className: 'dshm-btn done' }, t('updated'))
+                  : updatingName === name
+                    ? h('button', { className: 'dshm-btn upd busy' }, t('updating'))
+                    : status && status.updateAvailable
+                      ? h('button', {
+                          className: 'dshm-btn upd',
+                          disabled: updatingName !== null,
+                          onClick: () => doUpdate(name),
+                        }, t('update'))
+                      : status && status.kind === 'linked'
+                        ? h('span', { className: 'dshm-owner' }, t('linkedDev'))
+                        : h('span', { className: 'dshm-owner' }, t('upToDate')))
             })),
     confirming !== null && h('div', { className: 'dshm-mask', onClick: e => { if (e.target === e.currentTarget) setConfirming(null) } },
       h('div', { className: 'dshm-modal' },
