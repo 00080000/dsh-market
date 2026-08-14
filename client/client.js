@@ -35,6 +35,8 @@ const zh = {
   loadFail: '插件目录加载失败，请稍后重试',
   installFail: '安装失败',
   viewSource: '源码',
+  hotBanner: '个新插件已装好，刷新页面即可使用',
+  refresh: '刷新页面',
   update: '更新',
   updating: '更新中…',
   updated: '✓ 已更新，重启后生效',
@@ -64,6 +66,8 @@ const en = {
   loadFail: 'Failed to load the plugin catalog, please retry later',
   installFail: 'Install failed',
   viewSource: 'Source',
+  hotBanner: 'new plugin(s) ready — refresh the page to use them',
+  refresh: 'Refresh',
   update: 'Update',
   updating: 'Updating…',
   updated: '✓ Updated — restart to apply',
@@ -169,6 +173,7 @@ function MarketSection(props) {
   const [updates, setUpdates] = useState({})
   const [updatingName, setUpdatingName] = useState(null)
   const [updatedNames, setUpdatedNames] = useState([])
+  const [hotUrls, setHotUrls] = useState([])
 
   const refreshInstalled = useCallback(() => {
     fetch('/dsh-market/installed', { cache: 'no-store' })
@@ -215,7 +220,8 @@ function MarketSection(props) {
       .then(res => res.json().then(body => ({ status: res.status, body })))
       .then(({ status, body }) => {
         if (status === 200 && body.ok) {
-          setDoneUrls(urls => urls.concat(plugin.url))
+          if (body.hot) setHotUrls(urls => urls.concat(plugin.url))
+          else setDoneUrls(urls => urls.concat(plugin.url))
           refreshInstalled()
         } else {
           const text = v => typeof v === 'string' ? v : (v && typeof v.text === 'string') ? v.text : v == null ? '' : JSON.stringify(v)
@@ -268,6 +274,10 @@ function MarketSection(props) {
         h('button', { className: 'dshm-tab' + (tab === 'installed' ? ' on' : ''), onClick: () => { setTab('installed'); refreshInstalled() } },
           t('tabInstalled') + (Object.keys(installed).length > 0 ? ' (' + Object.keys(installed).length + ')' : ''),
           hasUpdates && h('span', { className: 'dshm-dot' }))),
+      hotUrls.length > 0 && h('div', { className: 'dshm-restart' },
+        h('span', null, '✨'),
+        h('span', { className: 'dshm-grow' }, h('b', null, hotUrls.length), ' ', t('hotBanner')),
+        h('button', { className: 'dshm-btn install', onClick: () => location.reload() }, t('refresh'))),
       pendingRestart > 0 && h('div', { className: 'dshm-restart' },
         h('span', null, '🔄'),
         h('span', { className: 'dshm-grow' }, h('b', null, pendingRestart), ' ', t('restartBanner')),
@@ -291,7 +301,7 @@ function MarketSection(props) {
                   ? h('div', { className: 'dshm-empty' }, t('empty'))
                   : h('div', { className: 'dshm-grid' }, plugins.map(p => {
                       const desc = (p.description && (p.description[lang] || p.description.en)) || ''
-                      const done = doneUrls.includes(p.url)
+                      const done = doneUrls.includes(p.url) || hotUrls.includes(p.url)
                       const already = isInstalled(p, installed)
                       const busy = busyUrl === p.url
                       return h('div', { key: p.url, className: 'dshm-card' },

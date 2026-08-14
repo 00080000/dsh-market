@@ -12,6 +12,7 @@ import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { loadRegistry } from './registry.ts'
+import { cleanHotDir, hotMount } from './hot.ts'
 
 export interface WebServerService {
   register(route: {
@@ -23,7 +24,8 @@ export interface WebServerService {
 
 export interface MarketHost {
   webServer: WebServerService
-  logger?: { warn(message: string): void }
+  plugin(plugin: unknown, config: unknown): { await(): Promise<unknown>; dispose(): Promise<unknown> | void }
+  logger?: { info?(message: string): void; warn(message: string): void }
 }
 
 export interface MarketConfig {
@@ -238,6 +240,9 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
   if (!PROFILE_RE.test(config.profile)) {
     throw new Error(`dsh-market: invalid profile name: ${config.profile}`)
   }
+  // Boot-time wipe: stale hot-mount inputs from a previous session must never
+  // survive into a composition where the bundle layer already covers them.
+  cleanHotDir(profileDir(config.profile))
   let installing = false
 
   const disposers = [
@@ -378,16 +383,29 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
           }
           installing = true
           try {
+            const before = new Set(Object.keys(readInstalled(config.profile)))
             const result = await runDshPlugin(config.profile, ['add', `github:${repo}`])
             const ok = result.exitCode === 0 && !result.timedOut
             if (ok) updatesCache = null
+            const installed = readInstalled(config.profile)
+            let hot = false
+            if (ok) {
+              const added = Object.keys(installed).filter(name => !before.has(name))
+              if (added.length > 0) {
+                const results = await Promise.all(
+                  added.map(name => hotMount(host, profileDir(config.profile), name)),
+                )
+                hot = results.every(Boolean)
+              }
+            }
             sendJson(response, ok ? 200 : 502, {
               ok,
+              hot,
               exitCode: result.exitCode,
               timedOut: result.timedOut,
               stdout: result.stdout,
               stderr: result.stderr,
-              installed: readInstalled(config.profile),
+              installed,
             })
           } finally {
             installing = false
