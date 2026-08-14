@@ -18,7 +18,7 @@ export type Config = Partial<MarketConfig>
  */
 export function apply(ctx: Context, config?: Config): void {
   const resolved: MarketConfig = { profile: config?.profile ?? 'web' }
-  ctx.inject(['webServer', 'shell'], (hostCtx: Context) => {
+  ctx.inject(['webServer'], (hostCtx: Context) => {
     const host = hostCtx as unknown as MarketHost & {
       effect(callback: () => () => void, label: string): void
     }

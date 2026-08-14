@@ -197,8 +197,9 @@ function MarketSection(props) {
           setDoneUrls(urls => urls.concat(plugin.url))
           refreshInstalled()
         } else {
-          const detail = body.error || body.stderr || ('exit ' + body.exitCode)
-          setInstallError(t('installFail') + ': ' + plugin.name + ' — ' + String(detail).slice(-600))
+          const text = v => typeof v === 'string' ? v : (v && typeof v.text === 'string') ? v.text : v == null ? '' : JSON.stringify(v)
+          const detail = text(body.error) || text(body.stderr) || text(body.stdout) || ('exit ' + body.exitCode)
+          setInstallError(t('installFail') + ': ' + plugin.name + ' — ' + detail.trim().slice(-600))
         }
       })
       .catch(error => setInstallError(t('installFail') + ': ' + String(error)))

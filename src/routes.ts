@@ -6,9 +6,10 @@
  * same-origin POSTs and only sources present in the curated registry.
  */
 
+import { execFile } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { loadRegistry } from './registry.ts'
 
@@ -20,24 +21,8 @@ export interface WebServerService {
   }): () => void
 }
 
-export interface ShellService {
-  resolve(request: {
-    command: string
-    timeoutMs?: number
-    stdoutMaxBytes?: number
-  }): unknown
-  run(spec: unknown): Promise<{
-    exitCode: number | null
-    timedOut: boolean
-    aborted: boolean
-    stdout?: string
-    stderr?: string
-  }>
-}
-
 export interface MarketHost {
   webServer: WebServerService
-  shell: ShellService
   logger?: { warn(message: string): void }
 }
 
@@ -50,21 +35,48 @@ const PROFILE_RE = /^[A-Za-z0-9_-]+$/
 const REPO_RE = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/
 const INSTALL_TIMEOUT_MS = 5 * 60 * 1000
 
-function quoted(path: string): string {
-  return path.includes(' ') ? `"${path}"` : path
-}
-
 /**
- * Shell prefix re-invoking the CLI that launched this host process, so installs
- * work whether dsh runs from a global bin, a local install, or repo source
+ * Argv re-invoking the CLI that launched this host process, so installs work
+ * whether dsh runs from a global bin, a local install, or repo source
  * (`node --import tsx/esm .../bin.ts`). Falls back to a PATH `dsh`.
+ *
+ * Installs run through node:child_process, not ctx.shell: the shell service is
+ * the agent's sandboxed executor and denies writes to the profile directory.
  */
-function dshCommand(): string {
+function dshArgv(): { file: string; args: string[]; cwd: string | undefined } {
   const entry = process.argv[1]
   if (entry !== undefined && /[\\/](?:bin\.(?:js|ts)|dsh)$/.test(entry)) {
-    return [quoted(process.execPath), ...process.execArgv.map(quoted), quoted(entry)].join(' ')
+    // cwd near the entry keeps execArgv imports (tsx/esm) resolvable on source launches.
+    return { file: process.execPath, args: [...process.execArgv, entry], cwd: dirname(entry) }
   }
-  return 'dsh'
+  return { file: 'dsh', args: [], cwd: undefined }
+}
+
+interface InstallResult {
+  exitCode: number | null
+  timedOut: boolean
+  stdout: string
+  stderr: string
+}
+
+function runDshPlugin(profile: string, pluginArgs: string[]): Promise<InstallResult> {
+  const { file, args, cwd } = dshArgv()
+  return new Promise((resolvePromise) => {
+    execFile(
+      file,
+      [...args, 'plugin', '--profile', profile, ...pluginArgs],
+      { cwd, timeout: INSTALL_TIMEOUT_MS, maxBuffer: 1024 * 1024 },
+      (error, stdout, stderr) => {
+        const failed = error as (NodeJS.ErrnoException & { code?: number | string; killed?: boolean }) | null
+        resolvePromise({
+          exitCode: failed === null ? 0 : typeof failed.code === 'number' ? failed.code : 1,
+          timedOut: failed?.killed === true,
+          stdout: String(stdout),
+          stderr: String(stderr),
+        })
+      },
+    )
+  })
 }
 
 function sendJson(response: ServerResponse, status: number, payload: unknown): void {
@@ -203,20 +215,14 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
           }
           installing = true
           try {
-            const command = `${dshCommand()} plugin --profile ${config.profile} add github:${repo}`
-            const result = await host.shell.run(host.shell.resolve({
-              command,
-              timeoutMs: INSTALL_TIMEOUT_MS,
-              stdoutMaxBytes: 256 * 1024,
-            }))
-            const ok = result.exitCode === 0 && !result.timedOut && !result.aborted
+            const result = await runDshPlugin(config.profile, ['add', `github:${repo}`])
+            const ok = result.exitCode === 0 && !result.timedOut
             sendJson(response, ok ? 200 : 502, {
               ok,
-              command,
               exitCode: result.exitCode,
               timedOut: result.timedOut,
-              stdout: result.stdout ?? '',
-              stderr: result.stderr ?? '',
+              stdout: result.stdout,
+              stderr: result.stderr,
               installed: readInstalled(config.profile),
             })
           } finally {
