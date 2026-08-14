@@ -37,6 +37,11 @@ export interface MarketConfig {
   allowRestart?: boolean
 }
 
+/** Self-restart is enabled by default and disabled only by an explicit false. */
+export function restartAllowed(config: Pick<MarketConfig, 'allowRestart'>): boolean {
+  return config.allowRestart !== false
+}
+
 const PROFILE_RE = /^[A-Za-z0-9_-]+$/
 const REPO_RE = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/
 const INSTALL_TIMEOUT_MS = 5 * 60 * 1000
@@ -481,7 +486,7 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
           lastLine: progress.lastLine,
           pnpm: await probePnpm(),
           boot: BOOT_ID,
-          restart: config.allowRestart !== false,
+          restart: restartAllowed(config),
           installed: readInstalled(config.profile),
         })
       },
@@ -523,7 +528,7 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
           response.end()
           return
         }
-        if (!config.allowRestart) {
+        if (!restartAllowed(config)) {
           sendJson(response, 403, { error: 'self-restart is disabled for this host' })
           return
         }

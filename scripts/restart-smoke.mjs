@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict'
 import { dirname, join, resolve } from 'node:path'
-import { restartLaunch, trustedRestartRequest } from '../lib/routes.js'
+import { restartAllowed, restartLaunch, trustedRestartRequest } from '../lib/routes.js'
 
 function request(remoteAddress, origin = 'http://127.0.0.1:3080', host = '127.0.0.1:3080') {
   return { socket: { remoteAddress }, headers: { origin, host } }
@@ -17,6 +17,10 @@ assert.equal(trustedRestartRequest({
   ...request('127.0.0.1'),
   headers: { ...request('127.0.0.1').headers, 'x-forwarded-for': '127.0.0.1' },
 }), false)
+
+assert.equal(restartAllowed({}), true)
+assert.equal(restartAllowed({ allowRestart: true }), true)
+assert.equal(restartAllowed({ allowRestart: false }), false)
 
 const originalArgv = [...process.argv]
 try {
