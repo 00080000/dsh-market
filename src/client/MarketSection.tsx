@@ -528,9 +528,6 @@ export function MarketSection(props: MarketSectionProps) {
           {t('subtitle') + (data ? ' · ' + data.count : '') + ' · '}
           <a className={css.src} href="/dsh-market/logs" download="dsh-market-log.txt">{t('exportLog')}</a>
         </div>
-        <div className={css.search}>
-          <input placeholder={t('searchPh')} value={q} onChange={e => setQ(e.target.value)} />
-        </div>
         <div className={css.tabs}>
           <button className={tab === 'discover' ? `${css.tab} ${css.on}` : css.tab} onClick={() => setTab('discover')}>{t('tabDiscover')}</button>
           {themeSnap !== null && <button className={tab === 'themes' ? `${css.tab} ${css.on}` : css.tab} onClick={() => setTab('themes')}>{t('tabThemes')}</button>}
@@ -538,6 +535,19 @@ export function MarketSection(props: MarketSectionProps) {
             {t('tabInstalled') + (Object.keys(installed).length > 0 ? ' (' + Object.keys(installed).length + ')' : '')}
             {hasUpdates && <span className={css.dot} />}
           </button>
+          <span className={css.grow} />
+          {tab === 'discover' && data !== null && (
+            <div className={css.sort}>
+              {['hot', 'new'].map(key => (
+                <button
+                  key={key}
+                  className={sort === key ? css.on : ''}
+                  onClick={() => setSort(key)}
+                >{t(key === 'hot' ? 'sortHot' : 'sortNew')}</button>
+              ))}
+            </div>
+          )}
+          <input className={css.searchInline} placeholder={t('searchPh')} value={q} onChange={e => setQ(e.target.value)} />
         </div>
         {!envReady && (
           <div className={css.restart}>
@@ -588,25 +598,14 @@ export function MarketSection(props: MarketSectionProps) {
               : (
                   <>
                     <div className={css.cats}>
-                      <div className={css.catScroll}>
-                        <button className={cat === 'all' ? `${css.chip} ${css.on}` : css.chip} onClick={() => setCat('all')}>{t('all')}</button>
-                        {categories.map(id => (
-                          <button
-                            key={id}
-                            className={cat === id ? `${css.chip} ${css.on}` : css.chip}
-                            onClick={() => setCat(id)}
-                          >{(data.categories[id] && (data.categories[id]![lang] || data.categories[id]!.en)) || id}</button>
-                        ))}
-                      </div>
-                      <div className={css.sort}>
-                        {['hot', 'new'].map(key => (
-                          <button
-                            key={key}
-                            className={sort === key ? css.on : ''}
-                            onClick={() => setSort(key)}
-                          >{t(key === 'hot' ? 'sortHot' : 'sortNew')}</button>
-                        ))}
-                      </div>
+                      <button className={cat === 'all' ? `${css.chip} ${css.on}` : css.chip} onClick={() => setCat('all')}>{t('all')}</button>
+                      {categories.map(id => (
+                        <button
+                          key={id}
+                          className={cat === id ? `${css.chip} ${css.on}` : css.chip}
+                          onClick={() => setCat(id)}
+                        >{(data.categories[id] && (data.categories[id]![lang] || data.categories[id]!.en)) || id}</button>
+                      ))}
                     </div>
                     {plugins.length === 0
                       ? <div className={css.empty}>{t('empty')}</div>
