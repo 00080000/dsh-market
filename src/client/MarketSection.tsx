@@ -3,7 +3,7 @@
  * /dsh-market/* host routes, with install/update/uninstall flows and the
  * pending-restart bookkeeping in sessionStorage.
  */
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { Button, IconChevronDownOutline14, IconChevronUpOutline14, IconSearchOutline16, Input, Modal, Pill, StateDot } from '@deepseek-ai/dsh-client-ui-primitives'
 import css from './Market.module.css'
 import {
@@ -95,6 +95,11 @@ export function MarketSection(props: MarketSectionProps) {
   const bodyRef = useRef<HTMLDivElement | null>(null)
   const [sort, setSort] = useState('hot')
   const [catsOpen, setCatsOpen] = useState(false)
+  // How many category pills fit in the two collapsed rows (measured once —
+  // the settings panel width is fixed); null = measuring render with all
+  // pills clamped, then slice so the chevron flows inline after the last one.
+  const [visibleCats, setVisibleCats] = useState<number | null>(null)
+  const catsWrapRef = useRef<HTMLDivElement | null>(null)
 
   const refreshInstalled = useCallback((force?: boolean) => {
     fetch('/dsh-market/installed', { cache: 'no-store' })
@@ -503,6 +508,21 @@ export function MarketSection(props: MarketSectionProps) {
 
   const categories = data === null ? [] : Object.keys(data.categories)
 
+  useLayoutEffect(() => { setVisibleCats(null) }, [lang, categories.length])
+  useLayoutEffect(() => {
+    if (catsOpen || visibleCats !== null) return
+    const el = catsWrapRef.current
+    if (el === null) return
+    const chips = [...el.children].filter((c): c is HTMLElement => (c as HTMLElement).dataset?.chip === '1')
+    if (chips.length === 0) return
+    const first = chips[0]!
+    const rowThreeTop = first.offsetTop + (first.offsetHeight + 6) * 2 - 3
+    let fits = 0
+    for (const chip of chips) { if (chip.offsetTop < rowThreeTop) fits += 1 }
+    // Reserve the tail slot of row two for the chevron itself.
+    setVisibleCats(fits >= chips.length ? fits : Math.max(1, fits - 1))
+  }, [catsOpen, visibleCats, data])
+
   return (
     <div className={css.root}>
       <div className={css.head}>
@@ -595,16 +615,33 @@ export function MarketSection(props: MarketSectionProps) {
                   <>
                     <div className={css.cats}>
                       <div className={css.catsRow}>
-                      <div className={catsOpen ? css.catsWrap : `${css.catsWrap} ${css.catsCollapsed}`}>
-                        <Pill active={cat === 'all'} onClick={() => setCat('all')}>{t('all')}</Pill>
-                        {/* Collapsed, the selected category is pulled to the front so it never hides. */}
-                        {(catsOpen ? categories : cat === 'all' ? categories : [cat, ...categories.filter(id => id !== cat)]).map(id => (
-                          <Pill
-                            key={id}
-                            active={cat === id}
-                            onClick={() => setCat(id)}
-                          >{(data.categories[id] && (data.categories[id]![lang] || data.categories[id]!.en)) || id}</Pill>
-                        ))}
+                      <div ref={catsWrapRef} className={catsOpen || visibleCats === null ? `${css.catsWrap} ${css.catsCollapsed}` : css.catsWrap}>
+                        {(() => {
+                          // Collapsed, the selected category is pulled to the front so it never hides.
+                          const ordered = catsOpen || cat === 'all' ? categories : [cat, ...categories.filter(id => id !== cat)]
+                          const shown = catsOpen || visibleCats === null ? ordered : ordered.slice(0, Math.max(0, visibleCats - 1))
+                          return (
+                            <>
+                              <Pill data-chip="1" active={cat === 'all'} onClick={() => setCat('all')}>{t('all')}</Pill>
+                              {shown.map(id => (
+                                <Pill
+                                  key={id}
+                                  data-chip="1"
+                                  active={cat === id}
+                                  onClick={() => setCat(id)}
+                                >{(data.categories[id] && (data.categories[id]![lang] || data.categories[id]!.en)) || id}</Pill>
+                              ))}
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className={css.catsToggle}
+                                icon={catsOpen ? <IconChevronUpOutline14 size={14} /> : <IconChevronDownOutline14 size={14} />}
+                                aria-label={catsOpen ? t('catsLess') : t('catsMore')}
+                                onClick={() => setCatsOpen(o => !o)}
+                              />
+                            </>
+                          )
+                        })()}
                       </div>
                       <div className={css.sort}>
                         {['hot', 'new'].map(key => (
@@ -616,13 +653,6 @@ export function MarketSection(props: MarketSectionProps) {
                         ))}
                       </div>
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className={css.catsToggle}
-                        icon={catsOpen ? <IconChevronUpOutline14 size={14} /> : <IconChevronDownOutline14 size={14} />}
-                        onClick={() => setCatsOpen(o => !o)}
-                      >{catsOpen ? t('catsLess') : t('catsMore')}</Button>
                     </div>
                     {plugins.length === 0
                       ? <div className={css.empty}>{t('empty')}</div>

@@ -13,8 +13,8 @@
 .tab.on{color:var(--dsw-alias-brand-primary,#4f6ef7);border-bottom-color:var(--dsw-alias-brand-primary,#4f6ef7);font-weight:600}
 .restart{display:flex;align-items:center;gap:8px;background:var(--dsw-alias-bg-layer-2,#fdf3e3);border:1px solid var(--dsw-alias-border-l2,#f3e3c3);border-radius:8px;padding:8px 12px;font-size:12px;margin:0}
 .body{flex:1;overflow-y:auto;padding:12px 4px 24px;overflow-x:hidden}
-.cats{display:flex;flex-direction:column;gap:4px;position:sticky;top:-13px;z-index:5;background:var(--dsw-alias-bg-layer-2,#f7f8fa);padding:12px 4px 4px;margin:-12px -4px 6px;align-items:stretch}
-.catsRow{display:flex;gap:8px;align-items:flex-start}
+.cats{position:sticky;top:-13px;z-index:5;background:var(--dsw-alias-bg-layer-2,#f7f8fa);padding:12px 4px 4px;margin:-12px -4px 2px}
+.catsRow{display:flex;gap:8px;align-items:flex-start;position:relative}
 .sort{flex-shrink:0;display:flex;gap:2px;background:var(--dsw-alias-bg-layer-1,#fff);border:1px solid var(--dsw-alias-border-l1,#e5e7eb);border-radius:8px;padding:2px}
 .sort button{border:none;background:none;font:inherit;font-size:12px;color:var(--dsw-alias-label-secondary,#6b7280);padding:3px 10px;border-radius:6px;cursor:pointer}
 .sort button.on{background:var(--dsw-alias-bg-layer-1,#fff);color:var(--dsw-alias-label-primary,#1f2328);font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,.08)}
@@ -28,7 +28,7 @@
 .warnBtn.warnBtn{background:var(--dsw-alias-state-warn-primary,#ea580c);color:#fff}
 .catsWrap{display:flex;gap:6px;flex-wrap:wrap;flex:1;min-width:0;align-items:center}
 .catsCollapsed{max-height:62px;overflow:hidden}
-.catsToggle.catsToggle{align-self:flex-end;font-size:12px;color:var(--dsw-alias-label-secondary,#6b7280)}
+.catsToggle.catsToggle{height:26px;min-height:26px;padding:0 6px;color:var(--dsw-alias-label-secondary,#6b7280)}
 .cmdDetails{margin:0}
 .cmdSummary{cursor:pointer;width:fit-content;color:var(--dsw-alias-label-secondary,#6b7280);border-radius:6px;align-items:center;gap:6px;padding:2px 4px;margin-left:-4px;font-size:12px;font-weight:500;line-height:18px;list-style:none;display:flex}
 .cmdSummary::-webkit-details-marker{display:none}
