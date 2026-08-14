@@ -165,10 +165,22 @@ function trackProgress(chunk: string): void {
   if (lines.length > 0) progress.lastLine = lines[lines.length - 1].slice(0, 200)
 }
 
+/**
+ * Central allowlist for every spawn target, regardless of which route built
+ * it (defense in depth on top of per-route validation — the win32 bare-dsh
+ * fallback runs through a shell). Suggested in #16 by @anupamme.
+ */
+const TARGET_RE = /^[A-Za-z0-9@:./_#+-]+$/
+
 function runDshPlugin(profile: string, pluginArgs: string[]): Promise<InstallResult> {
   const { file, args, cwd, viaShell } = dshArgv()
+  const target = pluginArgs[pluginArgs.length - 1] ?? ''
+  if (!TARGET_RE.test(target)) {
+    logEvent('error', 'install', `unsafe plugin target rejected: ${JSON.stringify(target)}`)
+    return Promise.resolve({ exitCode: 1, timedOut: false, stdout: '', stderr: `unsafe plugin target rejected: ${JSON.stringify(target)}` })
+  }
   progress.active = true
-  progress.target = pluginArgs[pluginArgs.length - 1] ?? ''
+  progress.target = target
   progress.startedAt = Date.now()
   progress.lastLine = ''
   return new Promise((resolvePromise) => {
