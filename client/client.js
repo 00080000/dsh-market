@@ -64,10 +64,9 @@ const zh = {
   marketUpdate: '市场有新版本，升级',
   updateAll: '全部更新',
   tabThemes: '主题',
-  themeNow: '点一下立即换肤，不用重启',
-  themeMore: '安装更多主题插件（装好后按提示刷新或重启，就会出现在上面）',
+  themeMore: '更多主题',
   themeSystem: '跟随系统',
-  themeApply: '启用',
+  themeApply: '使用',
   themeActive: '使用中',
   themeLight: '浅色',
   themeDark: '深色',
@@ -127,10 +126,9 @@ const en = {
   marketUpdate: 'Market update available — upgrade',
   updateAll: 'Update all',
   tabThemes: 'Themes',
-  themeNow: 'Click to switch instantly — no restart needed',
-  themeMore: 'Install more theme plugins — after the prompted refresh or restart they appear above',
+  themeMore: 'More themes',
   themeSystem: 'Follow system',
-  themeApply: 'Apply',
+  themeApply: 'Use',
   themeActive: 'Active',
   themeLight: 'Light',
   themeDark: 'Dark',
@@ -279,6 +277,7 @@ function MarketSection(props) {
   const [data, setData] = useState(null)
   const [loadError, setLoadError] = useState(false)
   const [installed, setInstalled] = useState({})
+  const [skins, setSkins] = useState([])
   const [tab, setTab] = useState(() => {
     const saved = sessionStorage.getItem('dshm-tab')
     if (saved !== null) sessionStorage.removeItem('dshm-tab')
@@ -313,7 +312,10 @@ function MarketSection(props) {
   const refreshInstalled = useCallback((force) => {
     fetch('/dsh-market/installed', { cache: 'no-store' })
       .then(res => res.json())
-      .then(body => setInstalled(body.installed || {}))
+      .then(body => {
+        setInstalled(body.installed || {})
+        setSkins(body.skins || [])
+      })
       .catch(() => {})
     fetch('/dsh-market/updates' + (force === true ? '?force=1' : ''), { cache: 'no-store' })
       .then(res => res.json())
@@ -538,11 +540,30 @@ function MarketSection(props) {
       .finally(() => setUpdatingName(null))
   }, [refreshInstalled, t])
 
+  const doUseSkin = useCallback((name) => {
+    setInstallError(null)
+    fetch('/dsh-market/use-skin', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name }),
+    })
+      .then(res => res.json().then(body => ({ status: res.status, body })))
+      .then(({ status, body }) => {
+        if (status === 200 && body.ok) {
+          sessionStorage.setItem('dshm-tab', 'themes')
+          location.reload()
+        } else {
+          setInstallError(String(body.error || 'failed'))
+        }
+      })
+      .catch(error => setInstallError(String(error)))
+  }, [])
+
   const doUninstall = useCallback((name) => {
     setRemoveArmed(null)
     setInstallError(null)
     setRemovingName(name)
-    fetch('/dsh-market/uninstall', {
+    return fetch('/dsh-market/uninstall', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ name }),
@@ -625,6 +646,60 @@ function MarketSection(props) {
       busy && h('div', { className: 'dshm-progress', style: { margin: '6px 0 0' } },
         h('span', { className: 'dshm-spin' }),
         h('code', { className: 'dshm-grow' }, progressLine || t('progressHint'))))
+  }
+
+  const installedNameOf = (p) => {
+    if (installed[p.name] !== undefined) return p.name
+    const repo = repoOf(p.url)
+    if (repo === null) return null
+    const needle = ('github:' + repo).toLowerCase()
+    for (const [name, spec] of Object.entries(installed)) {
+      if (String(spec).toLowerCase().includes(needle)) return name
+    }
+    return null
+  }
+
+  // Plugins loaded at boot (bundle-layer skins) aren't in the shim list but
+  // are just as live; the boot manifest is the page's own record of them.
+  const bootEntries = (typeof window !== 'undefined' && window.__DSH_BOOT__ && Array.isArray(window.__DSH_BOOT__.entries))
+    ? window.__DSH_BOOT__.entries
+    : []
+
+  // Unified card for the Themes tab: install → use/in-use → uninstall.
+  const themePluginCard = (p) => {
+    const instName = installedNameOf(p)
+    if (instName === null) return pluginCard(p)
+    const mounted = skins.includes(instName) || bootEntries.some(e => e.id === instName)
+    const desc = (p.description && (p.description[lang] || p.description.en)) || ''
+    return h('div', { key: p.url, className: 'dshm-card' },
+      h('div', { className: 'dshm-row1' },
+        h('div', { className: 'dshm-av', style: { background: avatarColor(p.name) } },
+          p.name.replace(/^dsh[-_]/i, '').charAt(0).toUpperCase() || 'P'),
+        h('div', { style: { minWidth: 0 } },
+          h('div', { className: 'dshm-nm' }, p.name),
+          h('div', { className: 'dshm-owner' }, p.owner,
+            typeof p.stars === 'number' && h('span', { className: 'dshm-star' }, ' · ★ ' + p.stars))),
+        h('span', { className: 'dshm-grow' }),
+        h('a', { className: 'dshm-src', href: p.url, target: '_blank', rel: 'noreferrer', style: { alignSelf: 'flex-start', flexShrink: 0 } }, t('viewSource'))),
+      h('div', { className: 'dshm-desc' }, desc),
+      h('div', { className: 'dshm-foot' },
+        h('span', { className: 'dshm-grow' }),
+        removingName === instName
+          ? h('button', { className: 'dshm-btn danger busy' }, t('uninstalling'))
+          : removeArmed === instName
+            ? h('button', {
+                className: 'dshm-btn danger armed',
+                onClick: () => doUninstall(instName).then(() => {
+                  if (mounted) {
+                    sessionStorage.setItem('dshm-tab', 'themes')
+                    location.reload()
+                  }
+                }),
+              }, t('confirmRemove'))
+            : h('button', { className: 'dshm-btn danger', onClick: () => setRemoveArmed(instName) }, t('uninstall')),
+        mounted
+          ? h('button', { className: 'dshm-btn done' }, t('themeActive'))
+          : h('button', { className: 'dshm-btn install', onClick: () => doUseSkin(instName) }, t('themeApply'))))
   }
 
   const themeCard = (id, label, swatch) => {
@@ -734,7 +809,6 @@ function MarketSection(props) {
                   : h('div', { className: 'dshm-grid' }, plugins.map(pluginCard)))
         : tab === 'themes' && themeSnap !== null
           ? h(React.Fragment, null,
-              h('div', { className: 'dshm-sect' }, t('themeNow')),
               h('div', { className: 'dshm-grid' },
                 themeCard('system', t('themeSystem'), ['#ffffff', '#e5e7eb', '#4f6ef7', '#0f1115']),
                 themeSnap.themes.map(def => themeCard(
@@ -747,7 +821,7 @@ function MarketSection(props) {
                 ? h('div', { className: 'dshm-loading' }, h('span', { className: 'dshm-spin' }), t('loading'))
                 : themePlugins.length === 0
                   ? h('div', { className: 'dshm-empty' }, t('themeEmpty'))
-                  : h('div', { className: 'dshm-grid' }, themePlugins.map(pluginCard)))
+                  : h('div', { className: 'dshm-grid' }, themePlugins.map(themePluginCard)))
         : Object.keys(installed).length === 0
           ? h('div', { className: 'dshm-empty' }, t('installedEmpty'))
           : Object.entries(installed).map(([name, spec]) => {

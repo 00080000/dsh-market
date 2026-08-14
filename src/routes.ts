@@ -9,11 +9,11 @@
 import { spawn } from 'node:child_process'
 import type { ChildProcess } from 'node:child_process'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
-import { homedir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { loadRegistry } from './registry.ts'
-import { cleanHotDir, hotMount, hotUnmount, mountClientOnlyDeps } from './hot.ts'
+import { cleanHotDir, hotMount, hotUnmount, isSkinPkg, listShimMounts, mountClientOnlyDeps, useSkin } from './hot.ts'
 import { exportLogs, logEvent } from './log.ts'
 
 export interface WebServerService {
@@ -517,7 +517,43 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
           response.end()
           return
         }
-        sendJson(response, 200, { profile: config.profile, installed: readInstalled(config.profile) })
+        sendJson(response, 200, {
+          profile: config.profile,
+          installed: readInstalled(config.profile),
+          skins: listShimMounts(),
+        })
+      },
+    }),
+
+    host.webServer.register({
+      kind: 'exact',
+      path: '/dsh-market/use-skin',
+      handler: async (request, response) => {
+        if (request.method !== 'POST') {
+          response.writeHead(405, { allow: 'POST' })
+          response.end()
+          return
+        }
+        if (!sameOrigin(request)) {
+          sendJson(response, 403, { error: 'untrusted origin' })
+          return
+        }
+        try {
+          const body = (await readJsonBody(request)) as { name?: unknown }
+          const name = typeof body.name === 'string' ? body.name : ''
+          const installed = readInstalled(config.profile)
+          if (installed[name] === undefined || !isSkinPkg(profileDir(config.profile), name)) {
+            sendJson(response, 400, { error: 'not an installed skin' })
+            return
+          }
+          const live = await useSkin(host, profileDir(config.profile), name)
+          logEvent(live ? 'info' : 'error', 'use-skin', `${name}: ${live ? 'active' : 'failed'}`)
+          sendJson(response, live ? 200 : 502, { ok: live, skins: listShimMounts() })
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error)
+          logEvent('error', 'use-skin', `route error: ${message}`)
+          sendJson(response, 500, { error: message })
+        }
       },
     }),
 

@@ -14,7 +14,7 @@
  * for the in-tree precedent).
  */
 
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { logEvent } from './log.ts'
@@ -122,9 +122,49 @@ export function parseSimplePatch(patchText: string): HotRow[] | null {
   return rows
 }
 
-/** Wipe leftover hot-mount inputs; call once when the market host starts. */
+/**
+ * Wipe leftover hot-mount inputs; call once when the market host starts.
+ * `state.json` (skin enable/disable choices) deliberately survives.
+ */
 export function cleanHotDir(profileDir: string): void {
-  rmSync(join(profileDir, HOT_DIR), { force: true, recursive: true })
+  const dir = join(profileDir, HOT_DIR)
+  let entries: string[]
+  try {
+    entries = readdirSync(dir)
+  } catch {
+    return
+  }
+  for (const name of entries) {
+    if (/^hot-\d+\.yml$/.test(name)) rmSync(join(dir, name), { force: true })
+  }
+}
+
+/** A skin package by the ecosystem's own convention: ships a `skin.json`. */
+export function isSkinPkg(profileDir: string, packageName: string): boolean {
+  return existsSync(join(profileDir, 'node_modules', packageName, 'skin.json'))
+}
+
+function stateFile(profileDir: string): string {
+  return join(profileDir, HOT_DIR, 'state.json')
+}
+
+function readDisabledSkins(profileDir: string): Set<string> {
+  try {
+    const state = JSON.parse(readFileSync(stateFile(profileDir), 'utf8')) as { disabledSkins?: string[] }
+    return new Set(Array.isArray(state.disabledSkins) ? state.disabledSkins : [])
+  } catch {
+    return new Set()
+  }
+}
+
+function writeDisabledSkins(profileDir: string, disabled: Set<string>): void {
+  mkdirSync(join(profileDir, HOT_DIR), { recursive: true, mode: 0o700 })
+  writeFileSync(stateFile(profileDir), JSON.stringify({ disabledSkins: [...disabled] }))
+}
+
+/** Currently shim-mounted package names (client-only plugins that are live). */
+export function listShimMounts(): string[] {
+  return [...shimNames].filter(name => hotHandles.has(name))
 }
 
 let hotSequence = 0
@@ -185,6 +225,19 @@ export async function hotMount(ctx: HotContext, profileDir: string, packageName:
       // is the whole activation.
       const dsh = readPkgDsh(profileDir, packageName)
       if (dsh === null || dsh.client === undefined || dsh.bundle !== undefined) return false
+      if (isSkinPkg(profileDir, packageName)) {
+        // Skins are exclusive: activating one deactivates the others, and the
+        // choice survives restarts through state.json.
+        const disabled = readDisabledSkins(profileDir)
+        for (const other of listShimMounts()) {
+          if (other !== packageName && isSkinPkg(profileDir, other)) {
+            await hotUnmount(other)
+            disabled.add(other)
+          }
+        }
+        disabled.delete(packageName)
+        writeDisabledSkins(profileDir, disabled)
+      }
       shimNames.add(packageName)
       rows = [{ id: `client-${packageName.replace(/[^A-Za-z0-9_.-]/g, '-')}`, name: packageName }]
     }
@@ -229,12 +282,23 @@ export async function mountClientOnlyDeps(ctx: HotContext, profileDir: string): 
   } catch {
     return []
   }
+  const disabled = readDisabledSkins(profileDir)
   const mounted: string[] = []
   for (const name of deps) {
-    if (hotHandles.has(name)) continue
+    if (hotHandles.has(name) || disabled.has(name)) continue
     const dsh = readPkgDsh(profileDir, name)
     if (dsh === null || dsh.client === undefined || dsh.bundle !== undefined) continue
     if (await hotMount(ctx, profileDir, name)) mounted.push(name)
   }
   return mounted
+}
+
+/**
+ * Switch the active skin: mount `packageName` and deactivate every other
+ * mounted skin (the exclusivity lives in {@link hotMount}).
+ * @returns true when the skin is now live.
+ */
+export async function useSkin(ctx: HotContext, profileDir: string, packageName: string): Promise<boolean> {
+  if (hotHandles.has(packageName)) return true
+  return hotMount(ctx, profileDir, packageName)
 }
