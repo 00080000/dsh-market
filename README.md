@@ -13,6 +13,10 @@ The plugin market inside DeepSeek Harness. Open Settings → **Plugin Market** �
 
 ![dsh-market](assets/demo-en.png)
 
+One-click themes — install, switch live, no restart:
+
+![Themes tab](assets/themes-en.png)
+
 ## Install
 
 ```sh
@@ -23,9 +27,10 @@ Restart `dsh web`, then open **Settings → Plugin Market**.
 
 ## What you get
 
-- **Browse & search** the full community catalog (230+ plugins, growing daily) — category filters, star counts, top/new sorting, bilingual descriptions that follow your UI language
+- **Browse & search** the full community catalog (300+ plugins, growing daily) — category filters, star counts, top/new sorting, bilingual descriptions that follow your UI language
+- **Themes** — a dedicated tab for community themes and skins: install → active immediately, switch with one click (themes are mutually exclusive, your choice survives restarts), uninstall to revert
 - **One-click install** — confirm the source, watch live progress; most plugins go live after a page refresh, no restart
-- **Updates** — per-plugin update checks (npm version or pinned commit vs HEAD), one-click update; the market updates itself the same way
+- **Updates** — per-plugin update checks (npm version or pinned commit vs HEAD), one-click update, or update everything at once; the market updates itself the same way
 - **Uninstall** — two-step confirm; plugins installed this session are removed live
 - **Zero jargon** — if a component is missing (pnpm), the market detects it and offers a one-click automatic setup
 - **Log export** — one click produces a sanitized plain-text log for bug reports (home paths and credential shapes are masked; nothing is ever sent anywhere)
