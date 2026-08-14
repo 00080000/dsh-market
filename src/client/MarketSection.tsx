@@ -743,6 +743,10 @@ export function MarketSection(props: MarketSectionProps) {
             </>
           )}
         >
+          <details className={css.cmdDetails}>
+            <summary className={css.cmdSummary}>{t('cmdDetails')}</summary>
+            <div className={css.cmd}>{confirming.install}</div>
+          </details>
           {looksTerminal(confirming, lang) && (
             <p className={css.warnLine}>
               {'🖥️ ' + t('terminalWarn') + ' '}
