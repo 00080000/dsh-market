@@ -43,6 +43,7 @@ const zh = {
   updateFail: '更新失败',
   upToDate: '已是最新',
   linkedDev: '本地开发链接',
+  exportLog: '导出日志',
 }
 
 const en = {
@@ -74,6 +75,7 @@ const en = {
   updateFail: 'Update failed',
   upToDate: 'Up to date',
   linkedDev: 'linked (dev)',
+  exportLog: 'Export log',
 }
 
 const CSS = `
@@ -266,7 +268,9 @@ function MarketSection(props) {
   return h('div', { className: 'dshm-root' },
     h('div', { className: 'dshm-head' },
       h('h2', { className: 'dshm-title' }, t('nav')),
-      h('div', { className: 'dshm-sub' }, t('subtitle') + (data ? ' · ' + data.count : '')),
+      h('div', { className: 'dshm-sub' },
+        t('subtitle') + (data ? ' · ' + data.count : '') + ' · ',
+        h('a', { className: 'dshm-src', href: '/dsh-market/logs', download: 'dsh-market-log.txt' }, t('exportLog'))),
       h('div', { className: 'dshm-search' },
         h('input', { placeholder: t('searchPh'), value: q, onChange: e => setQ(e.target.value) })),
       h('div', { className: 'dshm-tabs' },

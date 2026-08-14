@@ -13,6 +13,7 @@ import { dirname, join } from 'node:path'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { loadRegistry } from './registry.ts'
 import { cleanHotDir, hotMount } from './hot.ts'
+import { exportLogs, logEvent } from './log.ts'
 
 export interface WebServerService {
   register(route: {
@@ -279,6 +280,33 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
 
     host.webServer.register({
       kind: 'exact',
+      path: '/dsh-market/logs',
+      handler: (request, response) => {
+        if (request.method !== 'GET') {
+          response.writeHead(405, { allow: 'GET' })
+          response.end()
+          return
+        }
+        let version = 'unknown'
+        try {
+          version = (JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version?: string }).version ?? version
+        } catch { /* export still works without the version line */ }
+        response.writeHead(200, {
+          'cache-control': 'no-store',
+          'content-type': 'text/plain; charset=utf-8',
+          'content-disposition': 'attachment; filename="dsh-market-log.txt"',
+        })
+        response.end(exportLogs({
+          'dsh-market': version,
+          platform: `${process.platform} ${process.arch}`,
+          node: process.version,
+          profile: config.profile,
+        }))
+      },
+    }),
+
+    host.webServer.register({
+      kind: 'exact',
       path: '/dsh-market/updates',
       handler: async (request, response) => {
         if (request.method !== 'GET') {
@@ -331,6 +359,8 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
             const result = await runDshPlugin(config.profile, ['add', target])
             const ok = result.exitCode === 0 && !result.timedOut
             if (ok) updatesCache = null
+            logEvent(ok ? 'info' : 'error', 'update',
+              `${name} -> ${target} exit=${String(result.exitCode)}${result.timedOut ? ' TIMEOUT' : ''}${ok ? '' : ` stderr=${result.stderr.slice(-300)}`}`)
             sendJson(response, ok ? 200 : 502, {
               ok,
               exitCode: result.exitCode,
@@ -345,6 +375,7 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error)
           host.logger?.warn(`[dsh-market] update failed: ${message}`)
+          logEvent('error', 'update', `route error: ${message}`)
           sendJson(response, 500, { error: message })
         }
       },
@@ -373,6 +404,7 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
           const { registry } = await loadRegistry()
           const entry = registry.plugins.find(p => p.url.toLowerCase() === url.toLowerCase())
           if (entry === undefined) {
+            logEvent('warn', 'install-rejected', `not in curated registry: ${url.slice(0, 120)}`)
             sendJson(response, 400, { error: 'plugin is not in the curated registry' })
             return
           }
@@ -398,6 +430,8 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
                 hot = results.every(Boolean)
               }
             }
+            logEvent(ok ? 'info' : 'error', 'install',
+              `github:${repo} exit=${String(result.exitCode)}${result.timedOut ? ' TIMEOUT' : ''}${ok ? ` hot=${String(hot)}` : ` stderr=${result.stderr.slice(-300)}`}`)
             sendJson(response, ok ? 200 : 502, {
               ok,
               hot,
@@ -413,6 +447,7 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error)
           host.logger?.warn(`[dsh-market] install failed: ${message}`)
+          logEvent('error', 'install', `route error: ${message}`)
           sendJson(response, 500, { error: message })
         }
       },

@@ -17,6 +17,7 @@
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { logEvent } from './log.ts'
 
 interface HotRow {
   id: string
@@ -129,10 +130,12 @@ export async function hotMount(ctx: HotContext, profileDir: string, packageName:
     const handle = ctx.plugin(HotTree, { path: pathToFileURL(file).href })
     await handle.await()
     ctx.logger?.info?.(`[dsh-market] hot-mounted ${packageName}`)
+    logEvent('info', 'hot-mount', `${packageName}: live`)
     return true
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     ctx.logger?.warn(`[dsh-market] hot mount of ${packageName} failed, restart required: ${message}`)
+    logEvent('warn', 'hot-mount', `${packageName}: fell back to restart — ${message}`)
     return false
   }
 }
