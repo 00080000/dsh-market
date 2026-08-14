@@ -224,6 +224,22 @@ function isInstalled(plugin, installed) {
   return Object.values(installed).some(spec => String(spec).toLowerCase().includes(needle))
 }
 
+/**
+ * Derive a determinate progress percentage from pnpm's streaming
+ * "Progress: resolved N, reused R, downloaded D, added A" lines.
+ * Returns null when the line carries no parseable totals (clone/other phases),
+ * in which case the UI falls back to the indeterminate sweep.
+ */
+function parseProgressPct(line) {
+  if (typeof line !== 'string') return null
+  const m = /Progress:\s*resolved\s+(\d+)(?:,\s*reused\s+(\d+))?(?:,\s*downloaded\s+(\d+))?(?:,\s*added\s+(\d+))?/.exec(line)
+  if (m === null) return null
+  const total = Number(m[1])
+  const done = Number(m[2] || 0) + Number(m[3] || 0) + Number(m[4] || 0)
+  if (!(total > 0)) return null
+  return Math.max(0, Math.min(100, Math.round(done / total * 100)))
+}
+
 function MarketSection(props) {
   const t = props.t
   const localeSnap = React.useSyncExternalStore(
@@ -251,6 +267,7 @@ function MarketSection(props) {
   const [hotUrls, setHotUrls] = useState([])
   const [hotNames, setHotNames] = useState([])
   const [progressLine, setProgressLine] = useState(null)
+  const [progressPct, setProgressPct] = useState(null)
   const [removeArmed, setRemoveArmed] = useState(null)
   const [removingName, setRemovingName] = useState(null)
   const [removedCount, setRemovedCount] = useState(0)
@@ -347,6 +364,7 @@ function MarketSection(props) {
   useEffect(() => {
     if (busyUrl === null && updatingName === null) {
       setProgressLine(null)
+      setProgressPct(null)
       return
     }
     const timer = setInterval(() => {
@@ -355,8 +373,10 @@ function MarketSection(props) {
         .then(status => {
           if (status.active) {
             setProgressLine((status.lastLine || '…') + '  (' + status.seconds + 's)')
+            setProgressPct(parseProgressPct(status.lastLine))
           } else {
             setProgressLine(null)
+            setProgressPct(null)
             setInstalled(status.installed || {})
             const pending = readSession('dshm-pending')
             if (pending !== null && busyUrl !== null) {
@@ -616,7 +636,7 @@ function MarketSection(props) {
                                     onClick: () => busyUrl !== null ? setBusyHint(t('busyWait')) : setConfirming(p),
                                   }, t('install'))),
                         busy && h('div', { className: 'dshm-progress', style: { margin: '6px 0 0', flexDirection: 'column', alignItems: 'stretch', gap: 6 } },
-                          h('div', { className: 'dshm-bar' }, h('i')),
+                          h('div', { className: 'dshm-bar' }, h('i', { style: progressPct != null ? { width: progressPct + '%', animation: 'none', background: 'var(--dsw-alias-state-business-primary,#4f6ef7)' } : undefined })),
                           h('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } },
                             h('code', { style: { flex: 1, minWidth: 0 } }, progressLine || t('progressHint')),
                             h('button', { className: 'dshm-btn ghost', onClick: doCancel }, t('cancel')))))
@@ -640,7 +660,7 @@ function MarketSection(props) {
                   entry !== undefined && h('div', { className: 'dshm-desc', style: { minHeight: 0 } },
                     (entry.description && (entry.description[lang] || entry.description.en)) || ''),
                   updatingName === name && h('div', { className: 'dshm-progress', style: { margin: '6px 0 0', flexDirection: 'column', alignItems: 'stretch', gap: 6 } },
-                    h('div', { className: 'dshm-bar' }, h('i')),
+                    h('div', { className: 'dshm-bar' }, h('i', { style: progressPct != null ? { width: progressPct + '%', animation: 'none', background: 'var(--dsw-alias-state-business-primary,#4f6ef7)' } : undefined })),
                     h('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } },
                       h('code', { style: { flex: 1, minWidth: 0 } }, progressLine || t('progressHint')),
                       h('button', { className: 'dshm-btn ghost', onClick: doCancel }, t('cancel'))))),

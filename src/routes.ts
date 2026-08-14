@@ -36,7 +36,7 @@ export interface MarketConfig {
 
 const PROFILE_RE = /^[A-Za-z0-9_-]+$/
 const REPO_RE = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/
-const INSTALL_TIMEOUT_MS = 5 * 60 * 1000
+const INSTALL_TIMEOUT_MS = Number(process.env.DSH_MARKET_INSTALL_TIMEOUT_MS) || 15 * 60 * 1000
 
 /**
  * Argv re-invoking the CLI that launched this host process, so installs work
