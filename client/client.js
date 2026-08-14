@@ -296,7 +296,7 @@ function MarketSection(props) {
       .then(res => res.json())
       .then(body => {
         setInstalled(body.installed || {})
-        setSkins(body.skins || [])
+        setSkins(body.live || [])
       })
       .catch(() => {})
     fetch('/dsh-market/updates' + (force === true ? '?force=1' : ''), { cache: 'no-store' })
@@ -433,6 +433,14 @@ function MarketSection(props) {
       .then(res => res.json().then(body => ({ status: res.status, body })))
       .then(({ status, body }) => {
         sessionStorage.removeItem('dshm-pending')
+        if (status === 200 && body.ok && body.hot && plugin.category === 'theme') {
+          // Themes auto-activate on install; reload straight into the Themes
+          // tab so the new look is on screen immediately.
+          sessionStorage.setItem('dshm-toast', JSON.stringify([plugin.name]))
+          sessionStorage.setItem('dshm-tab', 'themes')
+          location.reload()
+          return
+        }
         if (status === 200 && body.ok) {
           sessionStorage.setItem('dshm-tab', 'installed')
           if (body.hot) {

@@ -13,7 +13,10 @@ import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { loadRegistry } from './registry.ts'
-import { cleanHotDir, hotMount, hotUnmount, isSkinPkg, listShimMounts, mountClientOnlyDeps, useSkin } from './hot.ts'
+import {
+  cleanHotDir, hotMount, hotUnmount, listHotMounts,
+  mountClientOnlyDeps, readDisabledThemes, writeDisabledThemes,
+} from './hot.ts'
 import { exportLogs, logEvent } from './log.ts'
 
 export interface WebServerService {
@@ -405,6 +408,58 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
   })
   let installing = false
 
+  /** Installed package names classified as themes by the registry's theme category. */
+  async function installedThemeNames(profile: string): Promise<Set<string>> {
+    const names = new Set<string>()
+    try {
+      const { registry } = await loadRegistry()
+      const themeEntries = registry.plugins.filter(p => p.category === 'theme')
+      const themeNames = new Set(themeEntries.map(p => p.name))
+      const themeRepos = new Set(
+        themeEntries.map(p => repoOf(p.url)).filter((r): r is string => r !== null).map(r => r.toLowerCase()),
+      )
+      for (const [name, spec] of Object.entries(readInstalled(profile))) {
+        if (themeNames.has(name)) {
+          names.add(name)
+          continue
+        }
+        const match = /github:([^#\s]+)/.exec(String(spec).toLowerCase())
+        if (match !== null && themeRepos.has(match[1])) names.add(name)
+      }
+    } catch { /* registry unavailable — nothing classifies as a theme */ }
+    return names
+  }
+
+  /**
+   * Make `name` the one active theme: deactivate other market-mounted themes
+   * (persisted so the boot re-mount honors the choice) and mount it.
+   * Bundle-layer themes loaded at boot can't be deactivated yet — known
+   * limitation until enable/disable (#11) lands.
+   */
+  async function activateTheme(name: string): Promise<boolean> {
+    const dir = profileDir(config.profile)
+    const themes = await installedThemeNames(config.profile)
+    const disabled = readDisabledThemes(dir)
+    for (const other of listHotMounts()) {
+      if (other !== name && themes.has(other)) {
+        await hotUnmount(other)
+        disabled.add(other)
+      }
+    }
+    disabled.delete(name)
+    writeDisabledThemes(dir, disabled)
+    if (listHotMounts().includes(name)) return true
+    // Already loaded as a bundle layer (post-restart state) — don't mount a
+    // second fiber on top of it.
+    try {
+      const manifest = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')) as {
+        dsh?: { profile?: { bundles?: string[] } }
+      }
+      if ((manifest.dsh?.profile?.bundles ?? []).includes(name)) return true
+    } catch { /* fall through to a hot mount */ }
+    return hotMount(host, dir, name)
+  }
+
   const disposers = [
     host.webServer.register({
       kind: 'exact',
@@ -436,7 +491,7 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
         sendJson(response, 200, {
           profile: config.profile,
           installed: readInstalled(config.profile),
-          skins: listShimMounts(),
+          live: listHotMounts(),
         })
       },
     }),
@@ -458,13 +513,14 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
           const body = (await readJsonBody(request)) as { name?: unknown }
           const name = typeof body.name === 'string' ? body.name : ''
           const installed = readInstalled(config.profile)
-          if (installed[name] === undefined || !isSkinPkg(profileDir(config.profile), name)) {
-            sendJson(response, 400, { error: 'not an installed skin' })
+          const themes = await installedThemeNames(config.profile)
+          if (installed[name] === undefined || !themes.has(name)) {
+            sendJson(response, 400, { error: 'not an installed theme' })
             return
           }
-          const live = await useSkin(host, profileDir(config.profile), name)
-          logEvent(live ? 'info' : 'error', 'use-skin', `${name}: ${live ? 'active' : 'failed'}`)
-          sendJson(response, live ? 200 : 502, { ok: live, skins: listShimMounts() })
+          const activated = await activateTheme(name)
+          logEvent(activated ? 'info' : 'error', 'use-skin', `${name}: ${activated ? 'active' : 'failed'}`)
+          sendJson(response, activated ? 200 : 502, { ok: activated, live: listHotMounts() })
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error)
           logEvent('error', 'use-skin', `route error: ${message}`)
@@ -754,10 +810,15 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
             if (ok) {
               const added = Object.keys(installed).filter(name => !before.has(name))
               if (added.length > 0) {
-                const results = await Promise.all(
-                  added.map(name => hotMount(host, profileDir(config.profile), name)),
-                )
-                hot = results.every(Boolean)
+                // Theme installs auto-activate (and deactivate the previous
+                // theme) so the result is visible right after the refresh.
+                hot = true
+                for (const name of added) {
+                  const live = entry.category === 'theme'
+                    ? await activateTheme(name)
+                    : await hotMount(host, profileDir(config.profile), name)
+                  if (!live) hot = false
+                }
               }
             }
             logEvent(ok ? 'info' : 'error', 'install',
