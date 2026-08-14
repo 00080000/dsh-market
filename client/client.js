@@ -58,6 +58,16 @@ const zh = {
   sortHot: '最热',
   sortNew: '最新',
   marketUpdate: '市场有新版本，升级',
+  updateAll: '全部更新',
+  tabThemes: '主题',
+  themeNow: '点一下立即换肤，不用重启',
+  themeMore: '安装更多主题插件（装好后会出现在上面）',
+  themeSystem: '跟随系统',
+  themeApply: '启用',
+  themeActive: '使用中',
+  themeLight: '浅色',
+  themeDark: '深色',
+  themeEmpty: '目录里暂时没有更多主题插件，敬请期待',
   progressHint: '首次安装需要下载与解析依赖，大插件可能要 1-3 分钟',
   toastReady: '已装好并已生效',
   gotIt: '知道了',
@@ -107,6 +117,16 @@ const en = {
   sortHot: 'Top',
   sortNew: 'New',
   marketUpdate: 'Market update available — upgrade',
+  updateAll: 'Update all',
+  tabThemes: 'Themes',
+  themeNow: 'Click to switch instantly — no restart needed',
+  themeMore: 'Install more theme plugins (they appear above once installed)',
+  themeSystem: 'Follow system',
+  themeApply: 'Apply',
+  themeActive: 'Active',
+  themeLight: 'Light',
+  themeDark: 'Dark',
+  themeEmpty: 'No more theme plugins in the catalog yet — stay tuned',
   progressHint: 'First installs download and resolve dependencies — large plugins can take 1-3 minutes',
   toastReady: 'installed and live',
   gotIt: 'Got it',
@@ -135,6 +155,10 @@ const CSS = `
 .dshm-chip{font:inherit;font-size:12px;border:1px solid var(--dsw-alias-border-l1,#e5e7eb);background:var(--dsw-alias-bg-layer-1,#fff);border-radius:99px;padding:3px 11px;cursor:pointer;color:var(--dsw-alias-label-secondary,#6b7280)}
 .dshm-chip.on{background:var(--dsw-alias-button-primary-fill,#4f6ef7);border-color:var(--dsw-alias-button-primary-fill,#4f6ef7);color:var(--dsw-alias-label-primary-foreground,#fff)}
 .dshm-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px}
+.dshm-sect{font-size:12px;color:var(--dsw-alias-label-secondary,#6b7280);margin:14px 2px 8px;font-weight:600}
+.dshm-sect:first-child{margin-top:2px}
+.dshm-swatches{display:flex;gap:0;height:34px;border-radius:8px;overflow:hidden;border:1px solid var(--dsw-alias-border-l1,#e5e7eb)}
+.dshm-swatches i{flex:1}
 .dshm-card{background:var(--dsw-alias-bg-layer-1,#fff);border:1px solid var(--dsw-alias-border-l1,#e5e7eb);border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;gap:6px}
 .dshm-row1{display:flex;align-items:center;gap:9px;min-width:0}
 .dshm-av{width:32px;height:32px;border-radius:8px;display:grid;place-items:center;font-weight:700;color:#fff;font-size:14px;flex-shrink:0}
@@ -216,6 +240,22 @@ function isInstalled(plugin, installed) {
   return Object.values(installed).some(spec => String(spec).toLowerCase().includes(needle))
 }
 
+/** The brand mark (assets/logo.svg), inlined so the header needs no extra request. */
+const LOGO_URI = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128"><rect width="128" height="128" rx="28" fill="#4F6EF7"/><rect x="24" y="24" width="80" height="8" rx="4" fill="#fff"/><path d="M24 32h26.7v2a13.3 13.3 0 0 1-26.7 0z" fill="#fff"/><path d="M50.7 32h26.6v2a13.3 13.3 0 0 1-26.6 0z" fill="#fff" opacity=".78"/><path d="M77.3 32h26.7v2a13.3 13.3 0 0 1-26.7 0z" fill="#fff"/><g fill="#fff"><path d="M28 66h4v-4h6v4h8v-4h6v4h4a4 4 0 0 1 4 4v12a4 4 0 0 1-4 4H28a4 4 0 0 1-4-4V70a4 4 0 0 1 4-4z"/><path d="M28 96h4v-4h6v4h8v-4h6v4h4a4 4 0 0 1 4 4v2a4 4 0 0 1-4 4H28a4 4 0 0 1-4-4v-2a4 4 0 0 1 4-4z"/><path d="M72 96h4v-4h6v4h8v-4h6v4h4a4 4 0 0 1 4 4v2a4 4 0 0 1-4 4H72a4 4 0 0 1-4-4v-2a4 4 0 0 1 4-4z"/><path d="M76 56h4v-4h6v4h8v-4h6v4h4a4 4 0 0 1 4 4v12a4 4 0 0 1-4 4H76a4 4 0 0 1-4-4V60a4 4 0 0 1 4-4z" opacity=".92"/></g><rect x="70" y="82" width="36" height="4" rx="2" fill="#fff" opacity=".35"/></svg>')
+
+/** Four representative colors for a theme card's preview strip. */
+function themeSwatch(def) {
+  const tk = def.tokens || {}
+  const pick = (names) => { for (const n of names) { if (tk[n]) return tk[n] } return null }
+  const dark = def.colorScheme === 'dark'
+  return [
+    pick(['--dsw-alias-bg-base', '--dsw-alias-bg-layer-1']) || (dark ? '#0f1115' : '#ffffff'),
+    pick(['--dsw-alias-bg-layer-2', '--dsw-alias-bg-overlay']) || (dark ? '#1a1d23' : '#f3f4f6'),
+    pick(['--dsw-alias-brand-primary']) || '#4f6ef7',
+    pick(['--dsw-alias-label-primary']) || (dark ? '#e5e7eb' : '#1f2328'),
+  ]
+}
+
 function MarketSection(props) {
   const t = props.t
   const localeSnap = React.useSyncExternalStore(
@@ -223,6 +263,11 @@ function MarketSection(props) {
     () => props.locale.getSnapshot(),
   )
   const lang = String(localeSnap.active).toLowerCase().startsWith('zh') ? 'zh' : 'en'
+  // null when the composition has no theme service — the Themes tab hides.
+  const themeSnap = React.useSyncExternalStore(
+    props.themeStore.subscribe,
+    props.themeStore.getSnapshot,
+  )
   const [data, setData] = useState(null)
   const [loadError, setLoadError] = useState(false)
   const [installed, setInstalled] = useState({})
@@ -239,6 +284,7 @@ function MarketSection(props) {
   const [installError, setInstallError] = useState(null)
   const [updates, setUpdates] = useState({})
   const [updatingName, setUpdatingName] = useState(null)
+  const [updatingAll, setUpdatingAll] = useState(false)
   const [updatedNames, setUpdatedNames] = useState([])
   const [hotUrls, setHotUrls] = useState([])
   const [hotNames, setHotNames] = useState([])
@@ -418,7 +464,7 @@ function MarketSection(props) {
   const doUpdate = useCallback((name) => {
     setInstallError(null)
     setUpdatingName(name)
-    fetch('/dsh-market/update', {
+    return fetch('/dsh-market/update', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ name }),
@@ -461,16 +507,93 @@ function MarketSection(props) {
       .finally(() => setRemovingName(null))
   }, [refreshInstalled])
 
+  // The market itself stays out of the batch: its update reloads this page
+  // mid-run, which would strand the remaining items.
+  const selfName = installed['dshmarket'] !== undefined ? 'dshmarket' : 'dsh-market'
+  const updatableNames = Object.keys(installed).filter(
+    name => name !== selfName && !updatedNames.includes(name) && updates[name] && updates[name].updateAvailable,
+  )
+
+  const doUpdateAll = useCallback(() => {
+    const names = updatableNames.slice()
+    setUpdatingAll(true)
+    const next = () => {
+      const name = names.shift()
+      if (name === undefined) {
+        setUpdatingAll(false)
+        return
+      }
+      doUpdate(name).then(next, next)
+    }
+    next()
+  }, [updatableNames, doUpdate])
+
   const pendingRestart = doneUrls.length + updatedNames.length + removedCount
   const hasUpdates = Object.keys(installed).some(
     name => !updatedNames.includes(name) && updates[name] && updates[name].updateAvailable,
   )
+
+  const themePlugins = data === null ? [] : data.plugins
+    .filter(p => p.category === 'theme')
+    .sort((a, b) => (b.stars || 0) - (a.stars || 0))
+
+  const pluginCard = (p) => {
+    const desc = (p.description && (p.description[lang] || p.description.en)) || ''
+    const done = doneUrls.includes(p.url) || hotUrls.includes(p.url)
+    const already = isInstalled(p, installed)
+    const busy = busyUrl === p.url
+    return h('div', { key: p.url, className: 'dshm-card' },
+      h('div', { className: 'dshm-row1' },
+        h('div', { className: 'dshm-av', style: { background: avatarColor(p.name) } },
+          p.name.replace(/^dsh[-_]/i, '').charAt(0).toUpperCase() || 'P'),
+        h('div', { style: { minWidth: 0 } },
+          h('div', { className: 'dshm-nm' }, p.name),
+          h('div', { className: 'dshm-owner' }, p.owner,
+            typeof p.stars === 'number' && h('span', { className: 'dshm-star' }, ' · ★ ' + p.stars))),
+        h('span', { className: 'dshm-grow' }),
+        h('a', { className: 'dshm-src', href: p.url, target: '_blank', rel: 'noreferrer', style: { alignSelf: 'flex-start', flexShrink: 0 } }, t('viewSource'))),
+      h('div', { className: 'dshm-desc' }, desc),
+      h('div', { className: 'dshm-foot' },
+        h('span', { className: 'dshm-cat' },
+          (data.categories[p.category] && (data.categories[p.category][lang] || data.categories[p.category].en)) || p.category),
+        h('span', { className: 'dshm-grow' }),
+        done
+          ? h('button', { className: 'dshm-btn done' }, t('installedBadge'))
+          : already
+            ? h('button', { className: 'dshm-btn done' }, t('alreadyInstalled'))
+            : busy
+              ? h('button', { className: 'dshm-btn install busy' }, t('installing'))
+              : h('button', {
+                  className: 'dshm-btn install',
+                  disabled: busyUrl !== null || !envReady,
+                  onClick: () => setConfirming(p),
+                }, t('install'))),
+      busy && h('div', { className: 'dshm-progress', style: { margin: '6px 0 0' } },
+        h('span', { className: 'dshm-spin' }),
+        h('code', { className: 'dshm-grow' }, progressLine || t('progressHint'))))
+  }
+
+  const themeCard = (id, label, swatch) => {
+    const active = themeSnap !== null && themeSnap.preference === id
+    return h('div', { key: 'th-' + id, className: 'dshm-card' },
+      h('div', { className: 'dshm-swatches' }, swatch.map((c, i) => h('i', { key: i, style: { background: c } }))),
+      h('div', { className: 'dshm-foot' },
+        h('span', { className: 'dshm-nm' }, label),
+        h('span', { className: 'dshm-grow' }),
+        active
+          ? h('button', { className: 'dshm-btn done' }, t('themeActive'))
+          : h('button', {
+              className: 'dshm-btn install',
+              onClick: () => { try { props.theme.setTheme(id) } catch (error) { setInstallError(String(error)) } },
+            }, t('themeApply'))))
+  }
 
   const categories = data === null ? [] : Object.keys(data.categories)
 
   return h('div', { className: 'dshm-root' },
     h('div', { className: 'dshm-head' },
       h('div', { style: { display: 'flex', alignItems: 'center', gap: '10px' } },
+        h('img', { src: LOGO_URI, width: 22, height: 22, alt: '', style: { borderRadius: '5px', flexShrink: 0 } }),
         h('h2', { className: 'dshm-title' }, t('nav')),
         (() => {
           const self = installed['dshmarket'] !== undefined ? 'dshmarket' : 'dsh-market'
@@ -481,7 +604,13 @@ function MarketSection(props) {
               disabled: updatingName !== null || busyUrl !== null,
               onClick: () => { setTab('installed'); doUpdate(self) },
             }, updatingName === self ? t('updating') : t('marketUpdate'))
-        })()),
+        })(),
+        updatableNames.length >= 2 && h('button', {
+          className: 'dshm-btn upd',
+          style: { fontSize: '11px', padding: '3px 10px' },
+          disabled: updatingAll || updatingName !== null || busyUrl !== null || removingName !== null,
+          onClick: () => { setTab('installed'); doUpdateAll() },
+        }, updatingAll ? t('updating') : t('updateAll') + ' (' + updatableNames.length + ')')),
       h('div', { className: 'dshm-sub' },
         t('subtitle') + (data ? ' · ' + data.count : '') + ' · ',
         h('a', { className: 'dshm-src', href: '/dsh-market/logs', download: 'dsh-market-log.txt' }, t('exportLog'))),
@@ -489,6 +618,7 @@ function MarketSection(props) {
         h('input', { placeholder: t('searchPh'), value: q, onChange: e => setQ(e.target.value) })),
       h('div', { className: 'dshm-tabs' },
         h('button', { className: 'dshm-tab' + (tab === 'discover' ? ' on' : ''), onClick: () => setTab('discover') }, t('tabDiscover')),
+        themeSnap !== null && h('button', { className: 'dshm-tab' + (tab === 'themes' ? ' on' : ''), onClick: () => setTab('themes') }, t('tabThemes')),
         h('button', { className: 'dshm-tab' + (tab === 'installed' ? ' on' : ''), onClick: () => { setTab('installed'); refreshInstalled(true) } },
           t('tabInstalled') + (Object.keys(installed).length > 0 ? ' (' + Object.keys(installed).length + ')' : ''),
           hasUpdates && h('span', { className: 'dshm-dot' }))),
@@ -542,41 +672,23 @@ function MarketSection(props) {
                     }, t(key === 'hot' ? 'sortHot' : 'sortNew'))))),
                 plugins.length === 0
                   ? h('div', { className: 'dshm-empty' }, t('empty'))
-                  : h('div', { className: 'dshm-grid' }, plugins.map(p => {
-                      const desc = (p.description && (p.description[lang] || p.description.en)) || ''
-                      const done = doneUrls.includes(p.url) || hotUrls.includes(p.url)
-                      const already = isInstalled(p, installed)
-                      const busy = busyUrl === p.url
-                      return h('div', { key: p.url, className: 'dshm-card' },
-                        h('div', { className: 'dshm-row1' },
-                          h('div', { className: 'dshm-av', style: { background: avatarColor(p.name) } },
-                            p.name.replace(/^dsh[-_]/i, '').charAt(0).toUpperCase() || 'P'),
-                          h('div', { style: { minWidth: 0 } },
-                            h('div', { className: 'dshm-nm' }, p.name),
-                            h('div', { className: 'dshm-owner' }, p.owner,
-                              typeof p.stars === 'number' && h('span', { className: 'dshm-star' }, ' · ★ ' + p.stars))),
-                          h('span', { className: 'dshm-grow' }),
-                          h('a', { className: 'dshm-src', href: p.url, target: '_blank', rel: 'noreferrer', style: { alignSelf: 'flex-start', flexShrink: 0 } }, t('viewSource'))),
-                        h('div', { className: 'dshm-desc' }, desc),
-                        h('div', { className: 'dshm-foot' },
-                          h('span', { className: 'dshm-cat' },
-                            (data.categories[p.category] && (data.categories[p.category][lang] || data.categories[p.category].en)) || p.category),
-                          h('span', { className: 'dshm-grow' }),
-                          done
-                            ? h('button', { className: 'dshm-btn done' }, t('installedBadge'))
-                            : already
-                              ? h('button', { className: 'dshm-btn done' }, t('alreadyInstalled'))
-                              : busy
-                                ? h('button', { className: 'dshm-btn install busy' }, t('installing'))
-                                : h('button', {
-                                    className: 'dshm-btn install',
-                                    disabled: busyUrl !== null || !envReady,
-                                    onClick: () => setConfirming(p),
-                                  }, t('install'))),
-                        busy && h('div', { className: 'dshm-progress', style: { margin: '6px 0 0' } },
-                          h('span', { className: 'dshm-spin' }),
-                          h('code', { className: 'dshm-grow' }, progressLine || t('progressHint'))))
-                    })))
+                  : h('div', { className: 'dshm-grid' }, plugins.map(pluginCard)))
+        : tab === 'themes' && themeSnap !== null
+          ? h(React.Fragment, null,
+              h('div', { className: 'dshm-sect' }, t('themeNow')),
+              h('div', { className: 'dshm-grid' },
+                themeCard('system', t('themeSystem'), ['#ffffff', '#e5e7eb', '#4f6ef7', '#0f1115']),
+                themeSnap.themes.map(def => themeCard(
+                  def.id,
+                  def.id === 'light' ? t('themeLight') : def.id === 'dark' ? t('themeDark') : def.id,
+                  themeSwatch(def),
+                ))),
+              h('div', { className: 'dshm-sect' }, t('themeMore')),
+              data === null
+                ? h('div', { className: 'dshm-loading' }, h('span', { className: 'dshm-spin' }), t('loading'))
+                : themePlugins.length === 0
+                  ? h('div', { className: 'dshm-empty' }, t('themeEmpty'))
+                  : h('div', { className: 'dshm-grid' }, themePlugins.map(pluginCard)))
         : Object.keys(installed).length === 0
           ? h('div', { className: 'dshm-empty' }, t('installedEmpty'))
           : Object.entries(installed).map(([name, spec]) => {
@@ -648,7 +760,10 @@ function MarketSection(props) {
 }
 
 exports.name = 'dsh-market'
-exports.inject = ['slots', 'locale']
+// 'theme' is safe to require: ui-layout (mandatory in every web composition)
+// already hard-depends on it. This cordis's object-form inject means
+// intercept config, NOT {required,optional} — do not use it here.
+exports.inject = ['slots', 'locale', 'theme']
 exports.apply = function apply(ctx) {
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'dsh-market: dictionaries')
   const t = ctx.locale.bind(NS)
@@ -660,7 +775,15 @@ exports.apply = function apply(ctx) {
     label: () => t('nav'),
     locale: NS,
     inject: () => ({ t }),
-  }, () => h(MarketSection, { t, locale: ctx.locale })))
+  }, () => h(MarketSection, {
+    t,
+    locale: ctx.locale,
+    theme: ctx.theme,
+    themeStore: {
+      subscribe: (cb) => ctx.on('theme/change', cb),
+      getSnapshot: () => ctx.theme.getTheme(),
+    },
+  })))
 
   // Post-reload confirmation: a floating "installed and live" card in the
   // shell overlay layer, shown once after the refresh that follows a hot

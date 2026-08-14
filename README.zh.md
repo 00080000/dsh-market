@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/logo.svg" width="96" alt="dsh-market logo">
+</p>
+
 # dsh-market
 
 [English](README.md) | 中文
