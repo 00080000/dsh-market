@@ -49,7 +49,12 @@ const zh = {
   exportLog: '导出日志',
   readme: '使用说明',
   terminalWarn: '这看起来是终端/命令行插件：装进网页版可能无效，甚至导致 DeepSeek Harness 无法启动。建议先看它的使用说明，按说明装进对应的 profile。',
+  envMissing: '还差一个小组件才能安装插件',
+  envFix: '自动装好',
+  envFixing: '正在准备…',
+  envFixFail: '自动准备没成功，请点"导出日志"把文件发给我们反馈',
   loading: '正在加载插件目录…',
+  fastInstall: '已发布 npm 包，安装更快',
   progressHint: '首次安装需要下载与解析依赖，大插件可能要 1-3 分钟',
   toastReady: '已装好并已生效',
   gotIt: '知道了',
@@ -90,7 +95,12 @@ const en = {
   exportLog: 'Export log',
   readme: 'README',
   terminalWarn: 'This looks like a terminal/CLI plugin: installing it into the web profile may do nothing, or even break DeepSeek Harness startup. Read its README and install it into the profile it targets.',
+  envMissing: 'One small component is needed before installing plugins',
+  envFix: 'Set up automatically',
+  envFixing: 'Setting up…',
+  envFixFail: 'Automatic setup failed — please use "Export log" and send us the file',
   loading: 'Loading the catalog…',
+  fastInstall: 'Published on npm — installs faster',
   progressHint: 'First installs download and resolve dependencies — large plugins can take 1-3 minutes',
   toastReady: 'installed and live',
   gotIt: 'Got it',
@@ -183,9 +193,10 @@ function looksTerminal(plugin, lang) {
   return /\b(tui|cli|tty|terminal)\b|终端|命令行/i.test(plugin.name + ' ' + desc)
 }
 
-/** A registry plugin counts as installed when its package name or GitHub spec appears in the profile dependencies. */
+/** A registry plugin counts as installed when its package name, npm name, or GitHub spec appears in the profile dependencies. */
 function isInstalled(plugin, installed) {
   if (installed[plugin.name] !== undefined) return true
+  if (plugin.npm && installed[plugin.npm] !== undefined) return true
   const repo = repoOf(plugin.url)
   if (repo === null) return false
   const needle = ('github:' + repo).toLowerCase()
@@ -222,6 +233,9 @@ function MarketSection(props) {
   const [removeArmed, setRemoveArmed] = useState(null)
   const [removingName, setRemovingName] = useState(null)
   const [removedCount, setRemovedCount] = useState(0)
+  const [envReady, setEnvReady] = useState(true)
+  const [envFixing, setEnvFixing] = useState(false)
+  const [envFailed, setEnvFailed] = useState(false)
 
   const refreshInstalled = useCallback(() => {
     fetch('/dsh-market/installed', { cache: 'no-store' })
@@ -240,8 +254,25 @@ function MarketSection(props) {
       .then(res => { if (!res.ok) throw new Error('HTTP ' + res.status); return res.json() })
       .then(body => setData(body.registry))
       .catch(() => setLoadError(true))
+    fetch('/dsh-market/status', { cache: 'no-store' })
+      .then(res => res.json())
+      .then(status => setEnvReady(status.pnpm !== false))
+      .catch(() => {})
     refreshInstalled()
   }, [refreshInstalled])
+
+  const fixEnv = useCallback(() => {
+    setEnvFixing(true)
+    setEnvFailed(false)
+    fetch('/dsh-market/setup-pnpm', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })
+      .then(res => res.json())
+      .then(body => {
+        if (body.ok) setEnvReady(true)
+        else setEnvFailed(true)
+      })
+      .catch(() => setEnvFailed(true))
+      .finally(() => setEnvFixing(false))
+  }, [])
 
   // Recover an install whose HTTP response was lost (page navigated away or
   // the connection dropped): the pending marker survives in sessionStorage and
@@ -396,6 +427,14 @@ function MarketSection(props) {
         h('button', { className: 'dshm-tab' + (tab === 'installed' ? ' on' : ''), onClick: () => { setTab('installed'); refreshInstalled() } },
           t('tabInstalled') + (Object.keys(installed).length > 0 ? ' (' + Object.keys(installed).length + ')' : ''),
           hasUpdates && h('span', { className: 'dshm-dot' }))),
+      !envReady && h('div', { className: 'dshm-restart' },
+        h('span', null, '🧩'),
+        h('span', { className: 'dshm-grow' }, envFailed ? t('envFixFail') : t('envMissing')),
+        !envFailed && h('button', {
+          className: 'dshm-btn install' + (envFixing ? ' busy' : ''),
+          disabled: envFixing,
+          onClick: fixEnv,
+        }, envFixing ? t('envFixing') : t('envFix'))),
       hotUrls.length > 0 && h('div', { className: 'dshm-restart' },
         h('span', null, '✨'),
         h('span', { className: 'dshm-grow' }, h('b', null, hotUrls.length), ' ', t('hotBanner')),
@@ -438,7 +477,7 @@ function MarketSection(props) {
                           h('div', { className: 'dshm-av', style: { background: avatarColor(p.name) } },
                             p.name.replace(/^dsh[-_]/i, '').charAt(0).toUpperCase() || 'P'),
                           h('div', { style: { minWidth: 0 } },
-                            h('div', { className: 'dshm-nm' }, p.name),
+                            h('div', { className: 'dshm-nm' }, p.name, p.npm && h('span', { title: t('fastInstall') }, ' ⚡')),
                             h('div', { className: 'dshm-owner' }, p.owner))),
                         h('div', { className: 'dshm-desc' }, desc),
                         h('div', { className: 'dshm-foot' },
@@ -454,7 +493,7 @@ function MarketSection(props) {
                                 ? h('button', { className: 'dshm-btn install busy' }, t('installing'))
                                 : h('button', {
                                     className: 'dshm-btn install',
-                                    disabled: busyUrl !== null,
+                                    disabled: busyUrl !== null || !envReady,
                                     onClick: () => setConfirming(p),
                                   }, t('install'))),
                         busy && h('div', { className: 'dshm-progress', style: { margin: '6px 0 0' } },

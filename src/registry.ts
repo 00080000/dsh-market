@@ -12,6 +12,7 @@ export interface RegistryPlugin {
   url: string
   category: string
   description: Record<string, string>
+  npm?: string | null
   install: string
   added: string
 }

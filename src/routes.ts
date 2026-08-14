@@ -62,6 +62,48 @@ interface InstallResult {
   stderr: string
 }
 
+/** Whether `pnpm` resolves on PATH; success is cached, absence is re-probed. */
+let pnpmReady = false
+
+function probePnpm(): Promise<boolean> {
+  if (pnpmReady) return Promise.resolve(true)
+  return new Promise((resolvePromise) => {
+    const child = spawn('pnpm', ['--version'], { stdio: 'ignore' })
+    child.on('error', () => resolvePromise(false))
+    child.on('close', (code) => {
+      pnpmReady = code === 0
+      resolvePromise(pnpmReady)
+    })
+  })
+}
+
+function runQuiet(file: string, args: string[], timeoutMs: number): Promise<{ code: number | null; output: string }> {
+  return new Promise((resolvePromise) => {
+    const child = spawn(file, args, { env: { ...process.env, CI: 'true' }, stdio: ['ignore', 'pipe', 'pipe'] })
+    let output = ''
+    const timer = setTimeout(() => child.kill('SIGKILL'), timeoutMs)
+    const collect = (chunk: Buffer): void => { output = (output + chunk.toString()).slice(-8 * 1024) }
+    child.stdout.on('data', collect)
+    child.stderr.on('data', collect)
+    child.on('error', (error) => { clearTimeout(timer); resolvePromise({ code: 127, output: error.message }) })
+    child.on('close', (code) => { clearTimeout(timer); resolvePromise({ code, output }) })
+  })
+}
+
+/**
+ * Provision pnpm without user involvement: corepack (ships with Node) first,
+ * a global npm install as fallback.
+ * @returns true when `pnpm --version` succeeds afterwards.
+ */
+async function provisionPnpm(): Promise<boolean> {
+  const corepack = await runQuiet('corepack', ['enable', 'pnpm'], 60 * 1000)
+  logEvent(corepack.code === 0 ? 'info' : 'warn', 'setup-pnpm', `corepack enable: exit=${String(corepack.code)} ${corepack.output.slice(-200)}`)
+  if (await probePnpm()) return true
+  const npm = await runQuiet('npm', ['install', '-g', 'pnpm'], 3 * 60 * 1000)
+  logEvent(npm.code === 0 ? 'info' : 'error', 'setup-pnpm', `npm -g: exit=${String(npm.code)} ${npm.output.slice(-200)}`)
+  return probePnpm()
+}
+
 /** Live progress of the running plugin command, for the status route. */
 interface InstallProgress {
   active: boolean
@@ -312,7 +354,7 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
     host.webServer.register({
       kind: 'exact',
       path: '/dsh-market/status',
-      handler: (request, response) => {
+      handler: async (request, response) => {
         if (request.method !== 'GET') {
           response.writeHead(405, { allow: 'GET' })
           response.end()
@@ -323,6 +365,7 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
           target: progress.target,
           seconds: progress.active ? Math.round((Date.now() - progress.startedAt) / 1000) : 0,
           lastLine: progress.lastLine,
+          pnpm: await probePnpm(),
           installed: readInstalled(config.profile),
         })
       },
@@ -433,6 +476,27 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
 
     host.webServer.register({
       kind: 'exact',
+      path: '/dsh-market/setup-pnpm',
+      handler: async (request, response) => {
+        if (request.method !== 'POST') {
+          response.writeHead(405, { allow: 'POST' })
+          response.end()
+          return
+        }
+        if (!sameOrigin(request)) {
+          sendJson(response, 403, { error: 'untrusted origin' })
+          return
+        }
+        try {
+          sendJson(response, 200, { ok: await provisionPnpm() })
+        } catch (error) {
+          sendJson(response, 500, { error: error instanceof Error ? error.message : String(error) })
+        }
+      },
+    }),
+
+    host.webServer.register({
+      kind: 'exact',
       path: '/dsh-market/uninstall',
       handler: async (request, response) => {
         if (request.method !== 'POST') {
@@ -522,10 +586,17 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
             sendJson(response, 400, { error: 'unsupported source url' })
             return
           }
+          // Registry tarballs beat full-repo GitHub downloads: smaller,
+          // prebuilt, and CDN/mirror served. The npm name comes from our
+          // curated registry, which only maps repo-verified packages.
+          const NPM_NAME_RE = /^(@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*$/
+          const target = typeof entry.npm === 'string' && NPM_NAME_RE.test(entry.npm)
+            ? entry.npm
+            : `github:${repo}`
           installing = true
           try {
             const before = new Set(Object.keys(readInstalled(config.profile)))
-            const result = await runDshPlugin(config.profile, ['add', `github:${repo}`])
+            const result = await runDshPlugin(config.profile, ['add', target])
             const ok = result.exitCode === 0 && !result.timedOut
             if (ok) updatesCache = null
             const installed = readInstalled(config.profile)
@@ -540,7 +611,7 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
               }
             }
             logEvent(ok ? 'info' : 'error', 'install',
-              `github:${repo} exit=${String(result.exitCode)}${result.timedOut ? ' TIMEOUT' : ''}${ok ? ` hot=${String(hot)}` : ` stderr=${result.stderr.slice(-300)}`}`)
+              `${target} exit=${String(result.exitCode)}${result.timedOut ? ' TIMEOUT' : ''}${ok ? ` hot=${String(hot)}` : ` stderr=${result.stderr.slice(-300)}`}`)
             sendJson(response, ok ? 200 : 502, {
               ok,
               hot,
