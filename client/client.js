@@ -44,6 +44,10 @@ const zh = {
   upToDate: '已是最新',
   linkedDev: '本地开发链接',
   exportLog: '导出日志',
+  loading: '正在加载插件目录…',
+  progressHint: '首次安装需要下载与解析依赖，大插件可能要 1-3 分钟',
+  toastReady: '已装好并已生效',
+  gotIt: '知道了',
 }
 
 const en = {
@@ -76,6 +80,10 @@ const en = {
   upToDate: 'Up to date',
   linkedDev: 'linked (dev)',
   exportLog: 'Export log',
+  loading: 'Loading the catalog…',
+  progressHint: 'First installs download and resolve dependencies — large plugins can take 1-3 minutes',
+  toastReady: 'installed and live',
+  gotIt: 'Got it',
 }
 
 const CSS = `
@@ -113,6 +121,13 @@ const CSS = `
 .dshm-btn.ghost{background:var(--dsw-alias-bg-layer-2,#f3f4f6);color:var(--dsw-alias-label-secondary,#6b7280)}
 .dshm-btn.upd{background:var(--dsw-alias-state-warn-primary,#ea580c);color:#fff}
 .dshm-dot{display:inline-block;width:7px;height:7px;border-radius:99px;background:var(--dsw-alias-state-error-primary,#ef4444);margin-left:5px;vertical-align:2px}
+.dshm-loading{display:flex;flex-direction:column;align-items:center;gap:12px;padding:48px;color:var(--dsw-alias-label-secondary,#9ca3af);font-size:13px}
+.dshm-spin{width:22px;height:22px;border:3px solid var(--dsw-alias-border-l1,#e5e7eb);border-top-color:var(--dsw-alias-brand-primary,#4f6ef7);border-radius:99px;animation:dshm-sp .8s linear infinite}
+@keyframes dshm-sp{to{transform:rotate(360deg)}}
+.dshm-progress{display:flex;align-items:center;gap:9px;background:var(--dsw-alias-bg-layer-2,#f3f4f6);border:1px solid var(--dsw-alias-border-l1,#e5e7eb);border-radius:8px;padding:8px 12px;font-size:12px;margin:10px 4px 0;color:var(--dsw-alias-label-secondary,#6b7280)}
+.dshm-progress .dshm-spin{width:14px;height:14px;border-width:2px;flex-shrink:0}
+.dshm-progress code{font-family:ui-monospace,Menlo,monospace;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dshm-toast{position:fixed;right:22px;bottom:22px;z-index:2000;background:var(--dsw-alias-bg-layer-1,#fff);border:1px solid var(--dsw-alias-border-l1,#e5e7eb);border-radius:12px;padding:13px 16px;box-shadow:0 12px 40px rgba(0,0,0,.18);display:flex;align-items:center;gap:10px;font-size:13px;color:var(--dsw-alias-label-primary,#1f2328);pointer-events:auto;max-width:340px}
 .dshm-empty{color:var(--dsw-alias-label-secondary,#9ca3af);font-size:13px;padding:32px;text-align:center}
 .dshm-err{color:var(--dsw-alias-state-error-primary,#dc2626);font-size:12px;margin:8px 0;white-space:pre-wrap;word-break:break-all}
 .dshm-mask{position:fixed;inset:0;background:rgba(15,18,25,.4);display:flex;align-items:center;justify-content:center;z-index:1000}
@@ -146,6 +161,12 @@ function repoOf(url) {
   return m ? m[1] : null
 }
 
+const navState = { attention: localStorage.getItem('dshm-visited') === null }
+
+function readSession(key) {
+  try { return JSON.parse(sessionStorage.getItem(key) || 'null') } catch { return null }
+}
+
 /** A registry plugin counts as installed when its package name or GitHub spec appears in the profile dependencies. */
 function isInstalled(plugin, installed) {
   if (installed[plugin.name] !== undefined) return true
@@ -165,7 +186,11 @@ function MarketSection(props) {
   const [data, setData] = useState(null)
   const [loadError, setLoadError] = useState(false)
   const [installed, setInstalled] = useState({})
-  const [tab, setTab] = useState('discover')
+  const [tab, setTab] = useState(() => {
+    const saved = sessionStorage.getItem('dshm-tab')
+    if (saved !== null) sessionStorage.removeItem('dshm-tab')
+    return saved || 'discover'
+  })
   const [q, setQ] = useState('')
   const [cat, setCat] = useState('all')
   const [confirming, setConfirming] = useState(null)
@@ -176,6 +201,8 @@ function MarketSection(props) {
   const [updatingName, setUpdatingName] = useState(null)
   const [updatedNames, setUpdatedNames] = useState([])
   const [hotUrls, setHotUrls] = useState([])
+  const [hotNames, setHotNames] = useState([])
+  const [progressLine, setProgressLine] = useState(null)
 
   const refreshInstalled = useCallback(() => {
     fetch('/dsh-market/installed', { cache: 'no-store' })
@@ -190,12 +217,53 @@ function MarketSection(props) {
 
   useEffect(() => {
     injectStyles()
+    localStorage.setItem('dshm-visited', '1')
+    navState.attention = false
     fetch('/dsh-market/registry', { cache: 'no-store' })
       .then(res => { if (!res.ok) throw new Error('HTTP ' + res.status); return res.json() })
       .then(body => setData(body.registry))
       .catch(() => setLoadError(true))
     refreshInstalled()
   }, [refreshInstalled])
+
+  // Recover an install whose HTTP response was lost (page navigated away or
+  // the connection dropped): the pending marker survives in sessionStorage and
+  // the poll below converges the button state from the host's ground truth.
+  useEffect(() => {
+    const pending = readSession('dshm-pending')
+    if (pending !== null && typeof pending.url === 'string') setBusyUrl(pending.url)
+  }, [])
+
+  useEffect(() => {
+    if (busyUrl === null && updatingName === null) {
+      setProgressLine(null)
+      return
+    }
+    const timer = setInterval(() => {
+      fetch('/dsh-market/status', { cache: 'no-store' })
+        .then(res => res.json())
+        .then(status => {
+          if (status.active) {
+            setProgressLine((status.lastLine || '…') + '  (' + status.seconds + 's)')
+          } else {
+            setProgressLine(null)
+            setInstalled(status.installed || {})
+            const pending = readSession('dshm-pending')
+            if (pending !== null && busyUrl !== null) {
+              const nowInstalled = data !== null && data.plugins.some(p =>
+                p.url === busyUrl && isInstalled(p, status.installed || {}))
+              if (nowInstalled) {
+                sessionStorage.removeItem('dshm-pending')
+                setDoneUrls(urls => urls.includes(busyUrl) ? urls : urls.concat(busyUrl))
+                setBusyUrl(null)
+              }
+            }
+          }
+        })
+        .catch(() => {})
+    }, 2000)
+    return () => clearInterval(timer)
+  }, [busyUrl, updatingName, data])
 
   const plugins = useMemo(() => {
     if (data === null) return []
@@ -214,6 +282,7 @@ function MarketSection(props) {
     setConfirming(null)
     setInstallError(null)
     setBusyUrl(plugin.url)
+    sessionStorage.setItem('dshm-pending', JSON.stringify({ url: plugin.url }))
     fetch('/dsh-market/install', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -221,9 +290,15 @@ function MarketSection(props) {
     })
       .then(res => res.json().then(body => ({ status: res.status, body })))
       .then(({ status, body }) => {
+        sessionStorage.removeItem('dshm-pending')
         if (status === 200 && body.ok) {
-          if (body.hot) setHotUrls(urls => urls.concat(plugin.url))
-          else setDoneUrls(urls => urls.concat(plugin.url))
+          sessionStorage.setItem('dshm-tab', 'installed')
+          if (body.hot) {
+            setHotUrls(urls => urls.includes(plugin.url) ? urls : urls.concat(plugin.url))
+            setHotNames(names => names.includes(plugin.name) ? names : names.concat(plugin.name))
+          } else {
+            setDoneUrls(urls => urls.includes(plugin.url) ? urls : urls.concat(plugin.url))
+          }
           refreshInstalled()
         } else {
           const text = v => typeof v === 'string' ? v : (v && typeof v.text === 'string') ? v.text : v == null ? '' : JSON.stringify(v)
@@ -231,7 +306,10 @@ function MarketSection(props) {
           setInstallError(t('installFail') + ': ' + plugin.name + ' — ' + detail.trim().slice(-600))
         }
       })
-      .catch(error => setInstallError(t('installFail') + ': ' + String(error)))
+      .catch(error => {
+        sessionStorage.removeItem('dshm-pending')
+        setInstallError(t('installFail') + ': ' + String(error))
+      })
       .finally(() => setBusyUrl(null))
   }, [refreshInstalled, t])
 
@@ -281,7 +359,17 @@ function MarketSection(props) {
       hotUrls.length > 0 && h('div', { className: 'dshm-restart' },
         h('span', null, '✨'),
         h('span', { className: 'dshm-grow' }, h('b', null, hotUrls.length), ' ', t('hotBanner')),
-        h('button', { className: 'dshm-btn install', onClick: () => location.reload() }, t('refresh'))),
+        h('button', {
+          className: 'dshm-btn install',
+          onClick: () => {
+            sessionStorage.setItem('dshm-toast', JSON.stringify(hotNames))
+            sessionStorage.setItem('dshm-tab', 'installed')
+            location.reload()
+          },
+        }, t('refresh'))),
+      (busyUrl !== null || updatingName !== null) && h('div', { className: 'dshm-progress' },
+        h('span', { className: 'dshm-spin' }),
+        h('code', { className: 'dshm-grow' }, progressLine || t('progressHint'))),
       pendingRestart > 0 && h('div', { className: 'dshm-restart' },
         h('span', null, '🔄'),
         h('span', { className: 'dshm-grow' }, h('b', null, pendingRestart), ' ', t('restartBanner')),
@@ -292,7 +380,7 @@ function MarketSection(props) {
         ? loadError
           ? h('div', { className: 'dshm-empty' }, t('loadFail'))
           : data === null
-            ? h('div', { className: 'dshm-empty' }, '…')
+            ? h('div', { className: 'dshm-loading' }, h('span', { className: 'dshm-spin' }), t('loading'))
             : h(React.Fragment, null,
                 h('div', { className: 'dshm-cats' },
                   h('button', { className: 'dshm-chip' + (cat === 'all' ? ' on' : ''), onClick: () => setCat('all') }, t('all')),
@@ -378,14 +466,52 @@ exports.inject = ['slots', 'locale']
 exports.apply = function apply(ctx) {
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'dsh-market: dictionaries')
   const t = ctx.locale.bind(NS)
+
+  // Attention dot on the nav entry: first run, or installed plugins with
+  // pending updates (checked once per page load; the label thunk re-reads on
+  // every projection).
+  fetch('/dsh-market/updates', { cache: 'no-store' })
+    .then(res => res.json())
+    .then(body => {
+      if (Object.values(body.updates || {}).some(u => u.updateAvailable)) navState.attention = true
+    })
+    .catch(() => {})
+
   ctx.slots.inject('settings.section', () => ctx.slots.register({
     name: 'settings.section',
     id: 'market',
     order: 40,
-    label: () => t('nav'),
+    label: () => t('nav') + (navState.attention ? ' ●' : ''),
     locale: NS,
     inject: () => ({ t }),
   }, () => h(MarketSection, { t, locale: ctx.locale })))
+
+  // Post-reload confirmation: a floating "installed and live" card in the
+  // shell overlay layer, shown once after the refresh that follows a hot
+  // install, so the user lands back in their flow with visible proof.
+  function InstallToast() {
+    const [names, setNames] = useState(() => {
+      const value = readSession('dshm-toast')
+      sessionStorage.removeItem('dshm-toast')
+      return Array.isArray(value) ? value : []
+    })
+    useEffect(() => {
+      if (names.length === 0) return
+      injectStyles()
+      const timer = setTimeout(() => setNames([]), 10000)
+      return () => clearTimeout(timer)
+    }, [names])
+    if (names.length === 0) return null
+    return h('div', { className: 'dshm-toast' },
+      h('span', null, '✨'),
+      h('span', null, names.join(', ') + ' ' + t('toastReady')),
+      h('button', { className: 'dshm-btn install', onClick: () => setNames([]) }, t('gotIt')))
+  }
+  ctx.slots.inject('shell.overlay', () => ctx.slots.register({
+    name: 'shell.overlay',
+    id: 'dsh-market-toast',
+    label: () => 'dsh-market',
+  }, InstallToast))
 }
 
 return module.exports; } });

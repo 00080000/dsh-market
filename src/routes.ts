@@ -6,7 +6,7 @@
  * same-origin POSTs and only sources present in the curated registry.
  */
 
-import { execFile } from 'node:child_process'
+import { spawn } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -62,32 +62,63 @@ interface InstallResult {
   stderr: string
 }
 
+/** Live progress of the running plugin command, for the status route. */
+interface InstallProgress {
+  active: boolean
+  target: string
+  startedAt: number
+  lastLine: string
+}
+
+const progress: InstallProgress = { active: false, target: '', startedAt: 0, lastLine: '' }
+
+function trackProgress(chunk: string): void {
+  const lines = chunk.split('\n').map(l => l.trim()).filter(l => l !== '')
+  if (lines.length > 0) progress.lastLine = lines[lines.length - 1].slice(0, 200)
+}
+
 function runDshPlugin(profile: string, pluginArgs: string[]): Promise<InstallResult> {
   const { file, args, cwd } = dshArgv()
+  progress.active = true
+  progress.target = pluginArgs[pluginArgs.length - 1] ?? ''
+  progress.startedAt = Date.now()
+  progress.lastLine = ''
   return new Promise((resolvePromise) => {
-    execFile(
-      file,
-      [...args, 'plugin', '--profile', profile, ...pluginArgs],
-      {
-        cwd,
-        timeout: INSTALL_TIMEOUT_MS,
-        maxBuffer: 1024 * 1024,
-        killSignal: 'SIGKILL',
-        // pnpm v10 blocks forever on a silent interactive prompt without a
-        // TTY (observed on re-add over a pinned git spec); CI mode forces it
-        // to act or fail instead of asking.
-        env: { ...process.env, CI: 'true' },
-      },
-      (error, stdout, stderr) => {
-        const failed = error as (NodeJS.ErrnoException & { code?: number | string; killed?: boolean }) | null
-        resolvePromise({
-          exitCode: failed === null ? 0 : typeof failed.code === 'number' ? failed.code : 1,
-          timedOut: failed?.killed === true,
-          stdout: String(stdout),
-          stderr: String(stderr),
-        })
-      },
-    )
+    const child = spawn(file, [...args, 'plugin', '--profile', profile, ...pluginArgs], {
+      cwd,
+      // pnpm v10 blocks forever on a silent interactive prompt without a TTY
+      // (observed on re-add over a pinned git spec); CI mode forces it to act
+      // or fail instead of asking.
+      env: { ...process.env, CI: 'true' },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+    let stdout = ''
+    let stderr = ''
+    let timedOut = false
+    const timer = setTimeout(() => {
+      timedOut = true
+      child.kill('SIGKILL')
+    }, INSTALL_TIMEOUT_MS)
+    child.stdout.on('data', (chunk: Buffer) => {
+      const text = chunk.toString()
+      stdout = (stdout + text).slice(-256 * 1024)
+      trackProgress(text)
+    })
+    child.stderr.on('data', (chunk: Buffer) => {
+      const text = chunk.toString()
+      stderr = (stderr + text).slice(-64 * 1024)
+      trackProgress(text)
+    })
+    child.on('error', (error) => {
+      clearTimeout(timer)
+      progress.active = false
+      resolvePromise({ exitCode: 127, timedOut: false, stdout, stderr: `${stderr}\n${error.message}` })
+    })
+    child.on('close', (code) => {
+      clearTimeout(timer)
+      progress.active = false
+      resolvePromise({ exitCode: code, timedOut, stdout, stderr })
+    })
   })
 }
 
@@ -275,6 +306,25 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
           return
         }
         sendJson(response, 200, { profile: config.profile, installed: readInstalled(config.profile) })
+      },
+    }),
+
+    host.webServer.register({
+      kind: 'exact',
+      path: '/dsh-market/status',
+      handler: (request, response) => {
+        if (request.method !== 'GET') {
+          response.writeHead(405, { allow: 'GET' })
+          response.end()
+          return
+        }
+        sendJson(response, 200, {
+          active: progress.active,
+          target: progress.target,
+          seconds: progress.active ? Math.round((Date.now() - progress.startedAt) / 1000) : 0,
+          lastLine: progress.lastLine,
+          installed: readInstalled(config.profile),
+        })
       },
     }),
 
