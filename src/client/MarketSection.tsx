@@ -385,9 +385,9 @@ export function MarketSection(props: MarketSectionProps) {
         </div>
         <div className={css.desc}>{desc}</div>
         <div className={css.foot}>
-          <Pill className={css.catPill}>
+          <span className={css.tag}>
             {(data!.categories[p.category] && (data!.categories[p.category]![lang] || data!.categories[p.category]!.en)) || p.category}
-          </Pill>
+          </span>
           <span className={css.grow} />
           {done
             ? <span className={css.okState}>{t('installedBadge')}</span>
@@ -405,7 +405,7 @@ export function MarketSection(props: MarketSectionProps) {
                   )}
         </div>
         {busy && (
-          <div className={css.progress} style={{ margin: '6px 0 0' }}>
+          <div className={css.progress}>
             <span className={css.spin} />
             <code className={css.grow}>{progressLine || t('progressHint')}</code>
           </div>
@@ -506,7 +506,7 @@ export function MarketSection(props: MarketSectionProps) {
   return (
     <div className={css.root}>
       <div className={css.head}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <div className={css.titleRow}>
           <img src={LOGO_URI} width={22} height={22} alt="" style={{ borderRadius: '5px', flexShrink: 0 }} />
           <h2 className={css.title}>{t('nav')}</h2>
           {(() => {
@@ -636,7 +636,7 @@ export function MarketSection(props: MarketSectionProps) {
                   {(() => {
                     const extra = themeSnap.themes.filter(def => def.id !== 'light' && def.id !== 'dark')
                     return extra.length > 0 && (
-                      <div className={css.grid} style={{ marginBottom: 10 }}>
+                      <div className={`${css.grid} ${css.themesGrid}`}>
                         {extra.map(def => themeCard(def.id, def.id, themeSwatch(def)))}
                       </div>
                     )
@@ -666,12 +666,12 @@ export function MarketSection(props: MarketSectionProps) {
                           ? <a className={`${css.spec} ${css.src}`} href={repoUrl} target="_blank" rel="noreferrer" style={{ display: 'inline-block' }}>{specText}</a>
                           : <div className={css.spec}>{specText}</div>}
                         {entry !== undefined && (
-                          <div className={css.desc} style={{ minHeight: 0 }}>
+                          <div className={`${css.desc} ${css.descTight}`}>
                             {(entry.description && (entry.description[lang] || entry.description.en)) || ''}
                           </div>
                         )}
                         {updatingName === name && (
-                          <div className={css.progress} style={{ margin: '6px 0 0' }}>
+                          <div className={css.progress}>
                             <span className={css.spin} />
                             <code className={css.grow}>{progressLine || t('progressHint')}</code>
                           </div>
@@ -739,7 +739,7 @@ export function MarketSection(props: MarketSectionProps) {
           footer={(
             <>
               <Button variant="ghost" onClick={() => setConfirming(null)}>{t('cancel')}</Button>
-              <Button variant="primary" onClick={() => doInstall(confirming)}>{t('install')}</Button>
+              <Button variant="primary" onClick={() => doInstall(confirming)}>{t('confirm')}</Button>
             </>
           )}
         >
