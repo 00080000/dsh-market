@@ -54,6 +54,7 @@ const zh = {
   envFixing: '正在准备…',
   envFixFail: '自动准备没成功，请点"导出日志"把文件发给我们反馈',
   loading: '正在加载插件目录…',
+  backTop: '回到顶部',
   progressHint: '首次安装需要下载与解析依赖，大插件可能要 1-3 分钟',
   toastReady: '已装好并已生效',
   gotIt: '知道了',
@@ -99,13 +100,14 @@ const en = {
   envFixing: 'Setting up…',
   envFixFail: 'Automatic setup failed — please use "Export log" and send us the file',
   loading: 'Loading the catalog…',
+  backTop: 'Back to top',
   progressHint: 'First installs download and resolve dependencies — large plugins can take 1-3 minutes',
   toastReady: 'installed and live',
   gotIt: 'Got it',
 }
 
 const CSS = `
-.dshm-root{height:100%;display:flex;flex-direction:column;min-width:0;color:var(--dsw-alias-label-primary,#1f2328)}
+.dshm-root{height:100%;display:flex;flex-direction:column;min-width:0;color:var(--dsw-alias-label-primary,#1f2328);position:relative}
 .dshm-head{padding:4px 4px 12px}
 .dshm-title{font-size:16px;font-weight:700;margin:0}
 .dshm-sub{font-size:12px;color:var(--dsw-alias-label-secondary,#6b7280);margin-top:2px}
@@ -117,7 +119,9 @@ const CSS = `
 .dshm-tab.on{color:var(--dsw-alias-brand-primary,#4f6ef7);border-bottom-color:var(--dsw-alias-brand-primary,#4f6ef7);font-weight:600}
 .dshm-restart{display:flex;align-items:center;gap:8px;background:var(--dsw-alias-bg-layer-2,#fdf3e3);border:1px solid var(--dsw-alias-border-l1,#f3e3c3);border-radius:8px;padding:8px 12px;font-size:12px;margin:10px 4px 0}
 .dshm-body{flex:1;overflow-y:auto;padding:12px 4px 24px}
-.dshm-cats{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.dshm-cats{display:flex;gap:6px;flex-wrap:wrap;position:sticky;top:-13px;z-index:5;background:var(--dsw-alias-bg-layer-1,#fff);padding:10px 0;margin:-10px 0 6px}
+.dshm-top{position:absolute;right:18px;bottom:18px;z-index:20;width:38px;height:38px;border-radius:99px;border:1px solid var(--dsw-alias-border-l1,#e5e7eb);background:var(--dsw-alias-bg-layer-1,#fff);color:var(--dsw-alias-label-secondary,#6b7280);font-size:16px;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.12)}
+.dshm-top:hover{color:var(--dsw-alias-brand-primary,#4f6ef7)}
 .dshm-chip{font:inherit;font-size:12px;border:1px solid var(--dsw-alias-border-l1,#e5e7eb);background:var(--dsw-alias-bg-layer-1,#fff);border-radius:99px;padding:3px 11px;cursor:pointer;color:var(--dsw-alias-label-secondary,#6b7280)}
 .dshm-chip.on{background:var(--dsw-alias-brand-primary,#4f6ef7);border-color:var(--dsw-alias-brand-primary,#4f6ef7);color:#fff}
 .dshm-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px}
@@ -236,6 +240,8 @@ function MarketSection(props) {
   const [envFixing, setEnvFixing] = useState(false)
   const [envFailed, setEnvFailed] = useState(false)
   const [bootId, setBootId] = useState(null)
+  const [showTop, setShowTop] = useState(false)
+  const bodyRef = React.useRef(null)
 
   const refreshInstalled = useCallback(() => {
     fetch('/dsh-market/installed', { cache: 'no-store' })
@@ -481,7 +487,11 @@ function MarketSection(props) {
         h('span', { className: 'dshm-grow' }, h('b', null, pendingRestart), ' ', t('restartBanner')),
         h('span', { title: t('restartHint') }, 'ℹ️'))),
     installError !== null && h('div', { className: 'dshm-err' }, installError),
-    h('div', { className: 'dshm-body' },
+    h('div', {
+      className: 'dshm-body',
+      ref: bodyRef,
+      onScroll: e => setShowTop(e.currentTarget.scrollTop > 400),
+    },
       tab === 'discover'
         ? loadError
           ? h('div', { className: 'dshm-empty' }, t('loadFail'))
@@ -581,6 +591,11 @@ function MarketSection(props) {
                           onClick: () => setRemoveArmed(name),
                         }, t('uninstall'))))
             })),
+    showTop && h('button', {
+      className: 'dshm-top',
+      title: t('backTop'),
+      onClick: () => { const el = bodyRef.current; if (el) el.scrollTo({ top: 0, behavior: 'smooth' }) },
+    }, '↑'),
     confirming !== null && h('div', { className: 'dshm-mask', onClick: e => { if (e.target === e.currentTarget) setConfirming(null) } },
       h('div', { className: 'dshm-modal' },
         h('h3', null, t('confirmTitle') + ' ' + confirming.name + '?'),
