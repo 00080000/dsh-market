@@ -3,7 +3,7 @@
  "url": "https://awesome-dsh-plugin.com",
  "source": "https://github.com/awesome-dsh-plugin/awesome-dsh-plugin",
  "updated": "2026-08-14",
- "count": 197,
+ "count": 218,
  "categories": {
   "ui": {
    "en": "UI Enhancements",
@@ -24,6 +24,10 @@
   "tools": {
    "en": "Tools & Capabilities",
    "zh": "工具与能力"
+  },
+  "skill": {
+   "en": "Skills",
+   "zh": "技能包"
   },
   "workflow": {
    "en": "Workflow & Automation",
@@ -503,6 +507,19 @@
    "added": "2026-08-14"
   },
   {
+   "name": "dsh-pet",
+   "owner": "zealot00",
+   "url": "https://github.com/zealot00/dsh-pet",
+   "category": "ui",
+   "description": {
+    "en": "Desktop pet for the DSH Web UI: sprite-sheet animation, agent state linkage, drag, alarm (daily/one-shot) and pomodoro widgets, skin picker with preview.",
+    "zh": "DSH Web UI 桌面宠物：精灵图动画、agent 状态联动、拖拽、闹钟（每天/一次）与番茄钟，皮肤下拉选择 + 预览。"
+   },
+   "npm": null,
+   "install": "dsh plugin --profile web add github:zealot00/dsh-pet",
+   "added": "2026-08-14"
+  },
+  {
    "name": "dsh-builtin-toggles",
    "owner": "Starfie1d1272",
    "url": "https://github.com/Starfie1d1272/dsh-builtin-toggles",
@@ -516,7 +533,7 @@
    "added": "2026-08-14"
   },
   {
-   "name": "dsh-enhance",
+   "name": "dsh-ux",
    "owner": "jiangnanquan",
    "url": "https://github.com/jiangnanquan/dsh-ux",
    "category": "ui",
@@ -534,11 +551,63 @@
    "url": "https://github.com/a903067276-rgb/dsh-hud",
    "category": "ui",
    "description": {
-    "en": "HUD status panel: git status, MCP servers, skills, model and token usage in a floating side panel.",
+    "en": "HUD status panel: Git status, MCP servers, skills, model and token usage in a floating side panel.",
     "zh": "HUD 状态面板：Git 状态、MCP 服务器、技能列表、模型与 token 用量，悬浮侧栏一览无余。"
    },
    "npm": null,
    "install": "dsh plugin --profile web add github:a903067276-rgb/dsh-hud",
+   "added": "2026-08-14"
+  },
+  {
+   "name": "dsh-plugins#turn-scrubber",
+   "owner": "wsxwj123",
+   "url": "https://github.com/wsxwj123/dsh-plugins/tree/main/packages/turn-scrubber",
+   "category": "ui",
+   "description": {
+    "en": "Compact right-edge turn rail with hover summaries and click-to-jump navigation.",
+    "zh": "右侧紧凑回合刻度条，悬停显示回合摘要，点击跳转到对应用户回合。"
+   },
+   "npm": null,
+   "install": "dsh plugin --profile web add github:wsxwj123/dsh-plugins/tree/main/packages/turn-scrubber",
+   "added": "2026-08-14"
+  },
+  {
+   "name": "dsh-cost-meter",
+   "owner": "Sttrevens",
+   "url": "https://github.com/Sttrevens/dsh-cost-meter",
+   "category": "ui",
+   "description": {
+    "en": "Per-turn USD cost badge in the Web UI: session total in the header and per-turn cost in each message footer, with a hover breakdown.",
+    "zh": "Web UI 美元成本徽标：头部显示会话总成本、每条回复结尾显示该轮成本，悬停看分项。"
+   },
+   "npm": "@steven-wu/dsh-cost-meter",
+   "install": "dsh plugin --profile web add @steven-wu/dsh-cost-meter",
+   "added": "2026-08-14"
+  },
+  {
+   "name": "dsh-file-mentions",
+   "owner": "a903067276-rgb",
+   "url": "https://github.com/a903067276-rgb/dsh-file-mentions",
+   "category": "ui",
+   "description": {
+    "en": "Clickable file paths in DSH replies: Codex-style inline open, reveal in file manager, and a mentioned-files chip list at the turn tail.",
+    "zh": "DSH 回复中的文件路径可点击：Codex 风格行内打开、文件管理器定位、回合尾部文件 chip 列表。"
+   },
+   "npm": null,
+   "install": "dsh plugin --profile web add github:a903067276-rgb/dsh-file-mentions",
+   "added": "2026-08-14"
+  },
+  {
+   "name": "dsh-calculator",
+   "owner": "bobcat848",
+   "url": "https://github.com/bobcat848/dsh-calculator",
+   "category": "ui",
+   "description": {
+    "en": "DeepSeek API spend (current session and all sessions) and account balance in the aside panel, with official pricing and peak/off-peak support.",
+    "zh": "右侧面板展示 DeepSeek API 费用（当前会话 + 全部会话累计）与账户余额，内置官方计价与峰谷计价支持。"
+   },
+   "npm": null,
+   "install": "dsh plugin --profile web add github:bobcat848/dsh-calculator",
    "added": "2026-08-14"
   },
   {
@@ -565,6 +634,19 @@
    },
    "npm": null,
    "install": "dsh plugin --profile web add github:Small-tailqwq/dsh-deep-whale",
+   "added": "2026-08-14"
+  },
+  {
+   "name": "dsh-plugins#theme-gallery",
+   "owner": "wsxwj123",
+   "url": "https://github.com/wsxwj123/dsh-plugins/tree/main/packages/theme-gallery",
+   "category": "theme",
+   "description": {
+    "en": "Fifteen curated theme families with complete light and dark palettes that follow the native Light, Dark, and Follow system modes.",
+    "zh": "15 个精选主题家族，浅深配色完整，跟随 DSH 原生浅色/深色/跟随系统模式。"
+   },
+   "npm": null,
+   "install": "dsh plugin --profile web add github:wsxwj123/dsh-plugins/tree/main/packages/theme-gallery",
    "added": "2026-08-14"
   },
   {
@@ -802,7 +884,7 @@
    "added": "2026-08-14"
   },
   {
-   "name": "dsh-memory-vault",
+   "name": "dsh-memory",
    "owner": "flymysql",
    "url": "https://github.com/flymysql/dsh-memory",
    "category": "memory",
@@ -943,6 +1025,19 @@
    "npm": null,
    "install": "dsh plugin --profile web add github:Anionex/dsh-computer-use",
    "added": "2026-08-13"
+  },
+  {
+   "name": "dsh-mobile-gui-agent",
+   "owner": "kunjinkao-os",
+   "url": "https://github.com/kunjinkao-os/dsh-mobile-gui-agent",
+   "category": "tools",
+   "description": {
+    "en": "Android GUI Agent with ADB screenshots, compact UI hierarchy grounding, verified iterative actions, approvals, and a Mobile Web view.",
+    "zh": "Android GUI Agent：ADB 截图、压缩 UI hierarchy 定位、逐步动作验证、审批和 Mobile Web 视图。"
+   },
+   "npm": null,
+   "install": "dsh plugin --profile web add github:kunjinkao-os/dsh-mobile-gui-agent",
+   "added": "2026-08-14"
   },
   {
    "name": "dsh-data-agent",
@@ -1150,6 +1245,19 @@
    },
    "npm": null,
    "install": "dsh plugin --profile web add github:Jesse-njx/dsh-skillport",
+   "added": "2026-08-14"
+  },
+  {
+   "name": "pack-agent",
+   "owner": "sakikoTGW",
+   "url": "https://github.com/sakikoTGW/pack-agent",
+   "category": "tools",
+   "description": {
+    "en": "Project .pack.json/.pack.zip into .agent-pack/modpacks/ and expose skills via a workspace allow-list.",
+    "zh": "把 .pack.json/.pack.zip 投影到 .agent-pack/modpacks/，按工作区白名单暴露 skill。"
+   },
+   "npm": "@sakikotgw/pack-agent",
+   "install": "dsh plugin --profile web add @sakikotgw/pack-agent",
    "added": "2026-08-14"
   },
   {
@@ -1374,7 +1482,7 @@
    "added": "2026-08-14"
   },
   {
-   "name": "@zhaoolee/dsh-notes",
+   "name": "notes",
    "owner": "zhaoolee",
    "url": "https://github.com/zhaoolee/notes",
    "category": "tools",
@@ -1543,7 +1651,7 @@
    "added": "2026-08-14"
   },
   {
-   "name": "dsh-trio",
+   "name": "trio",
    "owner": "huey1in",
    "url": "https://github.com/huey1in/trio",
    "category": "tools",
@@ -1553,6 +1661,45 @@
    },
    "npm": null,
    "install": "dsh plugin --profile web add github:huey1in/trio",
+   "added": "2026-08-14"
+  },
+  {
+   "name": "dsh-adb",
+   "owner": "SamXiaBing",
+   "url": "https://github.com/SamXiaBing/dsh-adb",
+   "category": "tools",
+   "description": {
+    "en": "ADB device & bench operations for DSH: device discovery, structured logcat (background streaming), apk install, file pull/push, and dumpsys performance snapshots.",
+    "zh": "ADB 设备·台架运维工具集：设备发现、结构化 logcat（后台采集）、apk 安装、文件 pull/push、性能快照。"
+   },
+   "npm": null,
+   "install": "dsh plugin --profile web add github:SamXiaBing/dsh-adb",
+   "added": "2026-08-14"
+  },
+  {
+   "name": "dsh-backup",
+   "owner": "xiaoyuyu6420",
+   "url": "https://github.com/xiaoyuyu6420/dsh-backup",
+   "category": "tools",
+   "description": {
+    "en": "One-command backup of DSH user data: /backup, scheduled auto-backup, sha256 checksums and rotation.",
+    "zh": "一键备份 DSH 用户数据：/backup 命令、定时自动备份、sha256 校验与自动轮换。"
+   },
+   "npm": null,
+   "install": "dsh plugin --profile web add github:xiaoyuyu6420/dsh-backup",
+   "added": "2026-08-14"
+  },
+  {
+   "name": "skills",
+   "owner": "creght-dev",
+   "url": "https://github.com/creght-dev/skills",
+   "category": "skill",
+   "description": {
+    "en": "Skills for building websites on the Creght platform: CLI pull/push sync, page and component conventions, CMS, forms, auth, SEO, publishing and version rollback.",
+    "zh": "Creght 平台建站技能包：CLI 拉取/推送同步、页面与组件规范、CMS、表单、Auth、SEO、发布与版本回滚。"
+   },
+   "npm": null,
+   "install": "dsh plugin --profile web add github:creght-dev/skills",
    "added": "2026-08-14"
   },
   {
@@ -1777,6 +1924,19 @@
    "added": "2026-08-14"
   },
   {
+   "name": "dsh-approval-llm",
+   "owner": "Letter2025",
+   "url": "https://github.com/Letter2025/dsh-approval-llm",
+   "category": "workflow",
+   "description": {
+    "en": "Model-based permission approval: an approval-request answerer backed by a separate reviewer model.",
+    "zh": "基于模型的权限审批：由独立审查模型自动应答 approval 权限请求。"
+   },
+   "npm": "dsh-approval-llm",
+   "install": "dsh plugin --profile web add dsh-approval-llm",
+   "added": "2026-08-14"
+  },
+  {
    "name": "dsh-open-in-vscode",
    "owner": "omdsh-dev",
    "url": "https://github.com/omdsh-dev/dsh-open-in-vscode",
@@ -1904,6 +2064,32 @@
    },
    "npm": null,
    "install": "dsh plugin --profile web add github:BiBoyang/dsh-im-bridge",
+   "added": "2026-08-14"
+  },
+  {
+   "name": "dsh-lark-bridge",
+   "owner": "imetn",
+   "url": "https://github.com/imetn/dsh-lark-bridge",
+   "category": "notify",
+   "description": {
+    "en": "Bidirectional Lark/Feishu controller for DeepSeek Harness with project and session routing, interactive cards, approvals, attachments, and task controls.",
+    "zh": "DeepSeek Harness 的飞书/Lark 双向控制器，支持 Project 与 Session 路由、交互卡片、审批、附件和任务控制。"
+   },
+   "npm": null,
+   "install": "dsh plugin --profile web add github:imetn/dsh-lark-bridge",
+   "added": "2026-08-14"
+  },
+  {
+   "name": "llm-adaptive",
+   "owner": "dylan121322",
+   "url": "https://github.com/dylan121322/llm-adaptive",
+   "category": "model",
+   "description": {
+    "en": "Adaptive model routing: per-request complexity classification with automatic provider routing.",
+    "zh": "自适应模型路由：请求级复杂度分类，按配置链自动选择后端 provider。"
+   },
+   "npm": null,
+   "install": "dsh plugin --profile web add github:dylan121322/llm-adaptive",
    "added": "2026-08-14"
   },
   {
@@ -2466,6 +2652,32 @@
    "added": "2026-08-14"
   },
   {
+   "name": "dsh-passwords",
+   "owner": "slywalker2006",
+   "url": "https://github.com/slywalker2006/dsh-passwords",
+   "category": "dev",
+   "description": {
+    "en": "Login gateway for the DSH web UI: password door with first-run setup, bcrypt + at-rest encryption (AES-256-GCM/HMAC), brute-force lockout, audit log, TLS 1.2+ with 80→443 redirect, CSRF, anti-framing.",
+    "zh": "DSH Web UI 登录网关：首次配置、bcrypt + 静态加密（AES-256-GCM/HMAC）、防爆破、审计日志、TLS 1.2+ 与 80→443 跳转、CSRF 与防嵌框。"
+   },
+   "npm": null,
+   "install": "dsh plugin --profile web add github:slywalker2006/dsh-passwords",
+   "added": "2026-08-14"
+  },
+  {
+   "name": "dsh-webui-auth",
+   "owner": "Yuuz12",
+   "url": "https://github.com/Yuuz12/dsh-webui-auth",
+   "category": "dev",
+   "description": {
+    "en": "WebUI authentication enforced at the HTTP/transport layer: four-layer login gate (resources, plugin bundles, /api, WebSocket), server-side sessions with HttpOnly cookies.",
+    "zh": "WebUI 身份认证：HTTP/传输层强制登录（资源、插件 bundle、/api、WebSocket 四层防护），服务端会话 + HttpOnly Cookie。"
+   },
+   "npm": null,
+   "install": "dsh plugin --profile web add github:Yuuz12/dsh-webui-auth",
+   "added": "2026-08-14"
+  },
+  {
    "name": "dsh-ads",
    "owner": "Nagi-ovo",
    "url": "https://github.com/Nagi-ovo/dsh-ads",
@@ -2607,6 +2819,71 @@
    "npm": null,
    "install": "dsh plugin --profile web add github:AnacondaKC/dsh-douyin",
    "added": "2026-08-13"
+  },
+  {
+   "name": "DeepSeek-Harness-Pet",
+   "owner": "minybear",
+   "url": "https://github.com/minybear/DeepSeek-Harness-Pet",
+   "category": "fun",
+   "description": {
+    "en": "Codex-style desktop pet: a floating animated sprite in the corner that mirrors the agent's running state (working, waiting, failed, done).",
+    "zh": "Codex 风格桌面宠物：右下角悬浮动画精灵，随 agent 运行状态实时变化（工作、等待、报错、完成）。"
+   },
+   "npm": null,
+   "install": "dsh plugin --profile web add github:minybear/DeepSeek-Harness-Pet",
+   "added": "2026-08-14"
+  },
+  {
+   "name": "dsh-web-search-pro",
+   "owner": "anweat",
+   "url": "https://github.com/anweat/dsh-web-search-pro",
+   "category": "fun",
+   "description": {
+    "en": "Persistent enhanced web search: multi-engine routing (DeepSeek/Exa/DDG/Bing/Jina + GitHub/Bilibili/YouTube/V2EX/Xiaohongshu/Twitter/Reddit/RSS), SQLite+LRU cache, userscript-style extraction, Playwright rendering.",
+    "zh": "增强型、可持久化的网页搜索：多引擎路由（DeepSeek/Exa/DDG/Bing/Jina + GitHub/B站/YouTube/V2EX/小红书/Twitter/Reddit/RSS）、SQLite+LRU 缓存、userscript 风格抽取、Playwright 渲染。"
+   },
+   "npm": "dsh-web-search-pro",
+   "install": "dsh plugin --profile web add dsh-web-search-pro",
+   "added": "2026-08-14"
+  },
+  {
+   "name": "dsh-browser",
+   "owner": "anweat",
+   "url": "https://github.com/anweat/dsh-browser",
+   "category": "fun",
+   "description": {
+    "en": "Self-contained browser runtime: Playwright (chromium) + OpenCLI as plugin-local dependencies (global reuse fallback), exposes a `browser` service and 9 interactive browser tools.",
+    "zh": "自包含浏览器运行时：Playwright（chromium）+ OpenCLI 作为插件本地依赖（全局复用回退），提供 `browser` 服务与 9 个交互式浏览器工具。"
+   },
+   "npm": "@anweat/dsh-browser",
+   "install": "dsh plugin --profile web add @anweat/dsh-browser",
+   "added": "2026-08-14"
+  },
+  {
+   "name": "dsh-voice-webspeech",
+   "owner": "anweat",
+   "url": "https://github.com/anweat/dsh-voice-webspeech",
+   "category": "fun",
+   "description": {
+    "en": "Browser Web Speech API voice input: zero server, zero keys, zero model downloads (Edge=Azure, Chrome=Google speech).",
+    "zh": "浏览器 Web Speech API 语音输入：零服务端、零密钥、零模型下载（Edge=Azure 语音、Chrome=Google 语音）。"
+   },
+   "npm": "dsh-voice-webspeech",
+   "install": "dsh plugin --profile web add dsh-voice-webspeech",
+   "added": "2026-08-14"
+  },
+  {
+   "name": "dsh-restart",
+   "owner": "anweat",
+   "url": "https://github.com/anweat/dsh-restart",
+   "category": "fun",
+   "description": {
+    "en": "Restart DSH: configurable restart method (Node native / legacy PowerShell), post-restart continue prompt, optional watchdog auto-relaunch.",
+    "zh": "DSH 重启插件：可配置的重启方式（Node 原生/旧 PowerShell 适配）、重启后自动继续的提示词、可选看门狗自动拉起。"
+   },
+   "npm": "dsh-restart",
+   "install": "dsh plugin --profile web add dsh-restart",
+   "added": "2026-08-14"
   }
  ]
 }

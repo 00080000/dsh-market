@@ -234,6 +234,7 @@ function MarketSection(props) {
   const [envReady, setEnvReady] = useState(true)
   const [envFixing, setEnvFixing] = useState(false)
   const [envFailed, setEnvFailed] = useState(false)
+  const [bootId, setBootId] = useState(null)
 
   const refreshInstalled = useCallback(() => {
     fetch('/dsh-market/installed', { cache: 'no-store' })
@@ -254,10 +255,40 @@ function MarketSection(props) {
       .catch(() => setLoadError(true))
     fetch('/dsh-market/status', { cache: 'no-store' })
       .then(res => res.json())
-      .then(status => setEnvReady(status.pnpm !== false))
+      .then(status => {
+        setEnvReady(status.pnpm !== false)
+        if (typeof status.boot === 'string') setBootId(status.boot)
+      })
       .catch(() => {})
     refreshInstalled()
   }, [refreshInstalled])
+
+  // Pending-restart flags survive tab switches and page reloads, scoped to
+  // one host process: a different boot id means the restart happened and the
+  // stale banner must not resurrect.
+  useEffect(() => {
+    if (bootId === null) return
+    const saved = readSession('dshm-restart')
+    if (saved === null) return
+    if (saved.boot !== bootId) {
+      sessionStorage.removeItem('dshm-restart')
+      return
+    }
+    if (Array.isArray(saved.doneUrls) && saved.doneUrls.length > 0) setDoneUrls(saved.doneUrls)
+    if (Array.isArray(saved.updated) && saved.updated.length > 0) setUpdatedNames(saved.updated)
+    if (typeof saved.removed === 'number' && saved.removed > 0) setRemovedCount(saved.removed)
+  }, [bootId])
+
+  useEffect(() => {
+    if (bootId === null) return
+    if (doneUrls.length === 0 && updatedNames.length === 0 && removedCount === 0) return
+    sessionStorage.setItem('dshm-restart', JSON.stringify({
+      boot: bootId,
+      doneUrls,
+      updated: updatedNames,
+      removed: removedCount,
+    }))
+  }, [bootId, doneUrls, updatedNames, removedCount])
 
   const fixEnv = useCallback(() => {
     setEnvFixing(true)

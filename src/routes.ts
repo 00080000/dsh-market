@@ -114,6 +114,9 @@ interface InstallProgress {
 
 const progress: InstallProgress = { active: false, target: '', startedAt: 0, lastLine: '' }
 
+/** Identifies this host process; the client scopes its pending-restart flags to it. */
+const BOOT_ID = `${String(process.pid)}-${String(Date.now())}`
+
 function trackProgress(chunk: string): void {
   const lines = chunk.split('\n').map(l => l.trim()).filter(l => l !== '')
   if (lines.length > 0) progress.lastLine = lines[lines.length - 1].slice(0, 200)
@@ -366,6 +369,7 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
           seconds: progress.active ? Math.round((Date.now() - progress.startedAt) / 1000) : 0,
           lastLine: progress.lastLine,
           pnpm: await probePnpm(),
+          boot: BOOT_ID,
           installed: readInstalled(config.profile),
         })
       },
