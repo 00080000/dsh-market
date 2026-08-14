@@ -60,13 +60,9 @@ const zh = {
   marketUpdate: '市场有新版本，升级',
   updateAll: '全部更新',
   tabThemes: '主题',
-  themeMore: '更多主题',
-  themeSystem: '跟随系统',
   themeApply: '使用',
   themeActive: '使用中',
-  themeLight: '浅色',
-  themeDark: '深色',
-  themeEmpty: '目录里暂时没有更多主题插件，敬请期待',
+  themeEmpty: '目录里暂时还没有主题，敬请期待',
   progressHint: '首次安装需要下载与解析依赖，大插件可能要 1-3 分钟',
   toastReady: '已装好并已生效',
   gotIt: '知道了',
@@ -118,12 +114,8 @@ const en = {
   marketUpdate: 'Market update available — upgrade',
   updateAll: 'Update all',
   tabThemes: 'Themes',
-  themeMore: 'More themes',
-  themeSystem: 'Follow system',
   themeApply: 'Use',
   themeActive: 'Active',
-  themeLight: 'Light',
-  themeDark: 'Dark',
   themeEmpty: 'No more theme plugins in the catalog yet — stay tuned',
   progressHint: 'First installs download and resolve dependencies — large plugins can take 1-3 minutes',
   toastReady: 'installed and live',
@@ -750,14 +742,14 @@ function MarketSection(props) {
                   : h('div', { className: 'dshm-grid' }, plugins.map(pluginCard)))
         : tab === 'themes' && themeSnap !== null
           ? h(React.Fragment, null,
-              h('div', { className: 'dshm-grid' },
-                themeCard('system', t('themeSystem'), ['#ffffff', '#e5e7eb', '#4f6ef7', '#0f1115']),
-                themeSnap.themes.map(def => themeCard(
-                  def.id,
-                  def.id === 'light' ? t('themeLight') : def.id === 'dark' ? t('themeDark') : def.id,
-                  themeSwatch(def),
-                ))),
-              h('div', { className: 'dshm-sect' }, t('themeMore')),
+              // Light/dark/system live in the official Appearance setting; this
+              // tab only shows what that setting can't: registered third-party
+              // palettes (none in the wild yet) and installable theme plugins.
+              (() => {
+                const extra = themeSnap.themes.filter(def => def.id !== 'light' && def.id !== 'dark')
+                return extra.length > 0 && h('div', { className: 'dshm-grid', style: { marginBottom: 10 } },
+                  extra.map(def => themeCard(def.id, def.id, themeSwatch(def))))
+              })(),
               data === null
                 ? h('div', { className: 'dshm-loading' }, h('span', { className: 'dshm-spin' }), t('loading'))
                 : themePlugins.length === 0
