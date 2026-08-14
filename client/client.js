@@ -547,7 +547,7 @@ exports.apply = function apply(ctx) {
     name: 'settings.section',
     id: 'market',
     order: 40,
-    label: () => t('nav') + (navState.attention ? ' ●' : ''),
+    label: () => t('nav') + (navState.attention ? ' ✨' : ''),
     locale: NS,
     inject: () => ({ t }),
   }, () => h(MarketSection, { t, locale: ctx.locale })))
