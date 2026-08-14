@@ -55,7 +55,6 @@ const zh = {
   envFixFail: '自动准备没成功，请点"导出日志"把文件发给我们反馈',
   loading: '正在加载插件目录…',
   backTop: '回到顶部',
-  sortFeatured: '推荐',
   sortHot: '最热',
   sortNew: '最新',
   marketUpdate: '市场有新版本，升级',
@@ -105,7 +104,6 @@ const en = {
   envFixFail: 'Automatic setup failed — please use "Export log" and send us the file',
   loading: 'Loading the catalog…',
   backTop: 'Back to top',
-  sortFeatured: 'Featured',
   sortHot: 'Top',
   sortNew: 'New',
   marketUpdate: 'Market update available — upgrade',
@@ -254,7 +252,7 @@ function MarketSection(props) {
   const [bootId, setBootId] = useState(null)
   const [showTop, setShowTop] = useState(false)
   const bodyRef = React.useRef(null)
-  const [sort, setSort] = useState('featured')
+  const [sort, setSort] = useState('hot')
 
   const refreshInstalled = useCallback((force) => {
     fetch('/dsh-market/installed', { cache: 'no-store' })
@@ -534,11 +532,11 @@ function MarketSection(props) {
                     onClick: () => setCat(id),
                   }, (data.categories[id] && (data.categories[id][lang] || data.categories[id].en)) || id)),
                   h('div', { className: 'dshm-sort' },
-                    ['featured', 'hot', 'new'].map(key => h('button', {
+                    ['hot', 'new'].map(key => h('button', {
                       key,
                       className: sort === key ? 'on' : '',
                       onClick: () => setSort(key),
-                    }, t(key === 'featured' ? 'sortFeatured' : key === 'hot' ? 'sortHot' : 'sortNew'))))),
+                    }, t(key === 'hot' ? 'sortHot' : 'sortNew'))))),
                 plugins.length === 0
                   ? h('div', { className: 'dshm-empty' }, t('empty'))
                   : h('div', { className: 'dshm-grid' }, plugins.map(p => {
