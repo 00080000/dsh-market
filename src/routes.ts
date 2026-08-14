@@ -9,7 +9,7 @@
 import { spawn } from 'node:child_process'
 import type { ChildProcess } from 'node:child_process'
 import { readFileSync } from 'node:fs'
-import { homedir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { loadRegistry } from './registry.ts'
@@ -218,6 +218,64 @@ function sameOrigin(request: IncomingMessage): boolean {
   }
 }
 
+/** Whether a process-control request came from this Web host on loopback. */
+export function trustedRestartRequest(request: Pick<IncomingMessage, 'headers' | 'socket'>): boolean {
+  const address = request.socket.remoteAddress
+  if (address !== '127.0.0.1' && address !== '::1' && address !== '::ffff:127.0.0.1') return false
+  if (request.headers.forwarded !== undefined
+    || request.headers['x-forwarded-for'] !== undefined
+    || request.headers['x-real-ip'] !== undefined) return false
+  const origin = request.headers.origin
+  const host = request.headers.host
+  if (origin === undefined || host === undefined) return false
+  try {
+    const parsed = new URL(origin)
+    return (parsed.protocol === 'http:' || parsed.protocol === 'https:') && parsed.host === host
+  } catch {
+    return false
+  }
+}
+
+interface RestartResult {
+  pid: number
+  helperPid: number | undefined
+  logOut: string
+  logErr: string
+}
+
+/** Relaunch this exact DSH entry after a short detached handoff, then stop it. */
+function scheduleRestart(): RestartResult {
+  const argv = [...process.execArgv, ...process.argv.slice(1)]
+  const cwd = process.cwd()
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
+  const logOut = join(tmpdir(), `dsh-market-restart-${stamp}.out.log`)
+  const logErr = join(tmpdir(), `dsh-market-restart-${stamp}.err.log`)
+  const helperCode = [
+    "const { spawn } = require('node:child_process')",
+    "const fs = require('node:fs')",
+    `const argv = ${JSON.stringify(argv)}`,
+    `const cwd = ${JSON.stringify(cwd)}`,
+    `const logOut = ${JSON.stringify(logOut)}`,
+    `const logErr = ${JSON.stringify(logErr)}`,
+    'setTimeout(() => {',
+    '  try {',
+    '    const out = fs.openSync(logOut, "a")',
+    '    const err = fs.openSync(logErr, "a")',
+    '    const child = spawn(process.execPath, argv, { cwd, detached: true, stdio: ["ignore", out, err], env: process.env })',
+    '    child.unref()',
+    '  } catch {}',
+    '}, 1500)',
+  ].join('\n')
+  const helper = spawn(process.execPath, ['-e', helperCode], {
+    detached: true,
+    stdio: 'ignore',
+    env: process.env,
+  })
+  helper.unref()
+  setTimeout(() => process.kill(process.pid, 'SIGTERM'), 500)
+  return { pid: process.pid, helperPid: helper.pid, logOut, logErr }
+}
+
 async function readJsonBody(request: IncomingMessage): Promise<unknown> {
   const chunks: Buffer[] = []
   let size = 0
@@ -353,6 +411,7 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
   // survive into a composition where the bundle layer already covers them.
   cleanHotDir(profileDir(config.profile))
   let installing = false
+  let restarting = false
 
   const disposers = [
     host.webServer.register({
@@ -431,6 +490,41 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
           node: process.version,
           profile: config.profile,
         }))
+      },
+    }),
+
+    host.webServer.register({
+      kind: 'exact',
+      path: '/dsh-market/restart',
+      handler: (request, response) => {
+        if (request.method !== 'POST') {
+          response.writeHead(405, { allow: 'POST' })
+          response.end()
+          return
+        }
+        if (!trustedRestartRequest(request)) {
+          sendJson(response, 403, { error: 'restart is limited to same-origin loopback requests' })
+          return
+        }
+        if (installing) {
+          sendJson(response, 409, { error: 'cannot restart while a plugin operation is running' })
+          return
+        }
+        if (restarting) {
+          sendJson(response, 409, { error: 'restart already scheduled' })
+          return
+        }
+        restarting = true
+        try {
+          const result = scheduleRestart()
+          logEvent('info', 'restart', `scheduled pid=${String(result.pid)} helper=${String(result.helperPid)}`)
+          sendJson(response, 202, { ok: true, boot: BOOT_ID, ...result })
+        } catch (error) {
+          restarting = false
+          const message = error instanceof Error ? error.message : String(error)
+          logEvent('error', 'restart', message)
+          sendJson(response, 500, { error: message })
+        }
       },
     }),
 

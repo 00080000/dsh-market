@@ -26,6 +26,10 @@ const zh = {
   installedBadge: '✓ 已装好',
   alreadyInstalled: '✓ 已安装',
   restartBanner: '项变更完成，重启 DeepSeek Harness 后生效',
+  restartNow: '立即重启',
+  restarting: '正在重启…',
+  restartFail: '重启失败',
+  restartTimeout: '等待 DeepSeek Harness 启动超时',
   uninstall: '卸载',
   confirmRemove: '确认卸载？',
   uninstalling: '卸载中…',
@@ -85,6 +89,10 @@ const en = {
   installedBadge: '✓ Installed',
   alreadyInstalled: '✓ Installed',
   restartBanner: 'change(s) done — restart DeepSeek Harness to apply',
+  restartNow: 'Restart now',
+  restarting: 'Restarting…',
+  restartFail: 'Restart failed',
+  restartTimeout: 'Timed out waiting for DeepSeek Harness to start',
   uninstall: 'Uninstall',
   confirmRemove: 'Confirm?',
   uninstalling: 'Removing…',
@@ -296,6 +304,7 @@ function MarketSection(props) {
   const [envFixing, setEnvFixing] = useState(false)
   const [envFailed, setEnvFailed] = useState(false)
   const [bootId, setBootId] = useState(null)
+  const [restarting, setRestarting] = useState(false)
   const [showTop, setShowTop] = useState(false)
   const bodyRef = React.useRef(null)
   const [sort, setSort] = useState('hot')
@@ -366,6 +375,49 @@ function MarketSection(props) {
       .catch(() => setEnvFailed(true))
       .finally(() => setEnvFixing(false))
   }, [])
+
+  const doRestart = useCallback(() => {
+    if (bootId === null || restarting) return
+    const previousBoot = bootId
+    setRestarting(true)
+    setInstallError(null)
+    fetch('/dsh-market/restart', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{}',
+    })
+      .then(res => res.json().then(body => ({ status: res.status, body })))
+      .then(({ status, body }) => {
+        if (status !== 202 || !body.ok) throw new Error(body.error || ('HTTP ' + status))
+        const deadline = Date.now() + 60000
+        const poll = () => {
+          fetch('/dsh-market/status', { cache: 'no-store' })
+            .then(res => res.json())
+            .then(next => {
+              if (typeof next.boot === 'string' && next.boot !== previousBoot) {
+                sessionStorage.removeItem('dshm-restart')
+                location.reload()
+                return
+              }
+              retry()
+            })
+            .catch(retry)
+        }
+        const retry = () => {
+          if (Date.now() >= deadline) {
+            setRestarting(false)
+            setInstallError(t('restartFail') + ': ' + t('restartTimeout'))
+            return
+          }
+          setTimeout(poll, 500)
+        }
+        setTimeout(poll, 500)
+      })
+      .catch(error => {
+        setRestarting(false)
+        setInstallError(t('restartFail') + ': ' + String(error))
+      })
+  }, [bootId, restarting, t])
 
   // Recover an install whose HTTP response was lost (page navigated away or
   // the connection dropped): the pending marker survives in sessionStorage and
@@ -644,6 +696,11 @@ function MarketSection(props) {
       pendingRestart > 0 && h('div', { className: 'dshm-restart' },
         h('span', null, '🔄'),
         h('span', { className: 'dshm-grow' }, h('b', null, pendingRestart), ' ', t('restartBanner')),
+        h('button', {
+          className: 'dshm-btn install' + (restarting ? ' busy' : ''),
+          disabled: restarting || bootId === null,
+          onClick: doRestart,
+        }, restarting ? t('restarting') : t('restartNow')),
         h('span', { title: t('restartHint') }, 'ℹ️'))),
     installError !== null && h('div', { className: 'dshm-err' }, installError),
     h('div', {
