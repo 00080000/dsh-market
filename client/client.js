@@ -55,6 +55,9 @@ const zh = {
   envFixFail: '自动准备没成功，请点"导出日志"把文件发给我们反馈',
   loading: '正在加载插件目录…',
   backTop: '回到顶部',
+  sortFeatured: '推荐',
+  sortHot: '最热',
+  sortNew: '最新',
   progressHint: '首次安装需要下载与解析依赖，大插件可能要 1-3 分钟',
   toastReady: '已装好并已生效',
   gotIt: '知道了',
@@ -101,6 +104,9 @@ const en = {
   envFixFail: 'Automatic setup failed — please use "Export log" and send us the file',
   loading: 'Loading the catalog…',
   backTop: 'Back to top',
+  sortFeatured: 'Featured',
+  sortHot: 'Top',
+  sortNew: 'New',
   progressHint: 'First installs download and resolve dependencies — large plugins can take 1-3 minutes',
   toastReady: 'installed and live',
   gotIt: 'Got it',
@@ -119,7 +125,11 @@ const CSS = `
 .dshm-tab.on{color:var(--dsw-alias-brand-primary,#4f6ef7);border-bottom-color:var(--dsw-alias-brand-primary,#4f6ef7);font-weight:600}
 .dshm-restart{display:flex;align-items:center;gap:8px;background:var(--dsw-alias-bg-layer-2,#fdf3e3);border:1px solid var(--dsw-alias-border-l1,#f3e3c3);border-radius:8px;padding:8px 12px;font-size:12px;margin:10px 4px 0}
 .dshm-body{flex:1;overflow-y:auto;padding:12px 4px 24px}
-.dshm-cats{display:flex;gap:6px;flex-wrap:wrap;position:sticky;top:-13px;z-index:5;background:var(--dsw-alias-bg-layer-1,#fff);padding:10px 0;margin:-10px 0 6px}
+.dshm-cats{display:flex;gap:6px;flex-wrap:wrap;position:sticky;top:-13px;z-index:5;background:var(--dsw-alias-bg-layer-1,#fff);padding:10px 0;margin:-10px 0 6px;align-items:center}
+.dshm-sort{margin-left:auto;display:flex;gap:2px;background:var(--dsw-alias-bg-layer-2,#f3f4f6);border-radius:8px;padding:2px;flex-shrink:0}
+.dshm-sort button{border:none;background:none;font:inherit;font-size:12px;color:var(--dsw-alias-label-secondary,#6b7280);padding:3px 10px;border-radius:6px;cursor:pointer}
+.dshm-sort button.on{background:var(--dsw-alias-bg-layer-1,#fff);color:var(--dsw-alias-label-primary,#1f2328);font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.dshm-star{font-size:11px;color:var(--dsw-alias-label-secondary,#9ca3af)}
 .dshm-top{position:absolute;right:18px;bottom:18px;z-index:20;width:38px;height:38px;border-radius:99px;border:1px solid var(--dsw-alias-border-l1,#e5e7eb);background:var(--dsw-alias-bg-layer-1,#fff);color:var(--dsw-alias-label-secondary,#6b7280);font-size:16px;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.12)}
 .dshm-top:hover{color:var(--dsw-alias-brand-primary,#4f6ef7)}
 .dshm-chip{font:inherit;font-size:12px;border:1px solid var(--dsw-alias-border-l1,#e5e7eb);background:var(--dsw-alias-bg-layer-1,#fff);border-radius:99px;padding:3px 11px;cursor:pointer;color:var(--dsw-alias-label-secondary,#6b7280)}
@@ -242,6 +252,8 @@ function MarketSection(props) {
   const [bootId, setBootId] = useState(null)
   const [showTop, setShowTop] = useState(false)
   const bodyRef = React.useRef(null)
+  const [stars, setStars] = useState({})
+  const [sort, setSort] = useState('featured')
 
   const refreshInstalled = useCallback(() => {
     fetch('/dsh-market/installed', { cache: 'no-store' })
@@ -266,6 +278,10 @@ function MarketSection(props) {
         setEnvReady(status.pnpm !== false)
         if (typeof status.boot === 'string') setBootId(status.boot)
       })
+      .catch(() => {})
+    fetch('/dsh-market/stars', { cache: 'no-store' })
+      .then(res => res.json())
+      .then(body => setStars(body.stars || {}))
       .catch(() => {})
     refreshInstalled()
   }, [refreshInstalled])
@@ -352,7 +368,7 @@ function MarketSection(props) {
   const plugins = useMemo(() => {
     if (data === null) return []
     const query = q.trim().toLowerCase()
-    return data.plugins.filter(p => {
+    const list = data.plugins.filter(p => {
       if (cat !== 'all' && p.category !== cat) return false
       if (query === '') return true
       const desc = (p.description && (p.description[lang] || p.description.en)) || ''
@@ -360,7 +376,14 @@ function MarketSection(props) {
         || p.owner.toLowerCase().includes(query)
         || desc.toLowerCase().includes(query)
     })
-  }, [data, q, cat, lang])
+    if (sort === 'hot') {
+      return [...list].sort((a, b) => (stars[b.url.toLowerCase()] ?? -1) - (stars[a.url.toLowerCase()] ?? -1))
+    }
+    if (sort === 'new') {
+      return [...list].sort((a, b) => String(b.added).localeCompare(String(a.added)))
+    }
+    return list
+  }, [data, q, cat, lang, sort, stars])
 
   const doInstall = useCallback((plugin) => {
     setConfirming(null)
@@ -504,7 +527,13 @@ function MarketSection(props) {
                     key: id,
                     className: 'dshm-chip' + (cat === id ? ' on' : ''),
                     onClick: () => setCat(id),
-                  }, (data.categories[id] && (data.categories[id][lang] || data.categories[id].en)) || id))),
+                  }, (data.categories[id] && (data.categories[id][lang] || data.categories[id].en)) || id)),
+                  h('div', { className: 'dshm-sort' },
+                    ['featured', 'hot', 'new'].map(key => h('button', {
+                      key,
+                      className: sort === key ? 'on' : '',
+                      onClick: () => setSort(key),
+                    }, t(key === 'featured' ? 'sortFeatured' : key === 'hot' ? 'sortHot' : 'sortNew'))))),
                 plugins.length === 0
                   ? h('div', { className: 'dshm-empty' }, t('empty'))
                   : h('div', { className: 'dshm-grid' }, plugins.map(p => {
@@ -518,12 +547,14 @@ function MarketSection(props) {
                             p.name.replace(/^dsh[-_]/i, '').charAt(0).toUpperCase() || 'P'),
                           h('div', { style: { minWidth: 0 } },
                             h('div', { className: 'dshm-nm' }, p.name),
-                            h('div', { className: 'dshm-owner' }, p.owner))),
+                            h('div', { className: 'dshm-owner' }, p.owner,
+                              stars[p.url.toLowerCase()] !== undefined && h('span', { className: 'dshm-star' }, ' · ★ ' + stars[p.url.toLowerCase()]))),
+                          h('span', { className: 'dshm-grow' }),
+                          h('a', { className: 'dshm-src', href: p.url, target: '_blank', rel: 'noreferrer', style: { alignSelf: 'flex-start', flexShrink: 0 } }, t('viewSource'))),
                         h('div', { className: 'dshm-desc' }, desc),
                         h('div', { className: 'dshm-foot' },
                           h('span', { className: 'dshm-cat' },
                             (data.categories[p.category] && (data.categories[p.category][lang] || data.categories[p.category].en)) || p.category),
-                          h('a', { className: 'dshm-src', href: p.url, target: '_blank', rel: 'noreferrer' }, t('viewSource')),
                           h('span', { className: 'dshm-grow' }),
                           done
                             ? h('button', { className: 'dshm-btn done' }, t('installedBadge'))
