@@ -10,7 +10,7 @@ import { spawn } from 'node:child_process'
 import type { ChildProcess } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { loadRegistry } from './registry.ts'
 import { cleanHotDir, hotMount, hotUnmount } from './hot.ts'
@@ -47,13 +47,18 @@ const INSTALL_TIMEOUT_MS = 5 * 60 * 1000
  * Installs run through node:child_process, not ctx.shell: the shell service is
  * the agent's sandboxed executor and denies writes to the profile directory.
  */
-function dshArgv(): { file: string; args: string[]; cwd: string | undefined } {
+function dshArgv(): { file: string; args: string[]; cwd: string | undefined; viaShell: boolean } {
   const entry = process.argv[1]
   if (entry !== undefined && /[\\/](?:bin\.(?:js|ts)|dsh)$/.test(entry)) {
-    // cwd near the entry keeps execArgv imports (tsx/esm) resolvable on source launches.
-    return { file: process.execPath, args: [...process.execArgv, entry], cwd: dirname(entry) }
+    // Absolute paths are required: source launches (`pnpm dsh`) pass a
+    // relative entry, which the child resolves against its OWN cwd and dies
+    // with MODULE_NOT_FOUND (#13). cwd near the entry keeps execArgv imports
+    // (tsx/esm) resolvable on source launches.
+    const abs = resolve(entry)
+    return { file: process.execPath, args: [...process.execArgv, abs], cwd: dirname(abs), viaShell: false }
   }
-  return { file: 'dsh', args: [], cwd: undefined }
+  // Bare `dsh` is a .cmd shim on Windows that only a shell can start (#13).
+  return { file: 'dsh', args: [], cwd: undefined, viaShell: winCmdShim }
 }
 
 interface InstallResult {
@@ -149,7 +154,7 @@ function trackProgress(chunk: string): void {
 }
 
 function runDshPlugin(profile: string, pluginArgs: string[]): Promise<InstallResult> {
-  const { file, args, cwd } = dshArgv()
+  const { file, args, cwd, viaShell } = dshArgv()
   progress.active = true
   progress.target = pluginArgs[pluginArgs.length - 1] ?? ''
   progress.startedAt = Date.now()
@@ -162,6 +167,7 @@ function runDshPlugin(profile: string, pluginArgs: string[]): Promise<InstallRes
       // or fail instead of asking.
       env: { ...process.env, CI: 'true' },
       stdio: ['ignore', 'pipe', 'pipe'],
+      shell: viaShell,
     })
     let stdout = ''
     let stderr = ''
@@ -477,16 +483,36 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
           }
           // Re-running add re-resolves the source: git HEAD for github specs,
           // dist-tag latest for registry installs.
-          const target = spec.startsWith('github:') ? spec.replace(/#.*$/, '') : `${name}@latest`
+          const isGit = spec.startsWith('github:')
+          const target = isGit ? spec.replace(/#.*$/, '') : `${name}@latest`
+          const repoKey = isGit ? spec.slice('github:'.length).replace(/#.*$/, '').toLowerCase() : null
+          const beforeVersion = readInstalledVersion(config.profile, name)
+          const beforeCommit = repoKey !== null ? readLockCommits(config.profile).get(repoKey) ?? null : null
           installing = true
           try {
             const result = await runDshPlugin(config.profile, ['add', target])
-            const ok = result.exitCode === 0 && !result.timedOut
+            let ok = result.exitCode === 0 && !result.timedOut
+            let stale = false
+            if (ok) {
+              // pnpm's minimumReleaseAge silently keeps the old version and
+              // exits 0 when the new release is "too young" (#13) — a clean
+              // exit alone does not mean the update happened.
+              const afterVersion = readInstalledVersion(config.profile, name)
+              const afterCommit = repoKey !== null ? readLockCommits(config.profile).get(repoKey) ?? null : null
+              stale = isGit
+                ? beforeCommit !== null && afterCommit === beforeCommit
+                : beforeVersion !== null && afterVersion === beforeVersion
+              if (stale) ok = false
+            }
             if (ok) updatesCache = null
+            const staleError = stale
+              ? `still v${beforeVersion ?? beforeCommit?.slice(0, 7) ?? '?'} after the update — pnpm 的 minimumReleaseAge 安全策略会暂时拦下发布不久的新版本（静默保留旧版且返回成功）。请稍后再试；着急可调整 profile pnpm-workspace.yaml 的 minimumReleaseAge / pnpm's minimumReleaseAge holds back very fresh releases; retry later or tune it in the profile's pnpm-workspace.yaml`
+              : null
             logEvent(ok ? 'info' : 'error', 'update',
-              `${name} -> ${target} exit=${String(result.exitCode)}${result.timedOut ? ' TIMEOUT' : ''}${ok ? '' : ` stderr=${result.stderr.slice(-300)}`}`)
+              `${name} -> ${target} exit=${String(result.exitCode)}${result.timedOut ? ' TIMEOUT' : ''}${stale ? ' STALE(minimumReleaseAge?)' : ''}${ok ? '' : ` stderr=${result.stderr.slice(-300)}`}`)
             sendJson(response, ok ? 200 : 502, {
               ok,
+              error: staleError ?? undefined,
               exitCode: result.exitCode,
               timedOut: result.timedOut,
               stdout: result.stdout,
