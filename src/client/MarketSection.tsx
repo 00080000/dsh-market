@@ -594,6 +594,7 @@ export function MarketSection(props: MarketSectionProps) {
               : (
                   <>
                     <div className={css.cats}>
+                      <div className={css.catsRow}>
                       <div className={catsOpen ? css.catsWrap : `${css.catsWrap} ${css.catsCollapsed}`}>
                         <Pill active={cat === 'all'} onClick={() => setCat('all')}>{t('all')}</Pill>
                         {/* Collapsed, the selected category is pulled to the front so it never hides. */}
@@ -605,13 +606,6 @@ export function MarketSection(props: MarketSectionProps) {
                           >{(data.categories[id] && (data.categories[id]![lang] || data.categories[id]!.en)) || id}</Pill>
                         ))}
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className={css.catsToggle}
-                        icon={catsOpen ? <IconChevronUpOutline14 size={14} /> : <IconChevronDownOutline14 size={14} />}
-                        onClick={() => setCatsOpen(o => !o)}
-                      >{catsOpen ? t('catsLess') : t('catsMore')}</Button>
                       <div className={css.sort}>
                         {['hot', 'new'].map(key => (
                           <button
@@ -621,6 +615,14 @@ export function MarketSection(props: MarketSectionProps) {
                           >{t(key === 'hot' ? 'sortHot' : 'sortNew')}</button>
                         ))}
                       </div>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className={css.catsToggle}
+                        icon={catsOpen ? <IconChevronUpOutline14 size={14} /> : <IconChevronDownOutline14 size={14} />}
+                        onClick={() => setCatsOpen(o => !o)}
+                      >{catsOpen ? t('catsLess') : t('catsMore')}</Button>
                     </div>
                     {plugins.length === 0
                       ? <div className={css.empty}>{t('empty')}</div>
