@@ -257,12 +257,12 @@ function MarketSection(props) {
   const [stars, setStars] = useState({})
   const [sort, setSort] = useState('featured')
 
-  const refreshInstalled = useCallback(() => {
+  const refreshInstalled = useCallback((force) => {
     fetch('/dsh-market/installed', { cache: 'no-store' })
       .then(res => res.json())
       .then(body => setInstalled(body.installed || {}))
       .catch(() => {})
-    fetch('/dsh-market/updates', { cache: 'no-store' })
+    fetch('/dsh-market/updates' + (force === true ? '?force=1' : ''), { cache: 'no-store' })
       .then(res => res.json())
       .then(body => setUpdates(body.updates || {}))
       .catch(() => {})
@@ -493,7 +493,7 @@ function MarketSection(props) {
         h('input', { placeholder: t('searchPh'), value: q, onChange: e => setQ(e.target.value) })),
       h('div', { className: 'dshm-tabs' },
         h('button', { className: 'dshm-tab' + (tab === 'discover' ? ' on' : ''), onClick: () => setTab('discover') }, t('tabDiscover')),
-        h('button', { className: 'dshm-tab' + (tab === 'installed' ? ' on' : ''), onClick: () => { setTab('installed'); refreshInstalled() } },
+        h('button', { className: 'dshm-tab' + (tab === 'installed' ? ' on' : ''), onClick: () => { setTab('installed'); refreshInstalled(true) } },
           t('tabInstalled') + (Object.keys(installed).length > 0 ? ' (' + Object.keys(installed).length + ')' : ''),
           hasUpdates && h('span', { className: 'dshm-dot' }))),
       !envReady && h('div', { className: 'dshm-restart' },

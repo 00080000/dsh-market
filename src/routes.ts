@@ -297,8 +297,8 @@ async function fetchJson(url: string): Promise<unknown> {
 }
 
 /** Per-plugin update checks; a failed check reports no update rather than failing the listing. */
-async function checkUpdates(profile: string): Promise<Record<string, UpdateStatus>> {
-  if (updatesCache && Date.now() - updatesCache.at < UPDATES_TTL_MS) return updatesCache.data
+async function checkUpdates(profile: string, force = false): Promise<Record<string, UpdateStatus>> {
+  if (!force && updatesCache && Date.now() - updatesCache.at < UPDATES_TTL_MS) return updatesCache.data
   const installed = readInstalled(profile)
   const lockCommits = readLockCommits(profile)
   const result: Record<string, UpdateStatus> = {}
@@ -452,7 +452,8 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
           return
         }
         try {
-          sendJson(response, 200, { updates: await checkUpdates(config.profile) })
+          const force = (request.url ?? '').includes('force=1')
+          sendJson(response, 200, { updates: await checkUpdates(config.profile, force) })
         } catch (error) {
           sendJson(response, 500, { error: error instanceof Error ? error.message : String(error) })
         }
