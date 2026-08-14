@@ -173,8 +173,6 @@ function repoOf(url) {
   return m ? m[1] : null
 }
 
-const navState = { attention: localStorage.getItem('dshm-visited') === null }
-
 function readSession(key) {
   try { return JSON.parse(sessionStorage.getItem(key) || 'null') } catch { return null }
 }
@@ -238,8 +236,6 @@ function MarketSection(props) {
 
   useEffect(() => {
     injectStyles()
-    localStorage.setItem('dshm-visited', '1')
-    navState.attention = false
     fetch('/dsh-market/registry', { cache: 'no-store' })
       .then(res => { if (!res.ok) throw new Error('HTTP ' + res.status); return res.json() })
       .then(body => setData(body.registry))
@@ -411,9 +407,6 @@ function MarketSection(props) {
             location.reload()
           },
         }, t('refresh'))),
-      (busyUrl !== null || updatingName !== null) && h('div', { className: 'dshm-progress' },
-        h('span', { className: 'dshm-spin' }),
-        h('code', { className: 'dshm-grow' }, progressLine || t('progressHint'))),
       pendingRestart > 0 && h('div', { className: 'dshm-restart' },
         h('span', null, '🔄'),
         h('span', { className: 'dshm-grow' }, h('b', null, pendingRestart), ' ', t('restartBanner')),
@@ -463,7 +456,10 @@ function MarketSection(props) {
                                     className: 'dshm-btn install',
                                     disabled: busyUrl !== null,
                                     onClick: () => setConfirming(p),
-                                  }, t('install'))))
+                                  }, t('install'))),
+                        busy && h('div', { className: 'dshm-progress', style: { margin: '6px 0 0' } },
+                          h('span', { className: 'dshm-spin' }),
+                          h('code', { className: 'dshm-grow' }, progressLine || t('progressHint'))))
                     })))
         : Object.keys(installed).length === 0
           ? h('div', { className: 'dshm-empty' }, t('installedEmpty'))
@@ -482,7 +478,10 @@ function MarketSection(props) {
                     ? h('a', { className: 'dshm-spec dshm-src', href: repoUrl, target: '_blank', rel: 'noreferrer', style: { display: 'inline-block' } }, specText)
                     : h('div', { className: 'dshm-spec' }, specText),
                   entry !== undefined && h('div', { className: 'dshm-desc', style: { minHeight: 0 } },
-                    (entry.description && (entry.description[lang] || entry.description.en)) || '')),
+                    (entry.description && (entry.description[lang] || entry.description.en)) || ''),
+                  updatingName === name && h('div', { className: 'dshm-progress', style: { margin: '6px 0 0' } },
+                    h('span', { className: 'dshm-spin' }),
+                    h('code', { className: 'dshm-grow' }, progressLine || t('progressHint')))),
                 h('span', { className: 'dshm-grow' }),
                 repoUrl !== null && h('a', { className: 'dshm-src', href: repoUrl + '#readme', target: '_blank', rel: 'noreferrer' }, t('readme')),
                 updatedNames.includes(name)
@@ -533,21 +532,11 @@ exports.apply = function apply(ctx) {
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'dsh-market: dictionaries')
   const t = ctx.locale.bind(NS)
 
-  // Attention dot on the nav entry: first run, or installed plugins with
-  // pending updates (checked once per page load; the label thunk re-reads on
-  // every projection).
-  fetch('/dsh-market/updates', { cache: 'no-store' })
-    .then(res => res.json())
-    .then(body => {
-      if (Object.values(body.updates || {}).some(u => u.updateAvailable)) navState.attention = true
-    })
-    .catch(() => {})
-
   ctx.slots.inject('settings.section', () => ctx.slots.register({
     name: 'settings.section',
     id: 'market',
     order: 40,
-    label: () => t('nav') + (navState.attention ? ' ✨' : ''),
+    label: () => t('nav'),
     locale: NS,
     inject: () => ({ t }),
   }, () => h(MarketSection, { t, locale: ctx.locale })))
