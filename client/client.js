@@ -65,6 +65,7 @@ const zh = {
   themeEmpty: '目录里暂时还没有主题，敬请期待',
   progressHint: '首次安装需要下载与解析依赖，大插件可能要 1-3 分钟',
   toastReady: '已装好并已生效',
+  toastTheme: '已启用。到 设置 → 插件市场 → 主题 可随时切换',
   gotIt: '知道了',
 }
 
@@ -119,6 +120,7 @@ const en = {
   themeEmpty: 'No more theme plugins in the catalog yet — stay tuned',
   progressHint: 'First installs download and resolve dependencies — large plugins can take 1-3 minutes',
   toastReady: 'installed and live',
+  toastTheme: 'is now active. Switch any time in Settings → Plugin Market → Themes',
   gotIt: 'Got it',
 }
 
@@ -499,6 +501,8 @@ function MarketSection(props) {
       .then(res => res.json().then(body => ({ status: res.status, body })))
       .then(({ status, body }) => {
         if (status === 200 && body.ok) {
+          sessionStorage.setItem('dshm-toast', JSON.stringify([name]))
+          sessionStorage.setItem('dshm-toast-mode', 'theme')
           sessionStorage.setItem('dshm-tab', 'themes')
           location.reload()
         } else {
@@ -866,6 +870,11 @@ exports.apply = function apply(ctx) {
   // shell overlay layer, shown once after the refresh that follows a hot
   // install, so the user lands back in their flow with visible proof.
   function InstallToast() {
+    const [mode] = useState(() => {
+      const value = sessionStorage.getItem('dshm-toast-mode')
+      sessionStorage.removeItem('dshm-toast-mode')
+      return value
+    })
     const [names, setNames] = useState(() => {
       const value = readSession('dshm-toast')
       sessionStorage.removeItem('dshm-toast')
@@ -880,7 +889,7 @@ exports.apply = function apply(ctx) {
     if (names.length === 0) return null
     return h('div', { className: 'dshm-toast' },
       h('span', null, '✨'),
-      h('span', null, names.join(', ') + ' ' + t('toastReady')),
+      h('span', null, names.join(', ') + ' ' + t(mode === 'theme' ? 'toastTheme' : 'toastReady')),
       h('button', { className: 'dshm-btn install', onClick: () => setNames([]) }, t('gotIt')))
   }
   ctx.slots.inject('shell.overlay', () => ctx.slots.register({

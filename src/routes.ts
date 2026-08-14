@@ -31,7 +31,7 @@ export interface WebServerService {
 export interface LoaderEntry {
   options: { id?: string; name?: string; disabled?: boolean | null }
   fiber?: unknown
-  update(options: { disabled: boolean | null }): Promise<void>
+  update(options: { disabled: boolean | null }, create?: boolean, force?: boolean): Promise<void>
 }
 
 export interface MarketHost {
@@ -466,13 +466,26 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
     let found = false
     for (const entry of host.loader.entries()) {
       if (entry.options.name !== name) continue
-      try {
-        await entry.update({ disabled: disabledFlag ? true : null })
-        found = true
-      } catch (error) {
-        logEvent('warn', 'toggle', `${name}: entry update failed — ${error instanceof Error ? error.message : String(error)}`)
+      // A disable can land while the entry's init is still in flight: the
+      // options flip but the finishing init brings the fiber up anyway, and a
+      // plain re-update no-ops on the empty diff. Force the update and verify
+      // the live state, retrying until reality matches the flag.
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          await entry.update({ disabled: disabledFlag ? true : null }, false, true)
+          found = true
+        } catch (error) {
+          logEvent('warn', 'toggle', `${name}: entry update failed — ${error instanceof Error ? error.message : String(error)}`)
+          break
+        }
+        const live = entry.fiber !== undefined
+        if (live !== disabledFlag) break
+        await new Promise(resolvePromise => setTimeout(resolvePromise, 200))
       }
+      logEvent('info', 'toggle',
+        `${name} -> ${disabledFlag ? 'off' : 'on'}: fiber=${String(entry.fiber !== undefined)}`)
     }
+    if (!found) logEvent('info', 'toggle', `${name}: no loader entry matched`)
     return found
   }
 
