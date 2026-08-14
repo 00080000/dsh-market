@@ -25,7 +25,10 @@ const zh = {
   installing: '安装中…',
   installedBadge: '✓ 已装好',
   alreadyInstalled: '✓ 已安装',
-  restartBanner: '个新插件已装好，重启 DeepSeek Harness 后就能用啦',
+  restartBanner: '项变更完成，重启 DeepSeek Harness 后生效',
+  uninstall: '卸载',
+  confirmRemove: '确认卸载？',
+  uninstalling: '卸载中…',
   restartHint: '重启方式：关闭当前 dsh 进程后重新运行（例如 dsh web）',
   confirmTitle: '安装',
   confirmWarn: '插件是社区第三方代码。安装即表示你信任该来源；构建脚本默认被禁止执行。',
@@ -62,7 +65,10 @@ const en = {
   installing: 'Installing…',
   installedBadge: '✓ Installed',
   alreadyInstalled: '✓ Installed',
-  restartBanner: 'new plugin(s) installed — restart DeepSeek Harness to activate',
+  restartBanner: 'change(s) done — restart DeepSeek Harness to apply',
+  uninstall: 'Uninstall',
+  confirmRemove: 'Confirm?',
+  uninstalling: 'Removing…',
   restartHint: 'To restart: stop the current dsh process and run it again (e.g. dsh web)',
   confirmTitle: 'Install',
   confirmWarn: 'Plugins are third-party community code. Installing means you trust this source; build scripts are blocked by default.',
@@ -122,6 +128,8 @@ const CSS = `
 .dshm-btn.done{background:transparent;color:var(--dsw-alias-state-success-primary,#16a34a);cursor:default}
 .dshm-btn.ghost{background:var(--dsw-alias-bg-layer-2,#f3f4f6);color:var(--dsw-alias-label-secondary,#6b7280)}
 .dshm-btn.upd{background:var(--dsw-alias-state-warn-primary,#ea580c);color:#fff}
+.dshm-btn.danger{background:transparent;border:1px solid var(--dsw-alias-state-error-primary,#dc2626);color:var(--dsw-alias-state-error-primary,#dc2626)}
+.dshm-btn.danger.armed{background:var(--dsw-alias-state-error-primary,#dc2626);color:#fff}
 .dshm-dot{display:inline-block;width:7px;height:7px;border-radius:99px;background:var(--dsw-alias-state-error-primary,#ef4444);margin-left:5px;vertical-align:2px}
 .dshm-loading{display:flex;flex-direction:column;align-items:center;gap:12px;padding:48px;color:var(--dsw-alias-label-secondary,#9ca3af);font-size:13px}
 .dshm-spin{width:22px;height:22px;border:3px solid var(--dsw-alias-border-l1,#e5e7eb);border-top-color:var(--dsw-alias-brand-primary,#4f6ef7);border-radius:99px;animation:dshm-sp .8s linear infinite}
@@ -205,6 +213,9 @@ function MarketSection(props) {
   const [hotUrls, setHotUrls] = useState([])
   const [hotNames, setHotNames] = useState([])
   const [progressLine, setProgressLine] = useState(null)
+  const [removeArmed, setRemoveArmed] = useState(null)
+  const [removingName, setRemovingName] = useState(null)
+  const [removedCount, setRemovedCount] = useState(0)
 
   const refreshInstalled = useCallback(() => {
     fetch('/dsh-market/installed', { cache: 'no-store' })
@@ -338,7 +349,30 @@ function MarketSection(props) {
       .finally(() => setUpdatingName(null))
   }, [refreshInstalled, t])
 
-  const pendingRestart = doneUrls.length + updatedNames.length
+  const doUninstall = useCallback((name) => {
+    setRemoveArmed(null)
+    setInstallError(null)
+    setRemovingName(name)
+    fetch('/dsh-market/uninstall', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name }),
+    })
+      .then(res => res.json().then(body => ({ status: res.status, body })))
+      .then(({ status, body }) => {
+        if (status === 200 && body.ok) {
+          if (!body.hot) setRemovedCount(n => n + 1)
+          refreshInstalled()
+        } else {
+          const text = v => typeof v === 'string' ? v : (v && typeof v.text === 'string') ? v.text : v == null ? '' : JSON.stringify(v)
+          setInstallError((text(body.error) || text(body.stderr) || 'error').trim().slice(-600))
+        }
+      })
+      .catch(error => setInstallError(String(error)))
+      .finally(() => setRemovingName(null))
+  }, [refreshInstalled])
+
+  const pendingRestart = doneUrls.length + updatedNames.length + removedCount
   const hasUpdates = Object.keys(installed).some(
     name => !updatedNames.includes(name) && updates[name] && updates[name].updateAvailable,
   )
@@ -455,7 +489,21 @@ function MarketSection(props) {
                         }, t('update'))
                       : status && status.kind === 'linked'
                         ? h('span', { className: 'dshm-owner' }, t('linkedDev'))
-                        : h('span', { className: 'dshm-owner' }, t('upToDate')))
+                        : h('span', { className: 'dshm-owner' }, t('upToDate')),
+                name !== 'dsh-market' && (
+                  removingName === name
+                    ? h('button', { className: 'dshm-btn danger busy' }, t('uninstalling'))
+                    : removeArmed === name
+                      ? h('button', {
+                          className: 'dshm-btn danger armed',
+                          onClick: () => doUninstall(name),
+                          onMouseLeave: () => setRemoveArmed(null),
+                        }, t('confirmRemove'))
+                      : h('button', {
+                          className: 'dshm-btn danger',
+                          disabled: removingName !== null || busyUrl !== null || updatingName !== null,
+                          onClick: () => setRemoveArmed(name),
+                        }, t('uninstall'))))
             })),
     confirming !== null && h('div', { className: 'dshm-mask', onClick: e => { if (e.target === e.currentTarget) setConfirming(null) } },
       h('div', { className: 'dshm-modal' },

@@ -12,7 +12,7 @@ import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { loadRegistry } from './registry.ts'
-import { cleanHotDir, hotMount } from './hot.ts'
+import { cleanHotDir, hotMount, hotUnmount } from './hot.ts'
 import { exportLogs, logEvent } from './log.ts'
 
 export interface WebServerService {
@@ -426,6 +426,65 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
           const message = error instanceof Error ? error.message : String(error)
           host.logger?.warn(`[dsh-market] update failed: ${message}`)
           logEvent('error', 'update', `route error: ${message}`)
+          sendJson(response, 500, { error: message })
+        }
+      },
+    }),
+
+    host.webServer.register({
+      kind: 'exact',
+      path: '/dsh-market/uninstall',
+      handler: async (request, response) => {
+        if (request.method !== 'POST') {
+          response.writeHead(405, { allow: 'POST' })
+          response.end()
+          return
+        }
+        if (!sameOrigin(request)) {
+          sendJson(response, 403, { error: 'untrusted origin' })
+          return
+        }
+        if (installing) {
+          sendJson(response, 409, { error: 'another install is already running' })
+          return
+        }
+        try {
+          const body = (await readJsonBody(request)) as { name?: unknown }
+          const name = typeof body.name === 'string' ? body.name : ''
+          if (name === 'dsh-market') {
+            sendJson(response, 400, { error: 'the market cannot uninstall itself; use the dsh CLI' })
+            return
+          }
+          if (readInstalled(config.profile)[name] === undefined) {
+            sendJson(response, 400, { error: 'plugin is not installed' })
+            return
+          }
+          installing = true
+          try {
+            const result = await runDshPlugin(config.profile, ['remove', name])
+            const ok = result.exitCode === 0 && !result.timedOut
+            let hot = false
+            if (ok) {
+              updatesCache = null
+              hot = await hotUnmount(name)
+            }
+            logEvent(ok ? 'info' : 'error', 'uninstall',
+              `${name} exit=${String(result.exitCode)}${ok ? ` live-removed=${String(hot)}` : ` stderr=${result.stderr.slice(-300)}`}`)
+            sendJson(response, ok ? 200 : 502, {
+              ok,
+              hot,
+              exitCode: result.exitCode,
+              stdout: result.stdout,
+              stderr: result.stderr,
+              installed: readInstalled(config.profile),
+            })
+          } finally {
+            installing = false
+          }
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error)
+          host.logger?.warn(`[dsh-market] uninstall failed: ${message}`)
+          logEvent('error', 'uninstall', `route error: ${message}`)
           sendJson(response, 500, { error: message })
         }
       },

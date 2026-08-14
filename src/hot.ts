@@ -100,6 +100,28 @@ export function cleanHotDir(profileDir: string): void {
 
 let hotSequence = 0
 
+const hotHandles = new Map<string, PluginHandle>()
+
+/**
+ * Dispose a plugin hot-mounted earlier in this session, removing it from the
+ * running composition immediately.
+ * @param packageName - package to unmount.
+ * @returns true when a live hot mount was found and disposed.
+ */
+export async function hotUnmount(packageName: string): Promise<boolean> {
+  const handle = hotHandles.get(packageName)
+  if (handle === undefined) return false
+  hotHandles.delete(packageName)
+  try {
+    await handle.dispose()
+    logEvent('info', 'hot-unmount', `${packageName}: removed live`)
+    return true
+  } catch (error) {
+    logEvent('warn', 'hot-unmount', `${packageName}: dispose failed — ${error instanceof Error ? error.message : String(error)}`)
+    return false
+  }
+}
+
 /**
  * Mount `packageName` (just installed into the profile) into the running
  * composition.
@@ -129,6 +151,7 @@ export async function hotMount(ctx: HotContext, profileDir: string, packageName:
     writeFileSync(file, yml)
     const handle = ctx.plugin(HotTree, { path: pathToFileURL(file).href })
     await handle.await()
+    hotHandles.set(packageName, handle)
     ctx.logger?.info?.(`[dsh-market] hot-mounted ${packageName}`)
     logEvent('info', 'hot-mount', `${packageName}: live`)
     return true
