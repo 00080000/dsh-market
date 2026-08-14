@@ -60,8 +60,7 @@ const zh = {
   marketUpdate: '市场有新版本，升级',
   updateAll: '全部更新',
   tabThemes: '主题',
-  themeNow: '点一下立即换肤，不用重启',
-  themeMore: '安装更多主题插件（装好后按提示刷新或重启，就会出现在上面）',
+  themeMore: '安装更多主题插件——皮肤类装好刷新后直接生效（卸载即恢复）；调色类会出现在上面的列表里',
   themeSystem: '跟随系统',
   themeApply: '启用',
   themeActive: '使用中',
@@ -119,8 +118,7 @@ const en = {
   marketUpdate: 'Market update available — upgrade',
   updateAll: 'Update all',
   tabThemes: 'Themes',
-  themeNow: 'Click to switch instantly — no restart needed',
-  themeMore: 'Install more theme plugins — after the prompted refresh or restart they appear above',
+  themeMore: 'Install more themes — skins apply right after the prompted refresh (uninstall to revert); palette themes appear in the list above',
   themeSystem: 'Follow system',
   themeApply: 'Apply',
   themeActive: 'Active',
@@ -675,7 +673,6 @@ function MarketSection(props) {
                   : h('div', { className: 'dshm-grid' }, plugins.map(pluginCard)))
         : tab === 'themes' && themeSnap !== null
           ? h(React.Fragment, null,
-              h('div', { className: 'dshm-sect' }, t('themeNow')),
               h('div', { className: 'dshm-grid' },
                 themeCard('system', t('themeSystem'), ['#ffffff', '#e5e7eb', '#4f6ef7', '#0f1115']),
                 themeSnap.themes.map(def => themeCard(
