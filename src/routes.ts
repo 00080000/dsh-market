@@ -27,9 +27,18 @@ export interface WebServerService {
   }): () => void
 }
 
+/** The slice of a cordis loader entry the market needs for live enable/disable. */
+export interface LoaderEntry {
+  options: { id?: string; name?: string; disabled?: boolean | null }
+  fiber?: unknown
+  update(options: { disabled: boolean | null }): Promise<void>
+}
+
 export interface MarketHost {
   webServer: WebServerService
+  loader: { entries(): Iterable<LoaderEntry> }
   plugin(plugin: unknown, config: unknown): { await(): Promise<unknown>; dispose(): Promise<unknown> | void }
+  on?(event: string, callback: (fiber: { entry?: { options?: { name?: string } } }) => void): () => void
   logger?: { info?(message: string): void; warn(message: string): void }
 }
 
@@ -403,8 +412,25 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
   // Client-only packages (dsh.client without dsh.bundle) are invisible to the
   // bundle layer in every boot; the market shim-mounts them so their client
   // bundles are actually served.
-  void mountClientOnlyDeps(host, profileDir(config.profile)).then((mounted) => {
+  // The user's persisted theme choice; activateTheme mutates and writes it.
+  const disabledThemes = readDisabledThemes(profileDir(config.profile))
+
+  void mountClientOnlyDeps(host, profileDir(config.profile)).then(async (mounted) => {
     if (mounted.length > 0) logEvent('info', 'boot', `client-only shims mounted: ${mounted.join(', ')}`)
+    // Replay the user's theme choice: bundle-layer themes they switched away
+    // from get live-disabled again (bundle trees are in-memory, so the
+    // disable never persists on its own).
+    for (const name of disabledThemes) {
+      if (await setEntryDisabled(name, true)) logEvent('info', 'boot', `theme kept off: ${name}`)
+    }
+  })
+
+  // Self-healing guard: dsh's own patch overlay can re-update entries during
+  // activation and wipe the runtime disabled flag — whenever a fiber comes up
+  // for a theme the user switched off, put it back down.
+  host.on?.('internal/plugin', (fiber) => {
+    const name = fiber.entry?.options?.name
+    if (name !== undefined && disabledThemes.has(name)) void setEntryDisabled(name, true)
   })
   let installing = false
 
@@ -431,32 +457,46 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
   }
 
   /**
-   * Make `name` the one active theme: deactivate other market-mounted themes
-   * (persisted so the boot re-mount honors the choice) and mount it.
-   * Bundle-layer themes loaded at boot can't be deactivated yet — known
-   * limitation until enable/disable (#11) lands.
+   * Live-toggle a bundle-layer plugin through its loader entry. Bundle trees
+   * are in-memory (write is a no-op), so this never touches any file — the
+   * market persists the choice itself and replays it at boot.
+   * @returns true when a matching live entry was found and updated.
+   */
+  async function setEntryDisabled(name: string, disabledFlag: boolean): Promise<boolean> {
+    let found = false
+    for (const entry of host.loader.entries()) {
+      if (entry.options.name !== name) continue
+      try {
+        await entry.update({ disabled: disabledFlag ? true : null })
+        found = true
+      } catch (error) {
+        logEvent('warn', 'toggle', `${name}: entry update failed — ${error instanceof Error ? error.message : String(error)}`)
+      }
+    }
+    return found
+  }
+
+  /**
+   * Make `name` the one active theme: deactivate every other installed theme
+   * (market hot mounts unmount; bundle-layer entries live-disable) and bring
+   * it up. The choice persists in state.json and is replayed at boot.
    */
   async function activateTheme(name: string): Promise<boolean> {
     const dir = profileDir(config.profile)
     const themes = await installedThemeNames(config.profile)
-    const disabled = readDisabledThemes(dir)
-    for (const other of listHotMounts()) {
-      if (other !== name && themes.has(other)) {
+    for (const other of themes) {
+      if (other === name) continue
+      if (listHotMounts().includes(other)) {
         await hotUnmount(other)
-        disabled.add(other)
+        disabledThemes.add(other)
+      } else if (await setEntryDisabled(other, true)) {
+        disabledThemes.add(other)
       }
     }
-    disabled.delete(name)
-    writeDisabledThemes(dir, disabled)
+    disabledThemes.delete(name)
+    writeDisabledThemes(dir, disabledThemes)
     if (listHotMounts().includes(name)) return true
-    // Already loaded as a bundle layer (post-restart state) — don't mount a
-    // second fiber on top of it.
-    try {
-      const manifest = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')) as {
-        dsh?: { profile?: { bundles?: string[] } }
-      }
-      if ((manifest.dsh?.profile?.bundles ?? []).includes(name)) return true
-    } catch { /* fall through to a hot mount */ }
+    if (await setEntryDisabled(name, false)) return true
     return hotMount(host, dir, name)
   }
 

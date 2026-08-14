@@ -30,7 +30,7 @@ function argvProfile(): string | undefined {
 
 export function apply(ctx: Context, config?: Config): void {
   const resolved: MarketConfig = { profile: config?.profile ?? argvProfile() ?? 'web' }
-  ctx.inject(['webServer'], (hostCtx: Context) => {
+  ctx.inject(['webServer', 'loader'], (hostCtx: Context) => {
     const host = hostCtx as unknown as MarketHost & {
       effect(callback: () => () => void, label: string): void
     }
