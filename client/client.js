@@ -1,4 +1,4 @@
-window.__ModuleLoader__.load({ id: "dsh-market", factory: (require) => {
+window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 var module = { exports: {} }; var exports = module.exports;
 'use strict'
 
@@ -178,7 +178,7 @@ const CSS = `
 function injectStyles() {
   if (document.querySelector('style[data-plugin-css="dsh-market/market"]') !== null) return
   const tag = document.createElement('style')
-  tag.dataset.plugin = 'dsh-market'
+  tag.dataset.plugin = "dshmarket"
   tag.dataset.pluginCss = 'dsh-market/market'
   tag.textContent = CSS
   document.head.appendChild(tag)
