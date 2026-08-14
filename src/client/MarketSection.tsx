@@ -261,7 +261,7 @@ export function MarketSection(props: MarketSectionProps) {
           refreshInstalled()
         } else {
           const text = (v: unknown) => typeof v === 'string' ? v : (v && typeof (v as any).text === 'string') ? (v as any).text : v == null ? '' : JSON.stringify(v)
-          const detail = text(body.error) || text(body.stderr) || text(body.stdout) || ('exit ' + body.exitCode)
+          const detail = text(body.error) || [text(body.stderr), text(body.stdout)].filter(Boolean).join('\n').trim() || ('exit ' + body.exitCode)
           setInstallError(t('installFail') + ': ' + plugin.name + ' — ' + detail.trim().slice(-600))
         }
       })
@@ -287,7 +287,7 @@ export function MarketSection(props: MarketSectionProps) {
           refreshInstalled()
         } else {
           const text = (v: unknown) => typeof v === 'string' ? v : (v && typeof (v as any).text === 'string') ? (v as any).text : v == null ? '' : JSON.stringify(v)
-          const detail = text(body.error) || text(body.stderr) || text(body.stdout) || ('exit ' + body.exitCode)
+          const detail = text(body.error) || [text(body.stderr), text(body.stdout)].filter(Boolean).join('\n').trim() || ('exit ' + body.exitCode)
           setInstallError(t('updateFail') + ': ' + name + ' — ' + detail.trim().slice(-600))
         }
       })

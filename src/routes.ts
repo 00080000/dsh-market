@@ -174,6 +174,11 @@ const TARGET_RE = /^[A-Za-z0-9@:./_#+-]+$/
 
 function runDshPlugin(profile: string, pluginArgs: string[]): Promise<InstallResult> {
   const { file, args, cwd, viaShell } = dshArgv()
+  // pnpm 9 refuses to add at a workspace root without -w (#17); pnpm 10/11
+  // accept the flag as a no-op there, so it is safe to pass always.
+  if (pluginArgs[0] === 'add' || pluginArgs[0] === 'remove') {
+    pluginArgs = [pluginArgs[0], '-w', ...pluginArgs.slice(1)]
+  }
   const target = pluginArgs[pluginArgs.length - 1] ?? ''
   if (!TARGET_RE.test(target)) {
     logEvent('error', 'install', `unsafe plugin target rejected: ${JSON.stringify(target)}`)
@@ -312,39 +317,99 @@ function readLockCommits(profile: string): Map<string, string> {
  * each plugin subdirectory through pnpm's `#path:` selector.
  * @returns overall success (true when nothing needed retargeting).
  */
+/**
+ * True when the package's declared entry artifact actually exists — github
+ * source checkouts of build-required plugins ship no lib/, and promoting one
+ * into the bundle layer bricks the next boot (ERR_MODULE_NOT_FOUND kills the
+ * whole profile, #18).
+ */
+function entryArtifactExists(dir: string): boolean {
+  try {
+    const manifest = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')) as {
+      main?: string
+      exports?: Record<string, unknown> | string
+    }
+    const candidates: string[] = []
+    if (typeof manifest.main === 'string') candidates.push(manifest.main)
+    const rootExport = typeof manifest.exports === 'string'
+      ? manifest.exports
+      : (manifest.exports as Record<string, unknown> | undefined)?.['.']
+    if (typeof rootExport === 'string') candidates.push(rootExport)
+    else if (rootExport !== null && typeof rootExport === 'object') {
+      for (const value of Object.values(rootExport)) if (typeof value === 'string') candidates.push(value)
+    }
+    if (candidates.length === 0) candidates.push('index.js')
+    return candidates.some(rel => existsSync(join(dir, rel)))
+  } catch {
+    return false
+  }
+}
+
+/** True when the installed package's manifest declares a dsh plugin surface. */
+function hasDshManifest(dir: string): boolean {
+  try {
+    const manifest = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')) as { dsh?: unknown }
+    return manifest.dsh !== undefined
+  } catch {
+    return false
+  }
+}
+
+/** Plugin subdirectories (depth 2) of a collection checkout, as relative paths. */
+function pluginSubdirs(root: string): string[] {
+  const found: string[] = []
+  let level1: string[] = []
+  try {
+    level1 = readdirSync(root, { withFileTypes: true })
+      .filter(dirent => dirent.isDirectory() && /^[A-Za-z0-9_.-]+$/.test(dirent.name) && dirent.name !== 'node_modules')
+      .map(dirent => dirent.name)
+  } catch {
+    return found
+  }
+  for (const sub of level1) {
+    if (hasDshManifest(join(root, sub))) {
+      found.push(sub)
+      continue
+    }
+    try {
+      for (const inner of readdirSync(join(root, sub), { withFileTypes: true })) {
+        if (!inner.isDirectory() || !/^[A-Za-z0-9_.-]+$/.test(inner.name) || inner.name === 'node_modules') continue
+        if (hasDshManifest(join(root, sub, inner.name))) found.push(`${sub}/${inner.name}`)
+      }
+    } catch { /* unreadable level — skip */ }
+    if (found.length >= 8) break
+  }
+  return found.slice(0, 8)
+}
+
 async function retargetCollections(profile: string, before: Set<string>, target: string): Promise<boolean> {
   if (!target.startsWith('github:')) return true
-  const junk = Object.keys(readInstalled(profile)).filter(name => !before.has(name)
-    && !existsSync(join(profileDir(profile), 'node_modules', name, 'package.json')))
+  // A collection checkout: no root package.json at all, or a root manifest
+  // that declares no dsh surface (workspace roots are usually also private
+  // with no entry point — #18).
+  const junk = Object.keys(readInstalled(profile)).filter((name) => {
+    if (before.has(name)) return false
+    const root = join(profileDir(profile), 'node_modules', name)
+    if (!existsSync(join(root, 'package.json'))) return true
+    return !hasDshManifest(root)
+  })
   let allOk = true
   for (const name of junk) {
     const root = join(profileDir(profile), 'node_modules', name)
-    let candidates: string[] = []
-    try {
-      candidates = readdirSync(root, { withFileTypes: true })
-        .filter(dirent => dirent.isDirectory() && /^[A-Za-z0-9_.-]+$/.test(dirent.name))
-        .filter((dirent) => {
-          try {
-            const manifest = JSON.parse(readFileSync(join(root, dirent.name, 'package.json'), 'utf8')) as { dsh?: unknown }
-            return manifest.dsh !== undefined
-          } catch {
-            return false
-          }
-        })
-        .map(dirent => dirent.name)
-        .slice(0, 5)
-    } catch {
-      candidates = []
-    }
-    logEvent('info', 'install', `${name}: collection repo (no root package.json); plugins inside: ${candidates.join(', ') || 'none'}`)
+    const candidates = pluginSubdirs(root)
+    logEvent('info', 'install', `${name}: collection repo (root declares no dsh manifest); plugins inside: ${candidates.join(', ') || 'none'}`)
     await runDshPlugin(profile, ['remove', name])
     if (candidates.length === 0) {
       allOk = false
       continue
     }
     for (const sub of candidates) {
-      const result = await runDshPlugin(profile, ['add', `${target}#path:${sub}`])
-      if (result.exitCode !== 0 || result.timedOut) allOk = false
+      const result = await runDshPlugin(profile, ['add', `${target}#path:/${sub}`])
+      if (result.exitCode !== 0 || result.timedOut) {
+        allOk = false
+        logEvent('error', 'install',
+          `${target}#path:/${sub}: exit=${String(result.exitCode)}${result.timedOut ? ' TIMEOUT' : ''} — ${(result.stderr || result.stdout).slice(-220)}`)
+      }
     }
   }
   return allOk
@@ -884,6 +949,38 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
               // plugin subdirectories via pnpm's #path: selector.
               ok = await retargetCollections(config.profile, before, target)
             }
+            // Fake-success guard (#18): a clean exit that added nothing
+            // installable must not read as success — and a plugin whose entry
+            // artifact is missing (source-only checkout, build blocked) would
+            // brick the next boot, so it is removed on the spot.
+            let notAPlugin = false
+            let removedBroken: string[] = []
+            // Runs even when retargeting partially failed — a broken piece
+            // that slipped in must never survive to brick the next boot.
+            if (result.exitCode === 0 && !result.timedOut) {
+              const addedNow = Object.keys(readInstalled(config.profile)).filter(n => !before.has(n))
+              const keep: string[] = []
+              for (const n of addedNow) {
+                const dir = join(profileDir(config.profile), 'node_modules', n)
+                if (hasDshManifest(dir) && entryArtifactExists(dir)) {
+                  keep.push(n)
+                } else {
+                  removedBroken.push(n)
+                  await runDshPlugin(config.profile, ['remove', n])
+                }
+              }
+              if (removedBroken.length > 0) {
+                logEvent('warn', 'install', `${target}: removed uninstallable pieces (no dsh manifest or missing build artifacts): ${removedBroken.join(', ')}`)
+              }
+              if (keep.length === 0) {
+                ok = false
+                notAPlugin = true
+                logEvent('error', 'install', `${target}: nothing installable survived validation`)
+              } else {
+                // Partial success across a collection still counts as success.
+                ok = true
+              }
+            }
             const installed = readInstalled(config.profile)
             let hot = false
             if (ok) {
@@ -905,6 +1002,7 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
             sendJson(response, ok ? 200 : 502, {
               ok,
               hot,
+              error: notAPlugin ? 'nothing installable: the plugin(s) need a build step (blocked by default, see allowBuilds) or ship no prebuilt artifacts / 没有可安装的内容：插件需要构建授权（allowBuilds，默认拦截）或未附带构建产物，详见导出日志' : undefined,
               exitCode: result.exitCode,
               timedOut: result.timedOut,
               stdout: result.stdout,

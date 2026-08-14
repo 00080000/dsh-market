@@ -215,59 +215,59 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 			document.head.appendChild(tag);
 		}
 		var Market_module_css_default = {
-			"warnLine": "TDaEaa_warnLine",
-			"catsWrap": "TDaEaa_catsWrap",
-			"sort": "TDaEaa_sort",
-			"cmdSummary": "TDaEaa_cmdSummary",
-			"grid": "TDaEaa_grid",
-			"desc": "TDaEaa_desc",
-			"catsToggle": "TDaEaa_catsToggle",
-			"row1": "TDaEaa_row1",
-			"spec": "TDaEaa_spec",
-			"catsCollapsed": "TDaEaa_catsCollapsed",
-			"modalNote": "TDaEaa_modalNote",
-			"tabs": "TDaEaa_tabs",
-			"nm": "TDaEaa_nm",
-			"card": "TDaEaa_card",
-			"okState": "TDaEaa_okState",
-			"title": "TDaEaa_title",
 			"cmd": "TDaEaa_cmd",
-			"foot": "TDaEaa_foot",
-			"warnBtn": "TDaEaa_warnBtn",
-			"star": "TDaEaa_star",
-			"catsRow": "TDaEaa_catsRow",
-			"root": "TDaEaa_root",
-			"tab": "TDaEaa_tab",
-			"swatches": "TDaEaa_swatches",
-			"dangerBtn": "TDaEaa_dangerBtn",
-			"grow": "TDaEaa_grow",
-			"top": "TDaEaa_top",
-			"titleRow": "TDaEaa_titleRow",
-			"src": "TDaEaa_src",
 			"progress": "TDaEaa_progress",
-			"sect": "TDaEaa_sect",
-			"sp": "TDaEaa_sp",
-			"dangerArmed": "TDaEaa_dangerArmed",
-			"descTight": "TDaEaa_descTight",
-			"themesGrid": "TDaEaa_themesGrid",
-			"tag": "TDaEaa_tag",
-			"owner": "TDaEaa_owner",
-			"restart": "TDaEaa_restart",
-			"loading": "TDaEaa_loading",
-			"empty": "TDaEaa_empty",
-			"dot": "TDaEaa_dot",
-			"spin": "TDaEaa_spin",
-			"cmdDetails": "TDaEaa_cmdDetails",
-			"head": "TDaEaa_head",
-			"on": "TDaEaa_on",
+			"body": "TDaEaa_body",
+			"modalNote": "TDaEaa_modalNote",
 			"av": "TDaEaa_av",
 			"irow": "TDaEaa_irow",
-			"sub": "TDaEaa_sub",
-			"searchInline": "TDaEaa_searchInline",
-			"btn": "TDaEaa_btn",
-			"body": "TDaEaa_body",
+			"warnBtn": "TDaEaa_warnBtn",
+			"warnLine": "TDaEaa_warnLine",
+			"nm": "TDaEaa_nm",
+			"titleRow": "TDaEaa_titleRow",
+			"catsRow": "TDaEaa_catsRow",
+			"catsCollapsed": "TDaEaa_catsCollapsed",
+			"head": "TDaEaa_head",
+			"card": "TDaEaa_card",
+			"sort": "TDaEaa_sort",
+			"sect": "TDaEaa_sect",
+			"foot": "TDaEaa_foot",
+			"top": "TDaEaa_top",
+			"cmdDetails": "TDaEaa_cmdDetails",
+			"star": "TDaEaa_star",
 			"cats": "TDaEaa_cats",
-			"err": "TDaEaa_err"
+			"sub": "TDaEaa_sub",
+			"dangerBtn": "TDaEaa_dangerBtn",
+			"root": "TDaEaa_root",
+			"swatches": "TDaEaa_swatches",
+			"src": "TDaEaa_src",
+			"tabs": "TDaEaa_tabs",
+			"empty": "TDaEaa_empty",
+			"descTight": "TDaEaa_descTight",
+			"err": "TDaEaa_err",
+			"searchInline": "TDaEaa_searchInline",
+			"grid": "TDaEaa_grid",
+			"okState": "TDaEaa_okState",
+			"row1": "TDaEaa_row1",
+			"loading": "TDaEaa_loading",
+			"btn": "TDaEaa_btn",
+			"grow": "TDaEaa_grow",
+			"catsWrap": "TDaEaa_catsWrap",
+			"tab": "TDaEaa_tab",
+			"sp": "TDaEaa_sp",
+			"owner": "TDaEaa_owner",
+			"catsToggle": "TDaEaa_catsToggle",
+			"restart": "TDaEaa_restart",
+			"dangerArmed": "TDaEaa_dangerArmed",
+			"themesGrid": "TDaEaa_themesGrid",
+			"desc": "TDaEaa_desc",
+			"dot": "TDaEaa_dot",
+			"spin": "TDaEaa_spin",
+			"spec": "TDaEaa_spec",
+			"cmdSummary": "TDaEaa_cmdSummary",
+			"on": "TDaEaa_on",
+			"title": "TDaEaa_title",
+			"tag": "TDaEaa_tag"
 		};
 		//#endregion
 		//#region src/client/MarketSection.tsx
@@ -471,7 +471,7 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 						refreshInstalled();
 					} else {
 						const text = (v) => typeof v === "string" ? v : v && typeof v.text === "string" ? v.text : v == null ? "" : JSON.stringify(v);
-						const detail = text(body.error) || text(body.stderr) || text(body.stdout) || "exit " + body.exitCode;
+						const detail = text(body.error) || [text(body.stderr), text(body.stdout)].filter(Boolean).join("\n").trim() || "exit " + body.exitCode;
 						setInstallError(t("installFail") + ": " + plugin.name + " — " + detail.trim().slice(-600));
 					}
 				}).catch((error) => {
@@ -495,7 +495,7 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 						refreshInstalled();
 					} else {
 						const text = (v) => typeof v === "string" ? v : v && typeof v.text === "string" ? v.text : v == null ? "" : JSON.stringify(v);
-						const detail = text(body.error) || text(body.stderr) || text(body.stdout) || "exit " + body.exitCode;
+						const detail = text(body.error) || [text(body.stderr), text(body.stdout)].filter(Boolean).join("\n").trim() || "exit " + body.exitCode;
 						setInstallError(t("updateFail") + ": " + name + " — " + detail.trim().slice(-600));
 					}
 				}).catch((error) => setInstallError(t("updateFail") + ": " + String(error))).finally(() => setUpdatingName(null));
