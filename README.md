@@ -42,6 +42,8 @@ Installs prefer npm tarballs over full-repo GitHub downloads whenever a plugin p
 - Terminal/CLI-surface plugins are flagged before you install them into the web profile
 - The install endpoint accepts same-origin POST only; the market never phones home
 - The restart endpoint additionally requires a direct loopback client (forwarded requests are rejected) and relaunches the exact DSH entry, arguments, environment, and working directory
+- One-click restart launches a detached replacement. If DSH is managed by systemd, launchd, pm2, or another supervisor, set the plugin option `allowRestart: false` and let the supervisor own restarts instead; the pending-change notice remains visible but the button is hidden
+- For terminal-attached launches, the detached replacement keeps running after the original terminal closes
 - Listing ≠ endorsement: plugins are third-party code, install sources you trust
 
 ## Data source

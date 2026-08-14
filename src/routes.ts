@@ -33,6 +33,8 @@ export interface MarketHost {
 export interface MarketConfig {
   /** Profile the market installs into; matches the profile serving this UI. */
   profile: string
+  /** Detached self-restart is unsafe under systemd/launchd/pm2; operators can disable it. */
+  allowRestart?: boolean
 }
 
 const PROFILE_RE = /^[A-Za-z0-9_-]+$/
@@ -47,7 +49,14 @@ const INSTALL_TIMEOUT_MS = 5 * 60 * 1000
  * Installs run through node:child_process, not ctx.shell: the shell service is
  * the agent's sandboxed executor and denies writes to the profile directory.
  */
-function dshArgv(): { file: string; args: string[]; cwd: string | undefined; viaShell: boolean } {
+interface DshLaunch {
+  file: string
+  args: string[]
+  cwd: string | undefined
+  viaShell: boolean
+}
+
+function dshArgv(): DshLaunch {
   const entry = process.argv[1]
   if (entry !== undefined && /[\\/](?:bin\.(?:js|ts)|dsh)$/.test(entry)) {
     // Absolute paths are required: source launches (`pnpm dsh`) pass a
@@ -59,6 +68,16 @@ function dshArgv(): { file: string; args: string[]; cwd: string | undefined; via
   }
   // Bare `dsh` is a .cmd shim on Windows that only a shell can start (#13).
   return { file: 'dsh', args: [], cwd: undefined, viaShell: winCmdShim }
+}
+
+/** Resolve the exact boot invocation used by the detached restart helper. */
+export function restartLaunch(): DshLaunch & { cwd: string } {
+  const launch = dshArgv()
+  return {
+    ...launch,
+    args: [...launch.args, ...process.argv.slice(2)],
+    cwd: launch.cwd ?? process.cwd(),
+  }
 }
 
 interface InstallResult {
@@ -245,23 +264,24 @@ interface RestartResult {
 
 /** Relaunch this exact DSH entry after a short detached handoff, then stop it. */
 function scheduleRestart(): RestartResult {
-  const argv = [...process.execArgv, ...process.argv.slice(1)]
-  const cwd = process.cwd()
+  const launch = restartLaunch()
   const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
   const logOut = join(tmpdir(), `dsh-market-restart-${stamp}.out.log`)
   const logErr = join(tmpdir(), `dsh-market-restart-${stamp}.err.log`)
   const helperCode = [
     "const { spawn } = require('node:child_process')",
     "const fs = require('node:fs')",
-    `const argv = ${JSON.stringify(argv)}`,
-    `const cwd = ${JSON.stringify(cwd)}`,
+    `const file = ${JSON.stringify(launch.file)}`,
+    `const args = ${JSON.stringify(launch.args)}`,
+    `const cwd = ${JSON.stringify(launch.cwd)}`,
+    `const viaShell = ${JSON.stringify(launch.viaShell)}`,
     `const logOut = ${JSON.stringify(logOut)}`,
     `const logErr = ${JSON.stringify(logErr)}`,
     'setTimeout(() => {',
     '  try {',
     '    const out = fs.openSync(logOut, "a")',
     '    const err = fs.openSync(logErr, "a")',
-    '    const child = spawn(process.execPath, argv, { cwd, detached: true, stdio: ["ignore", out, err], env: process.env })',
+    '    const child = spawn(file, args, { cwd, detached: true, stdio: ["ignore", out, err], env: process.env, shell: viaShell })',
     '    child.unref()',
     '  } catch {}',
     '}, 1500)',
@@ -461,6 +481,7 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
           lastLine: progress.lastLine,
           pnpm: await probePnpm(),
           boot: BOOT_ID,
+          restart: config.allowRestart !== false,
           installed: readInstalled(config.profile),
         })
       },
@@ -500,6 +521,10 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
         if (request.method !== 'POST') {
           response.writeHead(405, { allow: 'POST' })
           response.end()
+          return
+        }
+        if (!config.allowRestart) {
+          sendJson(response, 403, { error: 'self-restart is disabled for this host' })
           return
         }
         if (!trustedRestartRequest(request)) {

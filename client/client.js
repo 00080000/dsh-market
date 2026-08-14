@@ -304,6 +304,7 @@ function MarketSection(props) {
   const [envFixing, setEnvFixing] = useState(false)
   const [envFailed, setEnvFailed] = useState(false)
   const [bootId, setBootId] = useState(null)
+  const [restartEnabled, setRestartEnabled] = useState(false)
   const [restarting, setRestarting] = useState(false)
   const [showTop, setShowTop] = useState(false)
   const bodyRef = React.useRef(null)
@@ -331,6 +332,7 @@ function MarketSection(props) {
       .then(status => {
         setEnvReady(status.pnpm !== false)
         if (typeof status.boot === 'string') setBootId(status.boot)
+        setRestartEnabled(status.restart === true)
       })
       .catch(() => {})
     refreshInstalled()
@@ -696,7 +698,7 @@ function MarketSection(props) {
       pendingRestart > 0 && h('div', { className: 'dshm-restart' },
         h('span', null, '🔄'),
         h('span', { className: 'dshm-grow' }, h('b', null, pendingRestart), ' ', t('restartBanner')),
-        h('button', {
+        restartEnabled && h('button', {
           className: 'dshm-btn install' + (restarting ? ' busy' : ''),
           disabled: restarting || bootId === null,
           onClick: doRestart,

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict'
-import { trustedRestartRequest } from '../lib/routes.js'
+import { dirname, join, resolve } from 'node:path'
+import { restartLaunch, trustedRestartRequest } from '../lib/routes.js'
 
 function request(remoteAddress, origin = 'http://127.0.0.1:3080', host = '127.0.0.1:3080') {
   return { socket: { remoteAddress }, headers: { origin, host } }
@@ -17,4 +18,17 @@ assert.equal(trustedRestartRequest({
   headers: { ...request('127.0.0.1').headers, 'x-forwarded-for': '127.0.0.1' },
 }), false)
 
-console.log('restart smoke ok: same-origin loopback only')
+const originalArgv = [...process.argv]
+try {
+  const entry = join('apps', 'cli', 'src', 'bin.ts')
+  process.argv.splice(0, process.argv.length, process.execPath, entry, 'web', '--port', '3081')
+  const launch = restartLaunch()
+  assert.equal(launch.file, process.execPath)
+  assert.deepEqual(launch.args, [...process.execArgv, resolve(entry), 'web', '--port', '3081'])
+  assert.equal(launch.cwd, dirname(resolve(entry)))
+  assert.equal(launch.viaShell, false)
+} finally {
+  process.argv.splice(0, process.argv.length, ...originalArgv)
+}
+
+console.log('restart smoke ok: guarded route and resolved DSH launch')
