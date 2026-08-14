@@ -209,7 +209,8 @@ function avatarColor(name) {
 }
 
 function repoOf(url) {
-  const m = /^https:\/\/github\.com\/([^/]+\/[^/]+?)\/?$/.exec(url)
+  // Plain repo urls plus /tree/<branch>/<subpath> monorepo links.
+  const m = /^https:\/\/github\.com\/([^/]+\/[^/]+?)(?:\/tree\/.+)?\/?$/.exec(url)
   return m ? m[1] : null
 }
 

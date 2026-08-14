@@ -276,10 +276,21 @@ function readInstalled(profile: string): Record<string, string> {
 }
 
 /** GitHub `owner/repo` for a registry URL, or null when it is not a GitHub repo URL. */
-function repoOf(url: string): string | null {
-  const m = /^https:\/\/github\.com\/([^/]+\/[^/]+?)\/?$/.exec(url)
+/**
+ * Parse a registry source url: a github repo, optionally with a
+ * `/tree/<branch>/<subpath>` suffix (how the curated list links monorepo
+ * subpackages, e.g. dsh-plugins#theme-gallery).
+ */
+function parseSourceUrl(url: string): { repo: string; subpath: string | null } | null {
+  const m = /^https:\/\/github\.com\/([^/]+\/[^/]+?)(?:\/tree\/[^/]+\/(.+?))?\/?$/.exec(url)
   if (m === null || !REPO_RE.test(m[1])) return null
-  return m[1]
+  const subpath = m[2] ?? null
+  if (subpath !== null && !/^[A-Za-z0-9_./-]+$/.test(subpath)) return null
+  return { repo: m[1], subpath }
+}
+
+function repoOf(url: string): string | null {
+  return parseSourceUrl(url)?.repo ?? null
 }
 
 /** Pinned commit per `owner/repo` from the profile lockfile's codeload tarball URLs. */
@@ -846,18 +857,21 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
             sendJson(response, 400, { error: 'plugin is not in the curated registry' })
             return
           }
-          const repo = repoOf(entry.url)
-          if (repo === null) {
+          const source = parseSourceUrl(entry.url)
+          if (source === null) {
             sendJson(response, 400, { error: 'unsupported source url' })
             return
           }
+          const repo = source.repo
           // Registry tarballs beat full-repo GitHub downloads: smaller,
           // prebuilt, and CDN/mirror served. The npm name comes from our
           // curated registry, which only maps repo-verified packages.
           const NPM_NAME_RE = /^(@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*$/
           const target = typeof entry.npm === 'string' && NPM_NAME_RE.test(entry.npm)
             ? entry.npm
-            : `github:${repo}`
+            : source.subpath !== null
+              ? `github:${repo}#path:/${source.subpath}`
+              : `github:${repo}`
           installing = true
           try {
             const before = new Set(Object.keys(readInstalled(config.profile)))
