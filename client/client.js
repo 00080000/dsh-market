@@ -157,6 +157,7 @@ const CSS = `
 .dshm-cmd{font-size:11px;background:var(--dsw-alias-bg-layer-2,#f3f4f6);border-radius:6px;padding:6px 9px;font-family:ui-monospace,Menlo,monospace;margin:8px 0;word-break:break-all}
 .dshm-acts{display:flex;justify-content:flex-end;gap:8px;margin-top:14px}
 .dshm-irow{background:var(--dsw-alias-bg-layer-1,#fff);border:1px solid var(--dsw-alias-border-l1,#e5e7eb);border-radius:10px;padding:10px 14px;display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.dshm-irow>.dshm-src,.dshm-irow>.dshm-owner,.dshm-irow>.dshm-btn{white-space:nowrap;flex-shrink:0}
 .dshm-spec{font-size:11px;color:var(--dsw-alias-label-secondary,#9ca3af);font-family:ui-monospace,Menlo,monospace}
 `
 
