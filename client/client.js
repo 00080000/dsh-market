@@ -5,6 +5,7 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 		var exports = module.exports;
 		Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
 		let react = require("react");
+		let _deepseek_ai_dsh_client_ui_primitives = require("@deepseek-ai/dsh-client-ui-primitives");
 		let react_jsx_runtime = require("react/jsx-runtime");
 		//#region src/client/locales.ts
 		/** zh/en dictionaries for the Market settings section and install toast. */
@@ -49,6 +50,8 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 			envFixFail: "自动准备没成功，请点\"导出日志\"把文件发给我们反馈",
 			loading: "正在加载插件目录…",
 			backTop: "回到顶部",
+			catsMore: "更多分类",
+			catsLess: "收起",
 			sortHot: "最热",
 			sortNew: "最新",
 			marketUpdate: "市场有新版本，升级",
@@ -103,6 +106,8 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 			envFixFail: "Automatic setup failed — please use \"Export log\" and send us the file",
 			loading: "Loading the catalog…",
 			backTop: "Back to top",
+			catsMore: "More",
+			catsLess: "Less",
 			sortHot: "Top",
 			sortNew: "New",
 			marketUpdate: "Market update available — upgrade",
@@ -115,69 +120,6 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 			toastReady: "installed and live",
 			toastTheme: "is now active. Switch any time in Settings → Plugin Market → Themes",
 			gotIt: "Got it"
-		};
-		//#endregion
-		//#region \0dsh-css:/Users/fkysly/work/dshmarket/src/client/Market.module.css.mjs
-		const css = ".TDaEaa_root{min-width:0;height:100%;color:var(--dsw-alias-label-primary,#1f2328);flex-direction:column;display:flex;position:relative}.TDaEaa_head{padding:4px 4px 12px}.TDaEaa_title{margin:0;font-size:16px;font-weight:700}.TDaEaa_sub{color:var(--dsw-alias-label-secondary,#6b7280);margin-top:6px;font-size:12px}.TDaEaa_searchInline{box-sizing:border-box;border:1px solid var(--dsw-alias-border-l1,#e5e7eb);background:var(--dsw-alias-bg-layer-1,#fff);width:230px;color:inherit;border-radius:8px;outline:none;flex-shrink:0;margin-bottom:5px;padding:5px 10px;font-size:12px}.TDaEaa_tabs{border-bottom:1px solid var(--dsw-alias-border-l1,#e5e7eb);align-items:flex-end;gap:2px;margin-top:12px;display:flex}.TDaEaa_tab{font:inherit;color:var(--dsw-alias-label-secondary,#6b7280);cursor:pointer;white-space:nowrap;background:0 0;border:none;border-bottom:2px solid #0000;padding:7px 12px;font-size:13px}.TDaEaa_tab.TDaEaa_on{color:var(--dsw-alias-brand-primary,#4f6ef7);border-bottom-color:var(--dsw-alias-brand-primary,#4f6ef7);font-weight:600}.TDaEaa_restart{background:var(--dsw-alias-bg-layer-2,#fdf3e3);border:1px solid var(--dsw-alias-border-l1,#f3e3c3);border-radius:8px;align-items:center;gap:8px;margin:10px 4px 0;padding:8px 12px;font-size:12px;display:flex}.TDaEaa_body{flex:1;padding:12px 4px 24px;overflow-y:auto}.TDaEaa_cats{z-index:5;background:var(--dsw-alias-bg-layer-2,#f7f8fa);flex-wrap:wrap;align-items:center;gap:6px;margin:-10px -8px 6px;padding:10px 8px;display:flex;position:sticky;top:-13px}.TDaEaa_sort{background:var(--dsw-alias-bg-layer-2,#f3f4f6);border-radius:8px;flex-shrink:0;gap:2px;margin-bottom:5px;padding:2px;display:flex}.TDaEaa_sort button{font:inherit;color:var(--dsw-alias-label-secondary,#6b7280);cursor:pointer;background:0 0;border:none;border-radius:6px;padding:3px 10px;font-size:12px}.TDaEaa_sort button.TDaEaa_on{background:var(--dsw-alias-bg-layer-1,#fff);color:var(--dsw-alias-label-primary,#1f2328);font-weight:600;box-shadow:0 1px 3px #00000014}.TDaEaa_star{color:var(--dsw-alias-label-secondary,#9ca3af);font-size:11px}.TDaEaa_top{z-index:20;border:1px solid var(--dsw-alias-border-l1,#e5e7eb);background:var(--dsw-alias-bg-layer-1,#fff);width:38px;height:38px;color:var(--dsw-alias-label-secondary,#6b7280);cursor:pointer;border-radius:99px;font-size:16px;position:absolute;bottom:18px;right:18px;box-shadow:0 4px 14px #0000001f}.TDaEaa_top:hover{color:var(--dsw-alias-brand-primary,#4f6ef7)}.TDaEaa_chip{font:inherit;border:1px solid var(--dsw-alias-border-l1,#e5e7eb);background:var(--dsw-alias-bg-layer-1,#fff);cursor:pointer;color:var(--dsw-alias-label-secondary,#6b7280);border-radius:99px;padding:3px 11px;font-size:12px}.TDaEaa_chip.TDaEaa_on{background:var(--dsw-alias-button-primary-fill,#4f6ef7);border-color:var(--dsw-alias-button-primary-fill,#4f6ef7);color:var(--dsw-alias-label-primary-foreground,#fff)}.TDaEaa_grid{grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px;display:grid}.TDaEaa_sect{color:var(--dsw-alias-label-secondary,#6b7280);margin:14px 2px 8px;font-size:12px;font-weight:600}.TDaEaa_sect:first-child{margin-top:2px}.TDaEaa_swatches{border:1px solid var(--dsw-alias-border-l1,#e5e7eb);border-radius:8px;gap:0;height:34px;display:flex;overflow:hidden}.TDaEaa_swatches i{flex:1}.TDaEaa_card{background:var(--dsw-alias-bg-layer-1,#fff);border:1px solid var(--dsw-alias-border-l1,#e5e7eb);border-radius:10px;flex-direction:column;gap:6px;padding:12px 14px;display:flex}.TDaEaa_row1{align-items:center;gap:9px;min-width:0;display:flex}.TDaEaa_av{color:#fff;object-fit:cover;background:var(--dsw-alias-bg-layer-2,#f3f4f6);border-radius:8px;flex-shrink:0;place-items:center;width:32px;height:32px;font-size:14px;font-weight:700;display:grid}.TDaEaa_nm{text-overflow:ellipsis;white-space:nowrap;font-size:13px;font-weight:600;overflow:hidden}.TDaEaa_owner{color:var(--dsw-alias-label-secondary,#9ca3af);font-size:11px}.TDaEaa_desc{color:var(--dsw-alias-label-secondary,#6b7280);min-height:2.4em;font-size:12px;line-height:1.55}.TDaEaa_foot{align-items:center;gap:8px;margin-top:2px;display:flex}.TDaEaa_cat{color:var(--dsw-alias-label-secondary,#9ca3af);border:1px solid var(--dsw-alias-border-l1,#e5e7eb);border-radius:99px;padding:1px 8px;font-size:10px}.TDaEaa_grow{flex:1}.TDaEaa_src{color:var(--dsw-alias-label-secondary,#9ca3af);font-size:11px;text-decoration:none}.TDaEaa_src:hover{color:var(--dsw-alias-brand-primary,#4f6ef7)}.TDaEaa_btn{font:inherit;cursor:pointer;border:none;border-radius:7px;padding:5px 14px;font-size:12px;font-weight:600}.TDaEaa_btn.TDaEaa_install{background:var(--dsw-alias-button-primary-fill,#4f6ef7);color:var(--dsw-alias-label-primary-foreground,#fff)}.TDaEaa_btn.TDaEaa_busy{opacity:.65;cursor:default}.TDaEaa_btn.TDaEaa_done{color:var(--dsw-alias-state-success-primary,#16a34a);cursor:default;background:0 0}.TDaEaa_btn.TDaEaa_ghost{background:var(--dsw-alias-bg-layer-2,#f3f4f6);color:var(--dsw-alias-label-secondary,#6b7280)}.TDaEaa_btn.TDaEaa_upd{background:var(--dsw-alias-state-warn-primary,#ea580c);color:#fff}.TDaEaa_btn.TDaEaa_danger{border:1px solid var(--dsw-alias-state-error-primary,#dc2626);color:var(--dsw-alias-state-error-primary,#dc2626);background:0 0}.TDaEaa_btn.TDaEaa_danger.TDaEaa_armed{background:var(--dsw-alias-state-error-primary,#dc2626);color:#fff}.TDaEaa_dot{background:var(--dsw-alias-state-error-primary,#ef4444);vertical-align:2px;border-radius:99px;width:7px;height:7px;margin-left:5px;display:inline-block}.TDaEaa_loading{color:var(--dsw-alias-label-secondary,#9ca3af);flex-direction:column;align-items:center;gap:12px;padding:48px;font-size:13px;display:flex}.TDaEaa_spin{border:3px solid var(--dsw-alias-border-l1,#e5e7eb);border-top-color:var(--dsw-alias-brand-primary,#4f6ef7);border-radius:99px;width:22px;height:22px;animation:.8s linear infinite TDaEaa_sp}@keyframes TDaEaa_sp{to{transform:rotate(360deg)}}.TDaEaa_progress{background:var(--dsw-alias-bg-layer-2,#f3f4f6);border:1px solid var(--dsw-alias-border-l1,#e5e7eb);color:var(--dsw-alias-label-secondary,#6b7280);border-radius:8px;align-items:center;gap:9px;margin:10px 4px 0;padding:8px 12px;font-size:12px;display:flex}.TDaEaa_progress .TDaEaa_spin{border-width:2px;flex-shrink:0;width:14px;height:14px}.TDaEaa_progress code{text-overflow:ellipsis;white-space:nowrap;font-family:ui-monospace,Menlo,monospace;font-size:11px;overflow:hidden}.TDaEaa_toast{z-index:2000;background:var(--dsw-alias-bg-layer-1,#fff);border:1px solid var(--dsw-alias-border-l1,#e5e7eb);color:var(--dsw-alias-label-primary,#1f2328);pointer-events:auto;border-radius:12px;align-items:center;gap:10px;max-width:340px;padding:13px 16px;font-size:13px;display:flex;position:fixed;bottom:22px;right:22px;box-shadow:0 12px 40px #0000002e}.TDaEaa_toast .TDaEaa_btn{white-space:nowrap;flex-shrink:0}.TDaEaa_empty{color:var(--dsw-alias-label-secondary,#9ca3af);text-align:center;padding:32px;font-size:13px}.TDaEaa_err{color:var(--dsw-alias-state-error-primary,#dc2626);white-space:pre-wrap;word-break:break-all;margin:8px 0;font-size:12px}.TDaEaa_mask{z-index:1000;background:#0f121966;justify-content:center;align-items:center;display:flex;position:fixed;top:0;bottom:0;left:0;right:0}.TDaEaa_modal{background:var(--dsw-alias-bg-layer-1,#fff);border:1px solid var(--dsw-alias-border-l1,#e5e7eb);border-radius:14px;width:min(400px,90%);padding:18px 20px;box-shadow:0 24px 70px #00000040}.TDaEaa_modal h3{margin:0 0 8px;font-size:14px}.TDaEaa_modal p{color:var(--dsw-alias-label-secondary,#6b7280);margin:4px 0;font-size:12px;line-height:1.6}.TDaEaa_cmd{background:var(--dsw-alias-bg-layer-2,#f3f4f6);word-break:break-all;border-radius:6px;margin:8px 0;padding:6px 9px;font-family:ui-monospace,Menlo,monospace;font-size:11px}.TDaEaa_acts{justify-content:flex-end;gap:8px;margin-top:14px;display:flex}.TDaEaa_irow{background:var(--dsw-alias-bg-layer-1,#fff);border:1px solid var(--dsw-alias-border-l1,#e5e7eb);border-radius:10px;align-items:center;gap:10px;margin-bottom:8px;padding:10px 14px;display:flex}.TDaEaa_irow>.TDaEaa_src,.TDaEaa_irow>.TDaEaa_owner,.TDaEaa_irow>.TDaEaa_btn{white-space:nowrap;flex-shrink:0}.TDaEaa_spec{color:var(--dsw-alias-label-secondary,#9ca3af);font-family:ui-monospace,Menlo,monospace;font-size:11px}";
-		const tagId = "dshmarket/Market.module.css";
-		if (typeof document !== "undefined" && document.querySelector("style[data-plugin-css=" + JSON.stringify(tagId) + "]") === null) {
-			const tag = document.createElement("style");
-			tag.dataset.plugin = "dshmarket";
-			tag.dataset.pluginCss = tagId;
-			tag.textContent = css;
-			document.head.appendChild(tag);
-		}
-		var Market_module_css_default = {
-			"busy": "TDaEaa_busy",
-			"acts": "TDaEaa_acts",
-			"cats": "TDaEaa_cats",
-			"desc": "TDaEaa_desc",
-			"sp": "TDaEaa_sp",
-			"install": "TDaEaa_install",
-			"loading": "TDaEaa_loading",
-			"on": "TDaEaa_on",
-			"head": "TDaEaa_head",
-			"grow": "TDaEaa_grow",
-			"body": "TDaEaa_body",
-			"root": "TDaEaa_root",
-			"searchInline": "TDaEaa_searchInline",
-			"title": "TDaEaa_title",
-			"row1": "TDaEaa_row1",
-			"empty": "TDaEaa_empty",
-			"sect": "TDaEaa_sect",
-			"tab": "TDaEaa_tab",
-			"ghost": "TDaEaa_ghost",
-			"chip": "TDaEaa_chip",
-			"upd": "TDaEaa_upd",
-			"err": "TDaEaa_err",
-			"grid": "TDaEaa_grid",
-			"irow": "TDaEaa_irow",
-			"restart": "TDaEaa_restart",
-			"mask": "TDaEaa_mask",
-			"swatches": "TDaEaa_swatches",
-			"dot": "TDaEaa_dot",
-			"progress": "TDaEaa_progress",
-			"sub": "TDaEaa_sub",
-			"av": "TDaEaa_av",
-			"foot": "TDaEaa_foot",
-			"src": "TDaEaa_src",
-			"btn": "TDaEaa_btn",
-			"modal": "TDaEaa_modal",
-			"cat": "TDaEaa_cat",
-			"armed": "TDaEaa_armed",
-			"cmd": "TDaEaa_cmd",
-			"star": "TDaEaa_star",
-			"top": "TDaEaa_top",
-			"spin": "TDaEaa_spin",
-			"spec": "TDaEaa_spec",
-			"card": "TDaEaa_card",
-			"danger": "TDaEaa_danger",
-			"tabs": "TDaEaa_tabs",
-			"sort": "TDaEaa_sort",
-			"nm": "TDaEaa_nm",
-			"done": "TDaEaa_done",
-			"owner": "TDaEaa_owner",
-			"toast": "TDaEaa_toast"
 		};
 		//#endregion
 		//#region src/client/market-data.ts
@@ -234,9 +176,9 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 		//#endregion
 		//#region src/client/InstallToast.tsx
 		/**
-		* Post-reload confirmation: a floating "installed and live" card in the
-		* shell overlay layer, shown once after the refresh that follows a hot
-		* install, so the user lands back in their flow with visible proof.
+		* Post-reload confirmation via the official Toast primitive: shown once after
+		* the refresh that follows a hot install or theme switch, so the user lands
+		* back in their flow with visible proof.
 		*/
 		function InstallToast(props) {
 			const t = props.t;
@@ -250,25 +192,72 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 				sessionStorage.removeItem("dshm-toast");
 				return Array.isArray(value) ? value : [];
 			});
-			(0, react.useEffect)(() => {
-				if (names.length === 0) return;
-				const timer = setTimeout(() => setNames([]), 1e4);
-				return () => clearTimeout(timer);
-			}, [names]);
 			if (names.length === 0) return null;
-			return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-				className: Market_module_css_default.toast,
-				children: [
-					/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { children: "✨" }),
-					/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { children: names.join(", ") + " " + t(mode === "theme" ? "toastTheme" : "toastReady") }),
-					/* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
-						className: `${Market_module_css_default.btn} ${Market_module_css_default.install}`,
-						onClick: () => setNames([]),
-						children: t("gotIt")
-					})
-				]
+			return /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Toast, {
+				text: names.join(", ") + " " + t(mode === "theme" ? "toastTheme" : "toastReady"),
+				icon: /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { children: "✨" }),
+				onDone: () => setNames([])
 			});
 		}
+		//#endregion
+		//#region \0dsh-css:/Users/fkysly/work/dshmarket/src/client/Market.module.css.mjs
+		const css = ".TDaEaa_root{min-width:0;height:100%;color:var(--dsw-alias-label-primary,#1f2328);flex-direction:column;display:flex;position:relative}.TDaEaa_head{padding:4px 4px 12px}.TDaEaa_title{margin:0;font-size:16px;font-weight:700}.TDaEaa_sub{color:var(--dsw-alias-label-secondary,#6b7280);margin-top:6px;font-size:12px}.TDaEaa_searchInline{flex-shrink:0;width:200px;margin-bottom:6px}.TDaEaa_tabs{border-bottom:1px solid var(--dsw-alias-border-l1,#e5e7eb);align-items:flex-end;gap:2px;margin-top:12px;display:flex}.TDaEaa_tab{font:inherit;color:var(--dsw-alias-label-secondary,#6b7280);cursor:pointer;white-space:nowrap;background:0 0;border:none;border-bottom:2px solid #0000;padding:7px 12px;font-size:13px}.TDaEaa_tab.TDaEaa_on{color:var(--dsw-alias-brand-primary,#4f6ef7);border-bottom-color:var(--dsw-alias-brand-primary,#4f6ef7);font-weight:600}.TDaEaa_restart{background:var(--dsw-alias-bg-layer-2,#fdf3e3);border:1px solid var(--dsw-alias-border-l1,#f3e3c3);border-radius:8px;align-items:center;gap:8px;margin:12px 0 0;padding:8px 12px;font-size:12px;display:flex}.TDaEaa_body{flex:1;padding:12px 4px 24px;overflow-x:hidden;overflow-y:auto}.TDaEaa_cats{z-index:5;background:var(--dsw-alias-bg-layer-2,#f7f8fa);align-items:flex-start;gap:8px;margin:-12px -4px 12px;padding:12px 4px;display:flex;position:sticky;top:-13px}.TDaEaa_sort{background:var(--dsw-alias-bg-layer-1,#fff);border:1px solid var(--dsw-alias-border-l1,#e5e7eb);border-radius:8px;flex-shrink:0;gap:2px;padding:2px;display:flex}.TDaEaa_sort button{font:inherit;color:var(--dsw-alias-label-secondary,#6b7280);cursor:pointer;background:0 0;border:none;border-radius:6px;padding:3px 10px;font-size:12px}.TDaEaa_sort button.TDaEaa_on{background:var(--dsw-alias-bg-layer-1,#fff);color:var(--dsw-alias-label-primary,#1f2328);font-weight:600;box-shadow:0 1px 3px #00000014}.TDaEaa_star{color:var(--dsw-alias-label-secondary,#9ca3af);font-size:11px}.TDaEaa_top{z-index:20;border:1px solid var(--dsw-alias-border-l1,#e5e7eb);background:var(--dsw-alias-bg-layer-1,#fff);width:38px;height:38px;color:var(--dsw-alias-label-secondary,#6b7280);cursor:pointer;border-radius:99px;font-size:16px;position:absolute;bottom:18px;right:18px;box-shadow:0 4px 14px #0000001f}.TDaEaa_top:hover{color:var(--dsw-alias-brand-primary,#4f6ef7)}.TDaEaa_catPill.TDaEaa_catPill{color:var(--dsw-alias-label-tertiary,#9ca3af);font-size:11px}.TDaEaa_okState{color:var(--dsw-alias-state-success-primary,#16a34a);white-space:nowrap;font-size:12px;font-weight:600}.TDaEaa_dangerBtn.TDaEaa_dangerBtn{border-color:var(--dsw-alias-state-error-primary,#dc2626);color:var(--dsw-alias-state-error-primary,#dc2626)}.TDaEaa_dangerArmed.TDaEaa_dangerArmed{background:var(--dsw-alias-state-error-primary,#dc2626);color:#fff}.TDaEaa_warnBtn.TDaEaa_warnBtn{background:var(--dsw-alias-state-warn-primary,#ea580c);color:#fff}.TDaEaa_catsWrap{flex-wrap:wrap;flex:1;align-items:center;gap:6px;min-width:0;display:flex}.TDaEaa_catsCollapsed{max-height:62px;overflow:hidden}.TDaEaa_catsToggle.TDaEaa_catsToggle{color:var(--dsw-alias-label-secondary,#6b7280);flex-shrink:0;font-size:12px}.TDaEaa_warnLine{color:var(--dsw-alias-state-warn-primary,#b45309);margin:4px 0;font-size:12px;font-weight:600;line-height:1.6}.TDaEaa_modalNote{color:var(--dsw-alias-label-secondary,#6b7280);margin:4px 0;font-size:12px;line-height:1.6}.TDaEaa_grid{grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;display:grid}.TDaEaa_sect{color:var(--dsw-alias-label-secondary,#6b7280);margin:14px 2px 8px;font-size:12px;font-weight:600}.TDaEaa_sect:first-child{margin-top:2px}.TDaEaa_swatches{border:1px solid var(--dsw-alias-border-l1,#e5e7eb);border-radius:8px;gap:0;height:34px;display:flex;overflow:hidden}.TDaEaa_swatches i{flex:1}.TDaEaa_card{background:var(--dsw-alias-bg-layer-1,#fff);border:1px solid var(--dsw-alias-border-l1,#e5e7eb);border-radius:10px;flex-direction:column;gap:6px;padding:12px 14px;display:flex}.TDaEaa_row1{align-items:center;gap:9px;min-width:0;display:flex}.TDaEaa_av{color:#fff;object-fit:cover;background:var(--dsw-alias-bg-layer-2,#f3f4f6);border-radius:8px;flex-shrink:0;place-items:center;width:32px;height:32px;font-size:14px;font-weight:700;display:grid}.TDaEaa_nm{text-overflow:ellipsis;white-space:nowrap;font-size:13px;font-weight:600;overflow:hidden}.TDaEaa_owner{color:var(--dsw-alias-label-secondary,#9ca3af);font-size:11px}.TDaEaa_desc{color:var(--dsw-alias-label-secondary,#6b7280);min-height:2.4em;font-size:12px;line-height:1.55}.TDaEaa_foot{align-items:center;gap:8px;margin-top:8px;display:flex}.TDaEaa_grow{flex:1}.TDaEaa_src{color:var(--dsw-alias-label-secondary,#9ca3af);font-size:11px;text-decoration:none}.TDaEaa_src:hover{color:var(--dsw-alias-brand-primary,#4f6ef7)}.TDaEaa_dot{vertical-align:2px;margin-left:5px}.TDaEaa_loading{color:var(--dsw-alias-label-secondary,#9ca3af);flex-direction:column;align-items:center;gap:12px;padding:48px;font-size:13px;display:flex}.TDaEaa_spin{border:3px solid var(--dsw-alias-border-l1,#e5e7eb);border-top-color:var(--dsw-alias-brand-primary,#4f6ef7);border-radius:99px;width:22px;height:22px;animation:.8s linear infinite TDaEaa_sp}@keyframes TDaEaa_sp{to{transform:rotate(360deg)}}.TDaEaa_progress{background:var(--dsw-alias-bg-layer-2,#f3f4f6);border:1px solid var(--dsw-alias-border-l1,#e5e7eb);color:var(--dsw-alias-label-secondary,#6b7280);border-radius:8px;align-items:center;gap:9px;margin:8px 0 0;padding:8px 12px;font-size:12px;display:flex}.TDaEaa_progress .TDaEaa_spin{border-width:2px;flex-shrink:0;width:14px;height:14px}.TDaEaa_progress code{text-overflow:ellipsis;white-space:nowrap;font-family:ui-monospace,Menlo,monospace;font-size:11px;overflow:hidden}.TDaEaa_empty{color:var(--dsw-alias-label-secondary,#9ca3af);text-align:center;padding:32px;font-size:13px}.TDaEaa_err{color:var(--dsw-alias-state-error-primary,#dc2626);white-space:pre-wrap;word-break:break-all;margin:8px 0;font-size:12px}.TDaEaa_irow{background:var(--dsw-alias-bg-layer-1,#fff);border:1px solid var(--dsw-alias-border-l1,#e5e7eb);border-radius:10px;align-items:center;gap:10px;margin-bottom:12px;padding:12px 14px;display:flex}.TDaEaa_irow>.TDaEaa_src,.TDaEaa_irow>.TDaEaa_owner,.TDaEaa_irow>.TDaEaa_btn{white-space:nowrap;flex-shrink:0}.TDaEaa_spec{color:var(--dsw-alias-label-secondary,#9ca3af);font-family:ui-monospace,Menlo,monospace;font-size:11px}";
+		const tagId = "dshmarket/Market.module.css";
+		if (typeof document !== "undefined" && document.querySelector("style[data-plugin-css=" + JSON.stringify(tagId) + "]") === null) {
+			const tag = document.createElement("style");
+			tag.dataset.plugin = "dshmarket";
+			tag.dataset.pluginCss = tagId;
+			tag.textContent = css;
+			document.head.appendChild(tag);
+		}
+		var Market_module_css_default = {
+			"catPill": "TDaEaa_catPill",
+			"head": "TDaEaa_head",
+			"restart": "TDaEaa_restart",
+			"tab": "TDaEaa_tab",
+			"body": "TDaEaa_body",
+			"catsToggle": "TDaEaa_catsToggle",
+			"title": "TDaEaa_title",
+			"dangerArmed": "TDaEaa_dangerArmed",
+			"sp": "TDaEaa_sp",
+			"spec": "TDaEaa_spec",
+			"tabs": "TDaEaa_tabs",
+			"modalNote": "TDaEaa_modalNote",
+			"on": "TDaEaa_on",
+			"sub": "TDaEaa_sub",
+			"src": "TDaEaa_src",
+			"cats": "TDaEaa_cats",
+			"dot": "TDaEaa_dot",
+			"loading": "TDaEaa_loading",
+			"searchInline": "TDaEaa_searchInline",
+			"okState": "TDaEaa_okState",
+			"err": "TDaEaa_err",
+			"btn": "TDaEaa_btn",
+			"sort": "TDaEaa_sort",
+			"catsCollapsed": "TDaEaa_catsCollapsed",
+			"root": "TDaEaa_root",
+			"desc": "TDaEaa_desc",
+			"catsWrap": "TDaEaa_catsWrap",
+			"swatches": "TDaEaa_swatches",
+			"top": "TDaEaa_top",
+			"grid": "TDaEaa_grid",
+			"nm": "TDaEaa_nm",
+			"foot": "TDaEaa_foot",
+			"card": "TDaEaa_card",
+			"grow": "TDaEaa_grow",
+			"empty": "TDaEaa_empty",
+			"star": "TDaEaa_star",
+			"spin": "TDaEaa_spin",
+			"progress": "TDaEaa_progress",
+			"sect": "TDaEaa_sect",
+			"dangerBtn": "TDaEaa_dangerBtn",
+			"row1": "TDaEaa_row1",
+			"av": "TDaEaa_av",
+			"owner": "TDaEaa_owner",
+			"warnBtn": "TDaEaa_warnBtn",
+			"irow": "TDaEaa_irow",
+			"warnLine": "TDaEaa_warnLine"
+		};
 		//#endregion
 		//#region src/client/MarketSection.tsx
 		/**
@@ -332,6 +321,7 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 			const [showTop, setShowTop] = (0, react.useState)(false);
 			const bodyRef = (0, react.useRef)(null);
 			const [sort, setSort] = (0, react.useState)("hot");
+			const [catsOpen, setCatsOpen] = (0, react.useState)(false);
 			const refreshInstalled = (0, react.useCallback)((force) => {
 				fetch("/dsh-market/installed", { cache: "no-store" }).then((res) => res.json()).then((body) => {
 					setInstalled(body.installed || {});
@@ -603,22 +593,25 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 						/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
 							className: Market_module_css_default.foot,
 							children: [
-								/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-									className: Market_module_css_default.cat,
+								/* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Pill, {
+									className: Market_module_css_default.catPill,
 									children: data.categories[p.category] && (data.categories[p.category][lang] || data.categories[p.category].en) || p.category
 								}),
 								/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { className: Market_module_css_default.grow }),
-								done ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
-									className: `${Market_module_css_default.btn} ${Market_module_css_default.done}`,
+								done ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+									className: Market_module_css_default.okState,
 									children: t("installedBadge")
-								}) : already ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
-									className: `${Market_module_css_default.btn} ${Market_module_css_default.done}`,
+								}) : already ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+									className: Market_module_css_default.okState,
 									children: t("alreadyInstalled")
-								}) : busy ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
-									className: `${Market_module_css_default.btn} ${Market_module_css_default.install} ${Market_module_css_default.busy}`,
+								}) : busy ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
+									variant: "primary",
+									size: "sm",
+									disabled: true,
 									children: t("installing")
-								}) : /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
-									className: `${Market_module_css_default.btn} ${Market_module_css_default.install}`,
+								}) : /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
+									variant: "primary",
+									size: "sm",
 									disabled: busyUrl !== null || !envReady,
 									onClick: () => setConfirming(p),
 									children: t("install")
@@ -695,11 +688,16 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 							className: Market_module_css_default.foot,
 							children: [
 								/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { className: Market_module_css_default.grow }),
-								removingName === instName ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
-									className: `${Market_module_css_default.btn} ${Market_module_css_default.danger} ${Market_module_css_default.busy}`,
+								removingName === instName ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
+									variant: "outline",
+									size: "sm",
+									className: Market_module_css_default.dangerBtn,
+									disabled: true,
 									children: t("uninstalling")
-								}) : removeArmed === instName ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
-									className: `${Market_module_css_default.btn} ${Market_module_css_default.danger} ${Market_module_css_default.armed}`,
+								}) : removeArmed === instName ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
+									variant: "primary",
+									size: "sm",
+									className: Market_module_css_default.dangerArmed,
 									onClick: () => doUninstall(instName).then(() => {
 										if (mounted) {
 											sessionStorage.setItem("dshm-tab", "themes");
@@ -707,16 +705,19 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 										}
 									}),
 									children: t("confirmRemove")
-								}) : /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
-									className: `${Market_module_css_default.btn} ${Market_module_css_default.danger}`,
+								}) : /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
+									variant: "outline",
+									size: "sm",
+									className: Market_module_css_default.dangerBtn,
 									onClick: () => setRemoveArmed(instName),
 									children: t("uninstall")
 								}),
-								mounted ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
-									className: `${Market_module_css_default.btn} ${Market_module_css_default.done}`,
+								mounted ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+									className: Market_module_css_default.okState,
 									children: t("themeActive")
-								}) : /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
-									className: `${Market_module_css_default.btn} ${Market_module_css_default.install}`,
+								}) : /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
+									variant: "primary",
+									size: "sm",
 									onClick: () => doUseSkin(instName),
 									children: t("themeApply")
 								})
@@ -740,11 +741,12 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 								children: label
 							}),
 							/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { className: Market_module_css_default.grow }),
-							active ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
-								className: `${Market_module_css_default.btn} ${Market_module_css_default.done}`,
+							active ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+								className: Market_module_css_default.okState,
 								children: t("themeActive")
-							}) : /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
-								className: `${Market_module_css_default.btn} ${Market_module_css_default.install}`,
+							}) : /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
+								variant: "primary",
+								size: "sm",
 								onClick: () => {
 									try {
 										props.theme.setTheme(id);
@@ -788,12 +790,10 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 									}),
 									(() => {
 										const self = installed["dshmarket"] !== void 0 ? "dshmarket" : "dsh-market";
-										return updates[self] && updates[self].updateAvailable && !updatedNames.includes(self) && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
-											className: `${Market_module_css_default.btn} ${Market_module_css_default.upd}`,
-											style: {
-												fontSize: "11px",
-												padding: "3px 10px"
-											},
+										return updates[self] && updates[self].updateAvailable && !updatedNames.includes(self) && /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
+											variant: "primary",
+											size: "sm",
+											className: Market_module_css_default.warnBtn,
 											disabled: updatingName !== null || busyUrl !== null,
 											onClick: () => {
 												setTab("installed");
@@ -802,12 +802,10 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 											children: updatingName === self ? t("updating") : t("marketUpdate")
 										});
 									})(),
-									updatableNames.length >= 2 && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
-										className: `${Market_module_css_default.btn} ${Market_module_css_default.upd}`,
-										style: {
-											fontSize: "11px",
-											padding: "3px 10px"
-										},
+									updatableNames.length >= 2 && /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
+										variant: "primary",
+										size: "sm",
+										className: Market_module_css_default.warnBtn,
 										disabled: updatingAll || updatingName !== null || busyUrl !== null || removingName !== null,
 										onClick: () => {
 											setTab("installed");
@@ -845,19 +843,16 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 											setTab("installed");
 											refreshInstalled(true);
 										},
-										children: [t("tabInstalled") + (Object.keys(installed).length > 0 ? " (" + Object.keys(installed).length + ")" : ""), hasUpdates && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { className: Market_module_css_default.dot })]
+										children: [t("tabInstalled") + (Object.keys(installed).length > 0 ? " (" + Object.keys(installed).length + ")" : ""), hasUpdates && /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.StateDot, {
+											state: "error",
+											size: 7,
+											className: Market_module_css_default.dot
+										})]
 									}),
 									/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { className: Market_module_css_default.grow }),
-									tab === "discover" && data !== null && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
-										className: Market_module_css_default.sort,
-										children: ["hot", "new"].map((key) => /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
-											className: sort === key ? Market_module_css_default.on : "",
-											onClick: () => setSort(key),
-											children: t(key === "hot" ? "sortHot" : "sortNew")
-										}, key))
-									}),
-									/* @__PURE__ */ (0, react_jsx_runtime.jsx)("input", {
+									/* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Input, {
 										className: Market_module_css_default.searchInline,
+										icon: /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconSearchOutline16, { size: 14 }),
 										placeholder: t("searchPh"),
 										value: q,
 										onChange: (e) => setQ(e.target.value)
@@ -872,8 +867,9 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 										className: Market_module_css_default.grow,
 										children: envFailed ? t("envFixFail") : t("envMissing")
 									}),
-									!envFailed && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
-										className: envFixing ? `${Market_module_css_default.btn} ${Market_module_css_default.install} ${Market_module_css_default.busy}` : `${Market_module_css_default.btn} ${Market_module_css_default.install}`,
+									!envFailed && /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
+										variant: "primary",
+										size: "sm",
 										disabled: envFixing,
 										onClick: fixEnv,
 										children: envFixing ? t("envFixing") : t("envFix")
@@ -892,8 +888,9 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 											t("hotBanner")
 										]
 									}),
-									/* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
-										className: `${Market_module_css_default.btn} ${Market_module_css_default.install}`,
+									/* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
+										variant: "primary",
+										size: "sm",
 										onClick: () => {
 											sessionStorage.setItem("dshm-toast", JSON.stringify(hotNames));
 											sessionStorage.setItem("dshm-tab", "installed");
@@ -939,15 +936,36 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 							children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { className: Market_module_css_default.spin }), t("loading")]
 						}) : /* @__PURE__ */ (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
 							className: Market_module_css_default.cats,
-							children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
-								className: cat === "all" ? `${Market_module_css_default.chip} ${Market_module_css_default.on}` : Market_module_css_default.chip,
-								onClick: () => setCat("all"),
-								children: t("all")
-							}), categories.map((id) => /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
-								className: cat === id ? `${Market_module_css_default.chip} ${Market_module_css_default.on}` : Market_module_css_default.chip,
-								onClick: () => setCat(id),
-								children: data.categories[id] && (data.categories[id][lang] || data.categories[id].en) || id
-							}, id))]
+							children: [
+								/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+									className: catsOpen ? Market_module_css_default.catsWrap : `${Market_module_css_default.catsWrap} ${Market_module_css_default.catsCollapsed}`,
+									children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Pill, {
+										active: cat === "all",
+										onClick: () => setCat("all"),
+										children: t("all")
+									}), (catsOpen ? categories : cat === "all" ? categories : [cat, ...categories.filter((id) => id !== cat)]).map((id) => /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Pill, {
+										active: cat === id,
+										onClick: () => setCat(id),
+										children: data.categories[id] && (data.categories[id][lang] || data.categories[id].en) || id
+									}, id))]
+								}),
+								/* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
+									variant: "ghost",
+									size: "sm",
+									className: Market_module_css_default.catsToggle,
+									icon: catsOpen ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconChevronUpOutline14, { size: 14 }) : /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconChevronDownOutline14, { size: 14 }),
+									onClick: () => setCatsOpen((o) => !o),
+									children: catsOpen ? t("catsLess") : t("catsMore")
+								}),
+								/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+									className: Market_module_css_default.sort,
+									children: ["hot", "new"].map((key) => /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
+										className: sort === key ? Market_module_css_default.on : "",
+										onClick: () => setSort(key),
+										children: t(key === "hot" ? "sortHot" : "sortNew")
+									}, key))
+								})
+							]
 						}), plugins.length === 0 ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
 							className: Market_module_css_default.empty,
 							children: t("empty")
@@ -1027,14 +1045,19 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 										rel: "noreferrer",
 										children: t("readme")
 									}),
-									updatedNames.includes(name) ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
-										className: `${Market_module_css_default.btn} ${Market_module_css_default.done}`,
+									updatedNames.includes(name) ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+										className: Market_module_css_default.okState,
 										children: t("updated")
-									}) : updatingName === name ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
-										className: `${Market_module_css_default.btn} ${Market_module_css_default.upd} ${Market_module_css_default.busy}`,
+									}) : updatingName === name ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
+										variant: "primary",
+										size: "sm",
+										className: Market_module_css_default.warnBtn,
+										disabled: true,
 										children: t("updating")
-									}) : status && status.updateAvailable ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
-										className: `${Market_module_css_default.btn} ${Market_module_css_default.upd}`,
+									}) : status && status.updateAvailable ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
+										variant: "primary",
+										size: "sm",
+										className: Market_module_css_default.warnBtn,
 										disabled: updatingName !== null,
 										onClick: () => doUpdate(name),
 										children: t("update")
@@ -1045,16 +1068,23 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 										className: Market_module_css_default.owner,
 										children: t("upToDate")
 									}),
-									name !== "dsh-market" && name !== "dshmarket" && (removingName === name ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
-										className: `${Market_module_css_default.btn} ${Market_module_css_default.danger} ${Market_module_css_default.busy}`,
+									name !== "dsh-market" && name !== "dshmarket" && (removingName === name ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
+										variant: "outline",
+										size: "sm",
+										className: Market_module_css_default.dangerBtn,
+										disabled: true,
 										children: t("uninstalling")
-									}) : removeArmed === name ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
-										className: `${Market_module_css_default.btn} ${Market_module_css_default.danger} ${Market_module_css_default.armed}`,
+									}) : removeArmed === name ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
+										variant: "primary",
+										size: "sm",
+										className: Market_module_css_default.dangerArmed,
 										onClick: () => doUninstall(name),
 										onMouseLeave: () => setRemoveArmed(null),
 										children: t("confirmRemove")
-									}) : /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
-										className: `${Market_module_css_default.btn} ${Market_module_css_default.danger}`,
+									}) : /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
+										variant: "outline",
+										size: "sm",
+										className: Market_module_css_default.dangerBtn,
 										disabled: removingName !== null || busyUrl !== null || updatingName !== null,
 										onClick: () => setRemoveArmed(name),
 										children: t("uninstall")
@@ -1075,48 +1105,33 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 						},
 						children: "↑"
 					}),
-					confirming !== null && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
-						className: Market_module_css_default.mask,
-						onClick: (e) => {
-							if (e.target === e.currentTarget) setConfirming(null);
-						},
-						children: /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-							className: Market_module_css_default.modal,
-							children: [
-								/* @__PURE__ */ (0, react_jsx_runtime.jsx)("h3", { children: t("confirmTitle") + " " + confirming.name + "?" }),
-								/* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", { children: confirming.description && (confirming.description[lang] || confirming.description.en) || "" }),
-								/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
-									className: Market_module_css_default.cmd,
-									children: confirming.install
-								}),
-								looksTerminal(confirming, lang) && /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("p", {
-									style: {
-										color: "var(--dsw-alias-state-warn-primary, #b45309)",
-										fontWeight: 600
-									},
-									children: ["🖥️ " + t("terminalWarn") + " ", /* @__PURE__ */ (0, react_jsx_runtime.jsx)("a", {
-										className: Market_module_css_default.src,
-										href: confirming.url + "#readme",
-										target: "_blank",
-										rel: "noreferrer",
-										children: t("readme")
-									})]
-								}),
-								/* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", { children: "⚠️ " + t("confirmWarn") }),
-								/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-									className: Market_module_css_default.acts,
-									children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
-										className: `${Market_module_css_default.btn} ${Market_module_css_default.ghost}`,
-										onClick: () => setConfirming(null),
-										children: t("cancel")
-									}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
-										className: `${Market_module_css_default.btn} ${Market_module_css_default.install}`,
-										onClick: () => doInstall(confirming),
-										children: t("install")
-									})]
-								})
-							]
-						})
+					confirming !== null && /* @__PURE__ */ (0, react_jsx_runtime.jsxs)(_deepseek_ai_dsh_client_ui_primitives.Modal, {
+						open: true,
+						onClose: () => setConfirming(null),
+						title: t("confirmTitle") + " " + confirming.name + "?",
+						description: confirming.description && (confirming.description[lang] || confirming.description.en) || "",
+						footer: /* @__PURE__ */ (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
+							variant: "ghost",
+							onClick: () => setConfirming(null),
+							children: t("cancel")
+						}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
+							variant: "primary",
+							onClick: () => doInstall(confirming),
+							children: t("install")
+						})] }),
+						children: [looksTerminal(confirming, lang) && /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("p", {
+							className: Market_module_css_default.warnLine,
+							children: ["🖥️ " + t("terminalWarn") + " ", /* @__PURE__ */ (0, react_jsx_runtime.jsx)("a", {
+								className: Market_module_css_default.src,
+								href: confirming.url + "#readme",
+								target: "_blank",
+								rel: "noreferrer",
+								children: t("readme")
+							})]
+						}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
+							className: Market_module_css_default.modalNote,
+							children: "⚠️ " + t("confirmWarn")
+						})]
 					})
 				]
 			});

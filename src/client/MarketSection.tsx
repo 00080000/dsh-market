@@ -4,6 +4,7 @@
  * pending-restart bookkeeping in sessionStorage.
  */
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { Button, IconChevronDownOutline14, IconChevronUpOutline14, IconSearchOutline16, Input, Modal, Pill, StateDot } from '@deepseek-ai/dsh-client-ui-primitives'
 import css from './Market.module.css'
 import {
   avatarColor, isInstalled, LOGO_URI, looksTerminal, readSession, repoOf, themeSwatch,
@@ -93,6 +94,7 @@ export function MarketSection(props: MarketSectionProps) {
   const [showTop, setShowTop] = useState(false)
   const bodyRef = useRef<HTMLDivElement | null>(null)
   const [sort, setSort] = useState('hot')
+  const [catsOpen, setCatsOpen] = useState(false)
 
   const refreshInstalled = useCallback((force?: boolean) => {
     fetch('/dsh-market/installed', { cache: 'no-store' })
@@ -383,22 +385,23 @@ export function MarketSection(props: MarketSectionProps) {
         </div>
         <div className={css.desc}>{desc}</div>
         <div className={css.foot}>
-          <span className={css.cat}>
+          <Pill className={css.catPill}>
             {(data!.categories[p.category] && (data!.categories[p.category]![lang] || data!.categories[p.category]!.en)) || p.category}
-          </span>
+          </Pill>
           <span className={css.grow} />
           {done
-            ? <button className={`${css.btn} ${css.done}`}>{t('installedBadge')}</button>
+            ? <span className={css.okState}>{t('installedBadge')}</span>
             : already
-              ? <button className={`${css.btn} ${css.done}`}>{t('alreadyInstalled')}</button>
+              ? <span className={css.okState}>{t('alreadyInstalled')}</span>
               : busy
-                ? <button className={`${css.btn} ${css.install} ${css.busy}`}>{t('installing')}</button>
+                ? <Button variant="primary" size="sm" disabled>{t('installing')}</Button>
                 : (
-                    <button
-                      className={`${css.btn} ${css.install}`}
+                    <Button
+                      variant="primary"
+                      size="sm"
                       disabled={busyUrl !== null || !envReady}
                       onClick={() => setConfirming(p)}
-                    >{t('install')}</button>
+                    >{t('install')}</Button>
                   )}
         </div>
         {busy && (
@@ -452,23 +455,25 @@ export function MarketSection(props: MarketSectionProps) {
         <div className={css.foot}>
           <span className={css.grow} />
           {removingName === instName
-            ? <button className={`${css.btn} ${css.danger} ${css.busy}`}>{t('uninstalling')}</button>
+            ? <Button variant="outline" size="sm" className={css.dangerBtn} disabled>{t('uninstalling')}</Button>
             : removeArmed === instName
               ? (
-                  <button
-                    className={`${css.btn} ${css.danger} ${css.armed}`}
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    className={css.dangerArmed}
                     onClick={() => doUninstall(instName).then(() => {
                       if (mounted) {
                         sessionStorage.setItem('dshm-tab', 'themes')
                         location.reload()
                       }
                     })}
-                  >{t('confirmRemove')}</button>
+                  >{t('confirmRemove')}</Button>
                 )
-              : <button className={`${css.btn} ${css.danger}`} onClick={() => setRemoveArmed(instName)}>{t('uninstall')}</button>}
+              : <Button variant="outline" size="sm" className={css.dangerBtn} onClick={() => setRemoveArmed(instName)}>{t('uninstall')}</Button>}
           {mounted
-            ? <button className={`${css.btn} ${css.done}`}>{t('themeActive')}</button>
-            : <button className={`${css.btn} ${css.install}`} onClick={() => doUseSkin(instName)}>{t('themeApply')}</button>}
+            ? <span className={css.okState}>{t('themeActive')}</span>
+            : <Button variant="primary" size="sm" onClick={() => doUseSkin(instName)}>{t('themeApply')}</Button>}
         </div>
       </div>
     )
@@ -483,12 +488,13 @@ export function MarketSection(props: MarketSectionProps) {
           <span className={css.nm}>{label}</span>
           <span className={css.grow} />
           {active
-            ? <button className={`${css.btn} ${css.done}`}>{t('themeActive')}</button>
+            ? <span className={css.okState}>{t('themeActive')}</span>
             : (
-                <button
-                  className={`${css.btn} ${css.install}`}
+                <Button
+                  variant="primary"
+                  size="sm"
                   onClick={() => { try { props.theme.setTheme(id) } catch (error) { setInstallError(String(error)) } }}
-                >{t('themeApply')}</button>
+                >{t('themeApply')}</Button>
               )}
         </div>
       </div>
@@ -507,21 +513,23 @@ export function MarketSection(props: MarketSectionProps) {
             const self = installed['dshmarket'] !== undefined ? 'dshmarket' : 'dsh-market'
             return updates[self] && updates[self].updateAvailable && !updatedNames.includes(self)
               && (
-                <button
-                  className={`${css.btn} ${css.upd}`}
-                  style={{ fontSize: '11px', padding: '3px 10px' }}
+                <Button
+                  variant="primary"
+                  size="sm"
+                  className={css.warnBtn}
                   disabled={updatingName !== null || busyUrl !== null}
                   onClick={() => { setTab('installed'); doUpdate(self) }}
-                >{updatingName === self ? t('updating') : t('marketUpdate')}</button>
+                >{updatingName === self ? t('updating') : t('marketUpdate')}</Button>
               )
           })()}
           {updatableNames.length >= 2 && (
-            <button
-              className={`${css.btn} ${css.upd}`}
-              style={{ fontSize: '11px', padding: '3px 10px' }}
+            <Button
+              variant="primary"
+              size="sm"
+              className={css.warnBtn}
               disabled={updatingAll || updatingName !== null || busyUrl !== null || removingName !== null}
               onClick={() => { setTab('installed'); doUpdateAll() }}
-            >{updatingAll ? t('updating') : t('updateAll') + ' (' + updatableNames.length + ')'}</button>
+            >{updatingAll ? t('updating') : t('updateAll') + ' (' + updatableNames.length + ')'}</Button>
           )}
         </div>
         <div className={css.sub}>
@@ -533,32 +541,19 @@ export function MarketSection(props: MarketSectionProps) {
           {themeSnap !== null && <button className={tab === 'themes' ? `${css.tab} ${css.on}` : css.tab} onClick={() => setTab('themes')}>{t('tabThemes')}</button>}
           <button className={tab === 'installed' ? `${css.tab} ${css.on}` : css.tab} onClick={() => { setTab('installed'); refreshInstalled(true) }}>
             {t('tabInstalled') + (Object.keys(installed).length > 0 ? ' (' + Object.keys(installed).length + ')' : '')}
-            {hasUpdates && <span className={css.dot} />}
+            {hasUpdates && <StateDot state="error" size={7} className={css.dot} />}
           </button>
           <span className={css.grow} />
-          {tab === 'discover' && data !== null && (
-            <div className={css.sort}>
-              {['hot', 'new'].map(key => (
-                <button
-                  key={key}
-                  className={sort === key ? css.on : ''}
-                  onClick={() => setSort(key)}
-                >{t(key === 'hot' ? 'sortHot' : 'sortNew')}</button>
-              ))}
-            </div>
-          )}
-          <input className={css.searchInline} placeholder={t('searchPh')} value={q} onChange={e => setQ(e.target.value)} />
+          <Input className={css.searchInline} icon={<IconSearchOutline16 size={14} />} placeholder={t('searchPh')} value={q} onChange={e => setQ(e.target.value)} />
         </div>
         {!envReady && (
           <div className={css.restart}>
             <span>🧩</span>
             <span className={css.grow}>{envFailed ? t('envFixFail') : t('envMissing')}</span>
             {!envFailed && (
-              <button
-                className={envFixing ? `${css.btn} ${css.install} ${css.busy}` : `${css.btn} ${css.install}`}
-                disabled={envFixing}
-                onClick={fixEnv}
-              >{envFixing ? t('envFixing') : t('envFix')}</button>
+              <Button variant="primary" size="sm" disabled={envFixing} onClick={fixEnv}>
+                {envFixing ? t('envFixing') : t('envFix')}
+              </Button>
             )}
           </div>
         )}
@@ -566,14 +561,15 @@ export function MarketSection(props: MarketSectionProps) {
           <div className={css.restart}>
             <span>✨</span>
             <span className={css.grow}><b>{hotUrls.length}</b> {t('hotBanner')}</span>
-            <button
-              className={`${css.btn} ${css.install}`}
+            <Button
+              variant="primary"
+              size="sm"
               onClick={() => {
                 sessionStorage.setItem('dshm-toast', JSON.stringify(hotNames))
                 sessionStorage.setItem('dshm-tab', 'installed')
                 location.reload()
               }}
-            >{t('refresh')}</button>
+            >{t('refresh')}</Button>
           </div>
         )}
         {pendingRestart > 0 && (
@@ -598,14 +594,33 @@ export function MarketSection(props: MarketSectionProps) {
               : (
                   <>
                     <div className={css.cats}>
-                      <button className={cat === 'all' ? `${css.chip} ${css.on}` : css.chip} onClick={() => setCat('all')}>{t('all')}</button>
-                      {categories.map(id => (
-                        <button
-                          key={id}
-                          className={cat === id ? `${css.chip} ${css.on}` : css.chip}
-                          onClick={() => setCat(id)}
-                        >{(data.categories[id] && (data.categories[id]![lang] || data.categories[id]!.en)) || id}</button>
-                      ))}
+                      <div className={catsOpen ? css.catsWrap : `${css.catsWrap} ${css.catsCollapsed}`}>
+                        <Pill active={cat === 'all'} onClick={() => setCat('all')}>{t('all')}</Pill>
+                        {/* Collapsed, the selected category is pulled to the front so it never hides. */}
+                        {(catsOpen ? categories : cat === 'all' ? categories : [cat, ...categories.filter(id => id !== cat)]).map(id => (
+                          <Pill
+                            key={id}
+                            active={cat === id}
+                            onClick={() => setCat(id)}
+                          >{(data.categories[id] && (data.categories[id]![lang] || data.categories[id]!.en)) || id}</Pill>
+                        ))}
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className={css.catsToggle}
+                        icon={catsOpen ? <IconChevronUpOutline14 size={14} /> : <IconChevronDownOutline14 size={14} />}
+                        onClick={() => setCatsOpen(o => !o)}
+                      >{catsOpen ? t('catsLess') : t('catsMore')}</Button>
+                      <div className={css.sort}>
+                        {['hot', 'new'].map(key => (
+                          <button
+                            key={key}
+                            className={sort === key ? css.on : ''}
+                            onClick={() => setSort(key)}
+                          >{t(key === 'hot' ? 'sortHot' : 'sortNew')}</button>
+                        ))}
+                      </div>
                     </div>
                     {plugins.length === 0
                       ? <div className={css.empty}>{t('empty')}</div>
@@ -665,37 +680,43 @@ export function MarketSection(props: MarketSectionProps) {
                       <span className={css.grow} />
                       {repoUrl !== null && <a className={css.src} href={repoUrl + '#readme'} target="_blank" rel="noreferrer">{t('readme')}</a>}
                       {updatedNames.includes(name)
-                        ? <button className={`${css.btn} ${css.done}`}>{t('updated')}</button>
+                        ? <span className={css.okState}>{t('updated')}</span>
                         : updatingName === name
-                          ? <button className={`${css.btn} ${css.upd} ${css.busy}`}>{t('updating')}</button>
+                          ? <Button variant="primary" size="sm" className={css.warnBtn} disabled>{t('updating')}</Button>
                           : status && status.updateAvailable
                             ? (
-                                <button
-                                  className={`${css.btn} ${css.upd}`}
+                                <Button
+                                  variant="primary"
+                                  size="sm"
+                                  className={css.warnBtn}
                                   disabled={updatingName !== null}
                                   onClick={() => doUpdate(name)}
-                                >{t('update')}</button>
+                                >{t('update')}</Button>
                               )
                             : status && status.kind === 'linked'
                               ? <span className={css.owner}>{t('linkedDev')}</span>
                               : <span className={css.owner}>{t('upToDate')}</span>}
                       {name !== 'dsh-market' && name !== 'dshmarket' && (
                         removingName === name
-                          ? <button className={`${css.btn} ${css.danger} ${css.busy}`}>{t('uninstalling')}</button>
+                          ? <Button variant="outline" size="sm" className={css.dangerBtn} disabled>{t('uninstalling')}</Button>
                           : removeArmed === name
                             ? (
-                                <button
-                                  className={`${css.btn} ${css.danger} ${css.armed}`}
+                                <Button
+                                  variant="primary"
+                                  size="sm"
+                                  className={css.dangerArmed}
                                   onClick={() => doUninstall(name)}
                                   onMouseLeave={() => setRemoveArmed(null)}
-                                >{t('confirmRemove')}</button>
+                                >{t('confirmRemove')}</Button>
                               )
                             : (
-                                <button
-                                  className={`${css.btn} ${css.danger}`}
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className={css.dangerBtn}
                                   disabled={removingName !== null || busyUrl !== null || updatingName !== null}
                                   onClick={() => setRemoveArmed(name)}
-                                >{t('uninstall')}</button>
+                                >{t('uninstall')}</Button>
                               )
                       )}
                     </div>
@@ -710,24 +731,26 @@ export function MarketSection(props: MarketSectionProps) {
         >↑</button>
       )}
       {confirming !== null && (
-        <div className={css.mask} onClick={e => { if (e.target === e.currentTarget) setConfirming(null) }}>
-          <div className={css.modal}>
-            <h3>{t('confirmTitle') + ' ' + confirming.name + '?'}</h3>
-            <p>{(confirming.description && (confirming.description[lang] || confirming.description.en)) || ''}</p>
-            <div className={css.cmd}>{confirming.install}</div>
-            {looksTerminal(confirming, lang) && (
-              <p style={{ color: 'var(--dsw-alias-state-warn-primary, #b45309)', fontWeight: 600 }}>
-                {'🖥️ ' + t('terminalWarn') + ' '}
-                <a className={css.src} href={confirming.url + '#readme'} target="_blank" rel="noreferrer">{t('readme')}</a>
-              </p>
-            )}
-            <p>{'⚠️ ' + t('confirmWarn')}</p>
-            <div className={css.acts}>
-              <button className={`${css.btn} ${css.ghost}`} onClick={() => setConfirming(null)}>{t('cancel')}</button>
-              <button className={`${css.btn} ${css.install}`} onClick={() => doInstall(confirming)}>{t('install')}</button>
-            </div>
-          </div>
-        </div>
+        <Modal
+          open
+          onClose={() => setConfirming(null)}
+          title={t('confirmTitle') + ' ' + confirming.name + '?'}
+          description={(confirming.description && (confirming.description[lang] || confirming.description.en)) || ''}
+          footer={(
+            <>
+              <Button variant="ghost" onClick={() => setConfirming(null)}>{t('cancel')}</Button>
+              <Button variant="primary" onClick={() => doInstall(confirming)}>{t('install')}</Button>
+            </>
+          )}
+        >
+          {looksTerminal(confirming, lang) && (
+            <p className={css.warnLine}>
+              {'🖥️ ' + t('terminalWarn') + ' '}
+              <a className={css.src} href={confirming.url + '#readme'} target="_blank" rel="noreferrer">{t('readme')}</a>
+            </p>
+          )}
+          <p className={css.modalNote}>{'⚠️ ' + t('confirmWarn')}</p>
+        </Modal>
       )}
     </div>
   )
