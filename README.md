@@ -2,8 +2,8 @@
 
 English | [中文](README.zh.md)
 
-[![npm](https://img.shields.io/npm/v/dsh-market)](https://www.npmjs.com/package/dsh-market)
-[![downloads](https://img.shields.io/npm/dm/dsh-market)](https://www.npmjs.com/package/dsh-market)
+[![npm](https://img.shields.io/npm/v/dshmarket)](https://www.npmjs.com/package/dshmarket)
+[![downloads](https://img.shields.io/npm/dm/dshmarket)](https://www.npmjs.com/package/dshmarket)
 
 The plugin market inside DeepSeek Harness. Open Settings → **Plugin Market** → browse, search, one-click install.
 
@@ -12,7 +12,7 @@ The plugin market inside DeepSeek Harness. Open Settings → **Plugin Market** �
 ## Install
 
 ```sh
-dsh plugin --profile web add dsh-market
+dsh plugin --profile web add dshmarket
 ```
 
 Restart `dsh web`, then open **Settings → Plugin Market**.

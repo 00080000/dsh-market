@@ -472,13 +472,16 @@ function MarketSection(props) {
     h('div', { className: 'dshm-head' },
       h('div', { style: { display: 'flex', alignItems: 'center', gap: '10px' } },
         h('h2', { className: 'dshm-title' }, t('nav')),
-        updates['dsh-market'] && updates['dsh-market'].updateAvailable && !updatedNames.includes('dsh-market')
-          && h('button', {
-            className: 'dshm-btn upd',
-            style: { fontSize: '11px', padding: '3px 10px' },
-            disabled: updatingName !== null || busyUrl !== null,
-            onClick: () => { setTab('installed'); doUpdate('dsh-market') },
-          }, updatingName === 'dsh-market' ? t('updating') : t('marketUpdate'))),
+        (() => {
+          const self = installed['dshmarket'] !== undefined ? 'dshmarket' : 'dsh-market'
+          return updates[self] && updates[self].updateAvailable && !updatedNames.includes(self)
+            && h('button', {
+              className: 'dshm-btn upd',
+              style: { fontSize: '11px', padding: '3px 10px' },
+              disabled: updatingName !== null || busyUrl !== null,
+              onClick: () => { setTab('installed'); doUpdate(self) },
+            }, updatingName === self ? t('updating') : t('marketUpdate'))
+        })()),
       h('div', { className: 'dshm-sub' },
         t('subtitle') + (data ? ' · ' + data.count : '') + ' · ',
         h('a', { className: 'dshm-src', href: '/dsh-market/logs', download: 'dsh-market-log.txt' }, t('exportLog'))),
@@ -610,7 +613,7 @@ function MarketSection(props) {
                       : status && status.kind === 'linked'
                         ? h('span', { className: 'dshm-owner' }, t('linkedDev'))
                         : h('span', { className: 'dshm-owner' }, t('upToDate')),
-                name !== 'dsh-market' && (
+                name !== 'dsh-market' && name !== 'dshmarket' && (
                   removingName === name
                     ? h('button', { className: 'dshm-btn danger busy' }, t('uninstalling'))
                     : removeArmed === name

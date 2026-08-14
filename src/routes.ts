@@ -520,7 +520,7 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
         try {
           const body = (await readJsonBody(request)) as { name?: unknown }
           const name = typeof body.name === 'string' ? body.name : ''
-          if (name === 'dsh-market') {
+          if (name === 'dsh-market' || name === 'dshmarket') {
             sendJson(response, 400, { error: 'the market cannot uninstall itself; use the dsh CLI' })
             return
           }

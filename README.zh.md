@@ -2,8 +2,8 @@
 
 [English](README.md) | 中文
 
-[![npm](https://img.shields.io/npm/v/dsh-market)](https://www.npmjs.com/package/dsh-market)
-[![downloads](https://img.shields.io/npm/dm/dsh-market)](https://www.npmjs.com/package/dsh-market)
+[![npm](https://img.shields.io/npm/v/dshmarket)](https://www.npmjs.com/package/dshmarket)
+[![downloads](https://img.shields.io/npm/dm/dshmarket)](https://www.npmjs.com/package/dshmarket)
 
 装在 DeepSeek Harness 里的插件市场。打开设置 → **插件市场** → 逛一逛，点一下，装好。
 
@@ -12,7 +12,7 @@
 ## 安装
 
 ```sh
-dsh plugin --profile web add dsh-market
+dsh plugin --profile web add dshmarket
 ```
 
 重启 `dsh web`，打开 **设置 → 插件市场**。
