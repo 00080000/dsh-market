@@ -7,6 +7,7 @@
  */
 
 import { spawn } from 'node:child_process'
+import type { ChildProcess } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -71,6 +72,21 @@ let pnpmReady = false
  */
 const winCmdShim = process.platform === 'win32'
 
+/**
+ * Kill a spawned child and, on Windows, its whole process tree — `kill()`
+ * there only terminates the wrapper, leaving pnpm children running.
+ * (Contributed in #7 by @mraing.)
+ */
+function killChild(child: ChildProcess): void {
+  if (process.platform === 'win32' && child.pid !== undefined) {
+    try {
+      spawn('taskkill', ['/pid', String(child.pid), '/t', '/f'], { stdio: 'ignore' })
+      return
+    } catch { /* fall through */ }
+  }
+  child.kill('SIGKILL')
+}
+
 function probePnpm(): Promise<boolean> {
   if (pnpmReady) return Promise.resolve(true)
   return new Promise((resolvePromise) => {
@@ -91,7 +107,7 @@ function runQuiet(file: string, args: string[], timeoutMs: number): Promise<{ co
       shell: winCmdShim,
     })
     let output = ''
-    const timer = setTimeout(() => child.kill('SIGKILL'), timeoutMs)
+    const timer = setTimeout(() => killChild(child), timeoutMs)
     const collect = (chunk: Buffer): void => { output = (output + chunk.toString()).slice(-8 * 1024) }
     child.stdout.on('data', collect)
     child.stderr.on('data', collect)
@@ -152,7 +168,7 @@ function runDshPlugin(profile: string, pluginArgs: string[]): Promise<InstallRes
     let timedOut = false
     const timer = setTimeout(() => {
       timedOut = true
-      child.kill('SIGKILL')
+      killChild(child)
     }, INSTALL_TIMEOUT_MS)
     child.stdout.on('data', (chunk: Buffer) => {
       const text = chunk.toString()
