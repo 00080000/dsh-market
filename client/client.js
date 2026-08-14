@@ -178,6 +178,7 @@ const CSS = `
 .dshm-progress .dshm-spin{width:14px;height:14px;border-width:2px;flex-shrink:0}
 .dshm-progress code{font-family:ui-monospace,Menlo,monospace;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dshm-toast{position:fixed;right:22px;bottom:22px;z-index:2000;background:var(--dsw-alias-bg-layer-1,#fff);border:1px solid var(--dsw-alias-border-l1,#e5e7eb);border-radius:12px;padding:13px 16px;box-shadow:0 12px 40px rgba(0,0,0,.18);display:flex;align-items:center;gap:10px;font-size:13px;color:var(--dsw-alias-label-primary,#1f2328);pointer-events:auto;max-width:340px}
+.dshm-toast .dshm-btn{white-space:nowrap;flex-shrink:0}
 .dshm-empty{color:var(--dsw-alias-label-secondary,#9ca3af);font-size:13px;padding:32px;text-align:center}
 .dshm-err{color:var(--dsw-alias-state-error-primary,#dc2626);font-size:12px;margin:8px 0;white-space:pre-wrap;word-break:break-all}
 .dshm-mask{position:fixed;inset:0;background:rgba(15,18,25,.4);display:flex;align-items:center;justify-content:center;z-index:1000}
