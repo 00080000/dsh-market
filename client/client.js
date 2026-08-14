@@ -48,6 +48,7 @@ const zh = {
   linkedDev: '本地开发链接',
   exportLog: '导出日志',
   readme: '使用说明',
+  terminalWarn: '这看起来是终端/命令行插件：装进网页版可能无效，甚至导致 DeepSeek Harness 无法启动。建议先看它的使用说明，按说明装进对应的 profile。',
   loading: '正在加载插件目录…',
   progressHint: '首次安装需要下载与解析依赖，大插件可能要 1-3 分钟',
   toastReady: '已装好并已生效',
@@ -88,6 +89,7 @@ const en = {
   linkedDev: 'linked (dev)',
   exportLog: 'Export log',
   readme: 'README',
+  terminalWarn: 'This looks like a terminal/CLI plugin: installing it into the web profile may do nothing, or even break DeepSeek Harness startup. Read its README and install it into the profile it targets.',
   loading: 'Loading the catalog…',
   progressHint: 'First installs download and resolve dependencies — large plugins can take 1-3 minutes',
   toastReady: 'installed and live',
@@ -175,6 +177,12 @@ const navState = { attention: localStorage.getItem('dshm-visited') === null }
 
 function readSession(key) {
   try { return JSON.parse(sessionStorage.getItem(key) || 'null') } catch { return null }
+}
+
+/** Heuristic: plugins that target a terminal surface rather than the web UI. */
+function looksTerminal(plugin, lang) {
+  const desc = (plugin.description && (plugin.description[lang] || plugin.description.en)) || ''
+  return /\b(tui|cli|tty|terminal)\b|终端|命令行/i.test(plugin.name + ' ' + desc)
 }
 
 /** A registry plugin counts as installed when its package name or GitHub spec appears in the profile dependencies. */
@@ -510,6 +518,9 @@ function MarketSection(props) {
         h('h3', null, t('confirmTitle') + ' ' + confirming.name + '?'),
         h('p', null, (confirming.description && (confirming.description[lang] || confirming.description.en)) || ''),
         h('div', { className: 'dshm-cmd' }, confirming.install),
+        looksTerminal(confirming, lang) && h('p', { style: { color: 'var(--dsw-alias-state-warn-primary, #b45309)', fontWeight: 600 } },
+          '🖥️ ' + t('terminalWarn') + ' ',
+          h('a', { className: 'dshm-src', href: confirming.url + '#readme', target: '_blank', rel: 'noreferrer' }, t('readme'))),
         h('p', null, '⚠️ ' + t('confirmWarn')),
         h('div', { className: 'dshm-acts' },
           h('button', { className: 'dshm-btn ghost', onClick: () => setConfirming(null) }, t('cancel')),
