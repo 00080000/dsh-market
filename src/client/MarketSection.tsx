@@ -7,7 +7,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, use
 import { Button, IconChevronDownOutline14, IconChevronUpOutline14, IconSearchOutline16, Input, Modal, Pill, StateDot } from '@deepseek-ai/dsh-client-ui-primitives'
 import css from './Market.module.css'
 import {
-  avatarColor, isInstalled, LOGO_URI, looksTerminal, readSession, repoOf, themeSwatch,
+  avatarColor, entryForDep, isInstalled, LOGO_URI, looksTerminal, matchInstalledName, readSession, repoOf, themeSwatch,
 } from './market-data.ts'
 import type {
   InstalledMap, Registry, RegistryPlugin, ThemeSnapshot, Translate, UpdateStatus,
@@ -419,16 +419,7 @@ export function MarketSection(props: MarketSectionProps) {
     )
   }
 
-  const installedNameOf = (p: RegistryPlugin) => {
-    if (installed[p.name] !== undefined) return p.name
-    const repo = repoOf(p.url)
-    if (repo === null) return null
-    const needle = ('github:' + repo).toLowerCase()
-    for (const [name, spec] of Object.entries(installed)) {
-      if (String(spec).toLowerCase().includes(needle)) return name
-    }
-    return null
-  }
+  const installedNameOf = (p: RegistryPlugin) => matchInstalledName(p, installed)
 
   // Plugins loaded at boot (bundle-layer skins) aren't in the shim list but
   // are just as live; the boot manifest is the page's own record of them.
@@ -683,8 +674,7 @@ export function MarketSection(props: MarketSectionProps) {
             : Object.keys(installed).length === 0
               ? <div className={css.empty}>{t('installedEmpty')}</div>
               : Object.entries(installed).map(([name, spec]) => {
-                  const entry = data === null ? undefined : data.plugins.find(p => p.name === name
-                    || (repoOf(p.url) !== null && String(spec).toLowerCase().includes(('github:' + repoOf(p.url)).toLowerCase())))
+                  const entry = data === null ? undefined : entryForDep(data.plugins, name, String(spec))
                   const status = updates[name]
                   const version = status && status.version ? 'v' + status.version : ''
                   const specText = String(spec)

@@ -148,14 +148,44 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 			const desc = plugin.description && (plugin.description[lang] || plugin.description.en) || "";
 			return /\b(tui|cli|tty|terminal)\b|终端|命令行/i.test(plugin.name + " " + desc);
 		}
-		/** A registry plugin counts as installed when its package name, npm name, or GitHub spec appears in the profile dependencies. */
-		function isInstalled(plugin, installed) {
-			if (installed[plugin.name] !== void 0) return true;
-			if (plugin.npm && installed[plugin.npm] !== void 0) return true;
+		/**
+		* Unified installed-state matching (#15): both sides collapse to lowercase
+		* identity sets — the registry entry contributes its bare name, npm name and
+		* owner/repo; the dependency contributes its key and the repo inside its
+		* spec — and any exact intersection counts. Exact equality, not substrings,
+		* so prefix-related repo names cannot cross-match.
+		*/
+		function entryIdentities(plugin) {
+			const ids = /* @__PURE__ */ new Set([plugin.name.toLowerCase()]);
+			if (plugin.npm) ids.add(plugin.npm.toLowerCase());
 			const repo = repoOf(plugin.url);
-			if (repo === null) return false;
-			const needle = ("github:" + repo).toLowerCase();
-			return Object.values(installed).some((spec) => String(spec).toLowerCase().includes(needle));
+			if (repo !== null) ids.add(repo.toLowerCase());
+			return ids;
+		}
+		function depIdentities(name, spec) {
+			const ids = /* @__PURE__ */ new Set([name.toLowerCase()]);
+			const scoped = /^@([^/]+)\/(.+)$/.exec(name);
+			if (scoped !== null) ids.add(`${scoped[1].toLowerCase()}/${scoped[2].toLowerCase()}`);
+			const match = /github:([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)/i.exec(spec);
+			if (match !== null) ids.add(match[1].toLowerCase());
+			return ids;
+		}
+		/** The installed dependency name a registry entry corresponds to, or null. */
+		function matchInstalledName(plugin, installed) {
+			const ids = entryIdentities(plugin);
+			for (const [name, spec] of Object.entries(installed)) for (const id of depIdentities(name, String(spec))) if (ids.has(id)) return name;
+			return null;
+		}
+		/** The registry entry an installed dependency corresponds to, or undefined. */
+		function entryForDep(plugins, name, spec) {
+			const ids = depIdentities(name, String(spec));
+			return plugins.find((plugin) => {
+				for (const id of entryIdentities(plugin)) if (ids.has(id)) return true;
+				return false;
+			});
+		}
+		function isInstalled(plugin, installed) {
+			return matchInstalledName(plugin, installed) !== null;
 		}
 		/**
 		* The brand mark (assets/logo.svg — shared block-grid mark with
@@ -215,59 +245,59 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 			document.head.appendChild(tag);
 		}
 		var Market_module_css_default = {
-			"tag": "TDaEaa_tag",
-			"row1": "TDaEaa_row1",
-			"src": "TDaEaa_src",
-			"desc": "TDaEaa_desc",
-			"grid": "TDaEaa_grid",
-			"av": "TDaEaa_av",
-			"nm": "TDaEaa_nm",
-			"grow": "TDaEaa_grow",
-			"root": "TDaEaa_root",
-			"warnBtn": "TDaEaa_warnBtn",
-			"body": "TDaEaa_body",
-			"searchInline": "TDaEaa_searchInline",
-			"empty": "TDaEaa_empty",
-			"dot": "TDaEaa_dot",
-			"okState": "TDaEaa_okState",
-			"dangerBtn": "TDaEaa_dangerBtn",
-			"swatches": "TDaEaa_swatches",
-			"sub": "TDaEaa_sub",
-			"star": "TDaEaa_star",
-			"top": "TDaEaa_top",
-			"cmdDetails": "TDaEaa_cmdDetails",
-			"tabs": "TDaEaa_tabs",
-			"catsWrap": "TDaEaa_catsWrap",
-			"catsToggle": "TDaEaa_catsToggle",
-			"warnLine": "TDaEaa_warnLine",
-			"cats": "TDaEaa_cats",
-			"modalNote": "TDaEaa_modalNote",
-			"on": "TDaEaa_on",
-			"card": "TDaEaa_card",
-			"titleRow": "TDaEaa_titleRow",
-			"restart": "TDaEaa_restart",
-			"sort": "TDaEaa_sort",
-			"title": "TDaEaa_title",
-			"catsRow": "TDaEaa_catsRow",
-			"themesGrid": "TDaEaa_themesGrid",
-			"catsCollapsed": "TDaEaa_catsCollapsed",
-			"descTight": "TDaEaa_descTight",
-			"loading": "TDaEaa_loading",
-			"sp": "TDaEaa_sp",
-			"tab": "TDaEaa_tab",
-			"spec": "TDaEaa_spec",
-			"progress": "TDaEaa_progress",
-			"dangerArmed": "TDaEaa_dangerArmed",
-			"cmd": "TDaEaa_cmd",
-			"owner": "TDaEaa_owner",
-			"sect": "TDaEaa_sect",
-			"foot": "TDaEaa_foot",
-			"irow": "TDaEaa_irow",
 			"head": "TDaEaa_head",
+			"restart": "TDaEaa_restart",
+			"okState": "TDaEaa_okState",
+			"catsWrap": "TDaEaa_catsWrap",
+			"card": "TDaEaa_card",
+			"row1": "TDaEaa_row1",
+			"descTight": "TDaEaa_descTight",
+			"dangerArmed": "TDaEaa_dangerArmed",
+			"foot": "TDaEaa_foot",
+			"empty": "TDaEaa_empty",
+			"modalNote": "TDaEaa_modalNote",
+			"grow": "TDaEaa_grow",
+			"sub": "TDaEaa_sub",
+			"searchInline": "TDaEaa_searchInline",
 			"cmdSummary": "TDaEaa_cmdSummary",
+			"titleRow": "TDaEaa_titleRow",
+			"top": "TDaEaa_top",
+			"tabs": "TDaEaa_tabs",
+			"sect": "TDaEaa_sect",
+			"av": "TDaEaa_av",
+			"catsRow": "TDaEaa_catsRow",
+			"src": "TDaEaa_src",
+			"irow": "TDaEaa_irow",
+			"tab": "TDaEaa_tab",
+			"desc": "TDaEaa_desc",
+			"spec": "TDaEaa_spec",
+			"cats": "TDaEaa_cats",
+			"dangerBtn": "TDaEaa_dangerBtn",
+			"root": "TDaEaa_root",
+			"sort": "TDaEaa_sort",
+			"loading": "TDaEaa_loading",
+			"nm": "TDaEaa_nm",
+			"themesGrid": "TDaEaa_themesGrid",
+			"warnBtn": "TDaEaa_warnBtn",
+			"dot": "TDaEaa_dot",
+			"on": "TDaEaa_on",
+			"catsToggle": "TDaEaa_catsToggle",
+			"owner": "TDaEaa_owner",
 			"spin": "TDaEaa_spin",
+			"cmdDetails": "TDaEaa_cmdDetails",
+			"sp": "TDaEaa_sp",
+			"progress": "TDaEaa_progress",
+			"err": "TDaEaa_err",
+			"tag": "TDaEaa_tag",
+			"catsCollapsed": "TDaEaa_catsCollapsed",
+			"cmd": "TDaEaa_cmd",
+			"swatches": "TDaEaa_swatches",
+			"star": "TDaEaa_star",
+			"body": "TDaEaa_body",
 			"btn": "TDaEaa_btn",
-			"err": "TDaEaa_err"
+			"title": "TDaEaa_title",
+			"grid": "TDaEaa_grid",
+			"warnLine": "TDaEaa_warnLine"
 		};
 		//#endregion
 		//#region src/client/MarketSection.tsx
@@ -641,14 +671,7 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 					]
 				}, p.url);
 			};
-			const installedNameOf = (p) => {
-				if (installed[p.name] !== void 0) return p.name;
-				const repo = repoOf(p.url);
-				if (repo === null) return null;
-				const needle = ("github:" + repo).toLowerCase();
-				for (const [name, spec] of Object.entries(installed)) if (String(spec).toLowerCase().includes(needle)) return name;
-				return null;
-			};
+			const installedNameOf = (p) => matchInstalledName(p, installed);
 			const bootEntries = typeof window !== "undefined" && window.__DSH_BOOT__ && Array.isArray(window.__DSH_BOOT__.entries) ? window.__DSH_BOOT__.entries : [];
 			const themePluginCard = (p) => {
 				const instName = installedNameOf(p);
@@ -1028,7 +1051,7 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 							className: Market_module_css_default.empty,
 							children: t("installedEmpty")
 						}) : Object.entries(installed).map(([name, spec]) => {
-							const entry = data === null ? void 0 : data.plugins.find((p) => p.name === name || repoOf(p.url) !== null && String(spec).toLowerCase().includes(("github:" + repoOf(p.url)).toLowerCase()));
+							const entry = data === null ? void 0 : entryForDep(data.plugins, name, String(spec));
 							const status = updates[name];
 							const version = status && status.version ? "v" + status.version : "";
 							const specText = String(spec);

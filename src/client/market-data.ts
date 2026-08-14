@@ -84,14 +84,54 @@ export function looksTerminal(plugin: RegistryPlugin, lang: string): boolean {
   return /\b(tui|cli|tty|terminal)\b|终端|命令行/i.test(plugin.name + ' ' + desc)
 }
 
-/** A registry plugin counts as installed when its package name, npm name, or GitHub spec appears in the profile dependencies. */
-export function isInstalled(plugin: RegistryPlugin, installed: InstalledMap): boolean {
-  if (installed[plugin.name] !== undefined) return true
-  if (plugin.npm && installed[plugin.npm] !== undefined) return true
+/**
+ * Unified installed-state matching (#15): both sides collapse to lowercase
+ * identity sets — the registry entry contributes its bare name, npm name and
+ * owner/repo; the dependency contributes its key and the repo inside its
+ * spec — and any exact intersection counts. Exact equality, not substrings,
+ * so prefix-related repo names cannot cross-match.
+ */
+function entryIdentities(plugin: RegistryPlugin): Set<string> {
+  const ids = new Set<string>([plugin.name.toLowerCase()])
+  if (plugin.npm) ids.add(plugin.npm.toLowerCase())
   const repo = repoOf(plugin.url)
-  if (repo === null) return false
-  const needle = ('github:' + repo).toLowerCase()
-  return Object.values(installed).some(spec => String(spec).toLowerCase().includes(needle))
+  if (repo !== null) ids.add(repo.toLowerCase())
+  return ids
+}
+
+function depIdentities(name: string, spec: string): Set<string> {
+  const ids = new Set<string>([name.toLowerCase()])
+  // A scoped npm key usually mirrors owner/repo — expose that identity so an
+  // npm-installed plugin still matches an entry whose npm field is unset.
+  const scoped = /^@([^/]+)\/(.+)$/.exec(name)
+  if (scoped !== null) ids.add(`${scoped[1]!.toLowerCase()}/${scoped[2]!.toLowerCase()}`)
+  const match = /github:([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)/i.exec(spec)
+  if (match !== null) ids.add(match[1]!.toLowerCase())
+  return ids
+}
+
+/** The installed dependency name a registry entry corresponds to, or null. */
+export function matchInstalledName(plugin: RegistryPlugin, installed: InstalledMap): string | null {
+  const ids = entryIdentities(plugin)
+  for (const [name, spec] of Object.entries(installed)) {
+    for (const id of depIdentities(name, String(spec))) {
+      if (ids.has(id)) return name
+    }
+  }
+  return null
+}
+
+/** The registry entry an installed dependency corresponds to, or undefined. */
+export function entryForDep(plugins: RegistryPlugin[], name: string, spec: string): RegistryPlugin | undefined {
+  const ids = depIdentities(name, String(spec))
+  return plugins.find((plugin) => {
+    for (const id of entryIdentities(plugin)) if (ids.has(id)) return true
+    return false
+  })
+}
+
+export function isInstalled(plugin: RegistryPlugin, installed: InstalledMap): boolean {
+  return matchInstalledName(plugin, installed) !== null
 }
 
 /**
