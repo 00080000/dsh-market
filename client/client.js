@@ -114,10 +114,6 @@ function injectStyles() {
   document.head.appendChild(tag)
 }
 
-function isZh() {
-  const lang = document.documentElement.lang || navigator.language || 'en'
-  return lang.toLowerCase().startsWith('zh')
-}
 
 function avatarColor(name) {
   let hash = 0
@@ -141,7 +137,11 @@ function isInstalled(plugin, installed) {
 
 function MarketSection(props) {
   const t = props.t
-  const lang = isZh() ? 'zh' : 'en'
+  const localeSnap = React.useSyncExternalStore(
+    cb => props.locale.subscribe(cb),
+    () => props.locale.getSnapshot(),
+  )
+  const lang = String(localeSnap.active).toLowerCase().startsWith('zh') ? 'zh' : 'en'
   const [data, setData] = useState(null)
   const [loadError, setLoadError] = useState(false)
   const [installed, setInstalled] = useState({})
@@ -306,7 +306,7 @@ exports.apply = function apply(ctx) {
     label: () => t('nav'),
     locale: NS,
     inject: () => ({ t }),
-  }, () => h(MarketSection, { t })))
+  }, () => h(MarketSection, { t, locale: ctx.locale })))
 }
 
 return module.exports; } });
