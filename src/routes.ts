@@ -8,12 +8,12 @@
 
 import { spawn } from 'node:child_process'
 import type { ChildProcess } from 'node:child_process'
-import { readFileSync } from 'node:fs'
-import { homedir, tmpdir } from 'node:os'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { loadRegistry } from './registry.ts'
-import { cleanHotDir, hotMount, hotUnmount } from './hot.ts'
+import { cleanHotDir, hotMount, hotUnmount, mountClientOnlyDeps } from './hot.ts'
 import { exportLogs, logEvent } from './log.ts'
 
 export interface WebServerService {
@@ -353,6 +353,51 @@ function readLockCommits(profile: string): Map<string, string> {
   return commits
 }
 
+/**
+ * Some registry entries point at collection repos whose actual plugin lives
+ * in a subdirectory — the root has no package.json, and pnpm installs the
+ * bare fileset with exit 0. Detect that junk install, drop it, and re-add
+ * each plugin subdirectory through pnpm's `#path:` selector.
+ * @returns overall success (true when nothing needed retargeting).
+ */
+async function retargetCollections(profile: string, before: Set<string>, target: string): Promise<boolean> {
+  if (!target.startsWith('github:')) return true
+  const junk = Object.keys(readInstalled(profile)).filter(name => !before.has(name)
+    && !existsSync(join(profileDir(profile), 'node_modules', name, 'package.json')))
+  let allOk = true
+  for (const name of junk) {
+    const root = join(profileDir(profile), 'node_modules', name)
+    let candidates: string[] = []
+    try {
+      candidates = readdirSync(root, { withFileTypes: true })
+        .filter(dirent => dirent.isDirectory() && /^[A-Za-z0-9_.-]+$/.test(dirent.name))
+        .filter((dirent) => {
+          try {
+            const manifest = JSON.parse(readFileSync(join(root, dirent.name, 'package.json'), 'utf8')) as { dsh?: unknown }
+            return manifest.dsh !== undefined
+          } catch {
+            return false
+          }
+        })
+        .map(dirent => dirent.name)
+        .slice(0, 5)
+    } catch {
+      candidates = []
+    }
+    logEvent('info', 'install', `${name}: collection repo (no root package.json); plugins inside: ${candidates.join(', ') || 'none'}`)
+    await runDshPlugin(profile, ['remove', name])
+    if (candidates.length === 0) {
+      allOk = false
+      continue
+    }
+    for (const sub of candidates) {
+      const result = await runDshPlugin(profile, ['add', `${target}#path:${sub}`])
+      if (result.exitCode !== 0 || result.timedOut) allOk = false
+    }
+  }
+  return allOk
+}
+
 function readInstalledVersion(profile: string, name: string): string | null {
   try {
     const manifest = JSON.parse(
@@ -435,6 +480,12 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
   // Boot-time wipe: stale hot-mount inputs from a previous session must never
   // survive into a composition where the bundle layer already covers them.
   cleanHotDir(profileDir(config.profile))
+  // Client-only packages (dsh.client without dsh.bundle) are invisible to the
+  // bundle layer in every boot; the market shim-mounts them so their client
+  // bundles are actually served.
+  void mountClientOnlyDeps(host, profileDir(config.profile)).then((mounted) => {
+    if (mounted.length > 0) logEvent('info', 'boot', `client-only shims mounted: ${mounted.join(', ')}`)
+  })
   let installing = false
   let restarting = false
 
@@ -778,8 +829,14 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
           try {
             const before = new Set(Object.keys(readInstalled(config.profile)))
             const result = await runDshPlugin(config.profile, ['add', target])
-            const ok = result.exitCode === 0 && !result.timedOut
+            let ok = result.exitCode === 0 && !result.timedOut
             if (ok) updatesCache = null
+            if (ok) {
+              // Collection repos (e.g. skin monorepos) install as a junk
+              // fileset with no root package.json; retarget to the real
+              // plugin subdirectories via pnpm's #path: selector.
+              ok = await retargetCollections(config.profile, before, target)
+            }
             const installed = readInstalled(config.profile)
             let hot = false
             if (ok) {
