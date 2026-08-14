@@ -7,7 +7,7 @@
  */
 
 import { spawn } from 'node:child_process'
-import { readFileSync } from 'node:fs'
+import { readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import type { IncomingMessage, ServerResponse } from 'node:http'
@@ -278,6 +278,78 @@ function readInstalledVersion(profile: string, name: string): string | null {
   }
 }
 
+/** Whether an installed package declares a dsh.bundle (i.e. can become a profile layer). */
+function declaresBundle(profile: string, name: string): boolean {
+  try {
+    const manifest = JSON.parse(
+      readFileSync(join(profileDir(profile), 'node_modules', name, 'package.json'), 'utf8'),
+    ) as { dsh?: { bundle?: { patch?: unknown } } }
+    return !!(manifest.dsh?.bundle?.patch)
+  } catch {
+    return false
+  }
+}
+
+/** The profile manifest's current dsh.profile.bundles list. */
+function readBundles(profile: string): string[] {
+  try {
+    const manifest = JSON.parse(
+      readFileSync(join(profileDir(profile), 'package.json'), 'utf8'),
+    ) as { dsh?: { profile?: { bundles?: string[] } } }
+    return manifest.dsh?.profile?.bundles ?? []
+  } catch {
+    return []
+  }
+}
+
+/** Extract package names pnpm reported as having ignored build scripts. */
+function parseIgnoredBuilds(stdout: string, stderr: string): string[] {
+  const text = `${stdout ?? ''}\n${stderr ?? ''}`
+  const found: string[] = []
+  const m = /Ignored build scripts:?\s*([^\n]+)/i.exec(text)
+  if (m) {
+    for (const chunk of m[1].split(',')) {
+      const t = chunk.trim()
+      if (t === '') continue
+      const at = t.lastIndexOf('@')
+      const name = at > 0 ? t.slice(0, at) : t
+      if (name && !found.includes(name)) found.push(name)
+    }
+  }
+  return found
+}
+
+/** Whether the profile's pnpm-workspace.yaml sets a blocking minimumReleaseAge (days). */
+function releaseAgeHint(profile: string): number | null {
+  try {
+    const yaml = readFileSync(join(profileDir(profile), 'pnpm-workspace.yaml'), 'utf8')
+    const m = /minimumReleaseAge\s*:\s*(\d+)/.exec(yaml)
+    if (m && Number(m[1]) > 0) return Number(m[1])
+  } catch { /* no workspace yaml */ }
+  return null
+}
+
+/** Add packages (true) into the profile's allowBuilds block, keeping existing entries. */
+function setAllowBuilds(profile: string, packages: string[]): string[] {
+  const file = join(profileDir(profile), 'pnpm-workspace.yaml')
+  let yaml = ''
+  try { yaml = readFileSync(file, 'utf8') } catch { /* create below */ }
+  const blockRe = /allowBuilds:\n((?:\s+[^\n]*\n)*)/
+  const map: Record<string, string | boolean> = {}
+  const blockMatch = blockRe.exec(yaml)
+  if (blockMatch) {
+    for (const line of blockMatch[1].split('\n')) {
+      const m = /^\s+([^:\s]+(?:\/[^:\s]+)?)\s*:\s*(\S.*)?$/.exec(line)
+      if (m) map[m[1]] = m[2] ?? true
+    }
+  }
+  for (const pkg of packages) map[pkg] = true
+  const block = Object.entries(map).map(([k, v]) => `  ${k}: ${v === true ? 'true' : String(v)}`).join('\n')
+  const blockText = `allowBuilds:\n${block}\n`
+  writeFileSync(file, blockMatch ? yaml.replace(blockRe, blockText) : yaml.replace(/\n?$/, `\n${blockText}`))
+  return Object.keys(map)
+}
+
 export interface UpdateStatus {
   kind: 'github' | 'npm' | 'linked'
   version: string | null
@@ -292,7 +364,7 @@ let updatesCache: { at: number; data: Record<string, UpdateStatus> } | null = nu
 async function fetchJson(url: string): Promise<unknown> {
   const res = await fetch(url, {
     headers: { accept: 'application/json', 'user-agent': 'dsh-market' },
-    signal: AbortSignal.timeout(4000),
+    signal: AbortSignal.timeout(10000),
   })
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   return res.json() as unknown
@@ -483,15 +555,24 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
           const target = spec.startsWith('github:') ? spec.replace(/#.*$/, '') : `${name}@latest`
           installing = true
           try {
+            const beforeVersion = readInstalledVersion(config.profile, name)
             const result = await runDshPlugin(config.profile, ['add', target])
             const cancelled = result.cancelled === true
             const ok = result.exitCode === 0 && !result.timedOut && !cancelled
             if (ok) updatesCache = null
+            const afterVersion = readInstalledVersion(config.profile, name)
+            const updated = ok && beforeVersion !== null && afterVersion !== null && beforeVersion !== afterVersion
+            const ignoredBuilds = parseIgnoredBuilds(result.stdout, result.stderr)
             logEvent(ok ? 'info' : 'error', 'update',
-              `${name} -> ${target} exit=${String(result.exitCode)}${result.timedOut ? ' TIMEOUT' : ''}${cancelled ? ' CANCELLED' : ''}${ok ? '' : ` stderr=${result.stderr.slice(-300)}`}`)
+              `${name} -> ${target} exit=${String(result.exitCode)}${result.timedOut ? ' TIMEOUT' : ''}${cancelled ? ' CANCELLED' : ''}${ok && !updated ? ' NO-VERSION-CHANGE' : ''}${ignoredBuilds.length > 0 ? ` ignored-builds=${ignoredBuilds.join(',')}` : ''}${ok ? '' : ` stderr=${result.stderr.slice(-300)}`}`)
             sendJson(response, ok || cancelled ? 200 : 502, {
               ok,
               cancelled,
+              updated,
+              versionBefore: beforeVersion,
+              versionAfter: afterVersion,
+              releaseAgeDays: releaseAgeHint(config.profile),
+              ignoredBuilds,
               exitCode: result.exitCode,
               timedOut: result.timedOut,
               stdout: result.stdout,
@@ -639,22 +720,29 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
             const ok = result.exitCode === 0 && !result.timedOut && !cancelled
             if (ok) updatesCache = null
             const installed = readInstalled(config.profile)
+            const added = Object.keys(installed).filter(name => !before.has(name))
+            const ignoredBuilds = parseIgnoredBuilds(result.stdout, result.stderr)
+            const bundles = readBundles(config.profile)
+            const addedState = added.map(name => ({
+              name,
+              bundle: declaresBundle(config.profile, name),
+              inBundles: bundles.includes(name),
+            }))
             let hot = false
-            if (ok) {
-              const added = Object.keys(installed).filter(name => !before.has(name))
-              if (added.length > 0) {
-                const results = await Promise.all(
-                  added.map(name => hotMount(host, profileDir(config.profile), name)),
-                )
-                hot = results.every(Boolean)
-              }
+            if (ok && added.length > 0) {
+              const results = await Promise.all(
+                added.map(name => hotMount(host, profileDir(config.profile), name)),
+              )
+              hot = results.every(Boolean)
             }
             logEvent(ok ? 'info' : 'error', 'install',
-              `${target} exit=${String(result.exitCode)}${result.timedOut ? ' TIMEOUT' : ''}${cancelled ? ' CANCELLED' : ''}${ok ? ` hot=${String(hot)}` : ` stderr=${result.stderr.slice(-300)}`}`)
+              `${target} exit=${String(result.exitCode)}${result.timedOut ? ' TIMEOUT' : ''}${cancelled ? ' CANCELLED' : ''}${ok ? ` hot=${String(hot)}` : ` stderr=${result.stderr.slice(-300)}`}${ignoredBuilds.length > 0 ? ` ignored-builds=${ignoredBuilds.join(',')}` : ''}`)
             sendJson(response, ok || cancelled ? 200 : 502, {
               ok,
               cancelled,
               hot,
+              added: addedState,
+              ignoredBuilds,
               exitCode: result.exitCode,
               timedOut: result.timedOut,
               stdout: result.stdout,
@@ -693,6 +781,36 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
         await killTree(activeChild)
         logEvent('info', 'cancel', `cancelled ${progress.target || 'operation'}`)
         sendJson(response, 200, { ok: true, cancelled: true, target: progress.target })
+      },
+    }),
+    host.webServer.register({
+      kind: 'exact',
+      path: '/dsh-market/approve-builds',
+      handler: async (request, response) => {
+        if (request.method !== 'POST') {
+          response.writeHead(405, { allow: 'POST' })
+          response.end()
+          return
+        }
+        if (!sameOrigin(request)) {
+          sendJson(response, 403, { error: 'untrusted origin' })
+          return
+        }
+        try {
+          const body = (await readJsonBody(request)) as { packages?: unknown }
+          const packages = Array.isArray(body.packages) ? body.packages.map(p => String(p)).filter(Boolean) : []
+          if (packages.length === 0) {
+            sendJson(response, 400, { error: 'no packages given' })
+            return
+          }
+          const approved = setAllowBuilds(config.profile, packages)
+          logEvent('info', 'approve-builds', `allowed build scripts: ${approved.join(', ')}`)
+          sendJson(response, 200, { ok: true, approved, releaseAgeDays: releaseAgeHint(config.profile) })
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error)
+          host.logger?.warn(`[dsh-market] approve-builds failed: ${message}`)
+          sendJson(response, 500, { error: message })
+        }
       },
     }),
   ]

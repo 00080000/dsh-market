@@ -61,6 +61,12 @@ const zh = {
   progressHint: '首次安装需要下载与解析依赖，大插件可能要 1-3 分钟',
   busyWait: '已有操作正在进行中，请稍候（同一时间只支持一个安装/更新/卸载）',
   cancelled: '已取消',
+  installInert: '已安装但未生效：{0} 未声明插件清单（可能装的是仓库根，真实插件可能在子目录/子包）',
+  buildsIgnored: '部分构建脚本被跳过：{0}',
+  approveBuilds: '放行构建脚本并重试',
+  buildsApproved: '已放行。请重新点击 安装/更新。',
+  updateNoChange: '未检测到版本变化（可能被发布年龄策略拦截）',
+  releaseAgeHint: '（当前 pnpm 发布年龄限制 {0} 天）',
   toastReady: '已装好并已生效',
   gotIt: '知道了',
 }
@@ -112,6 +118,12 @@ const en = {
   progressHint: 'First installs download and resolve dependencies — large plugins can take 1-3 minutes',
   busyWait: 'Another operation is already running — please wait (only one install/update/uninstall at a time)',
   cancelled: 'Cancelled',
+  installInert: 'Installed but not active: {0} declares no plugin bundle (you may have installed a repo root; the real plugin may live in a subdirectory/subpackage)',
+  buildsIgnored: 'Some build scripts were skipped: {0}',
+  approveBuilds: 'Allow build scripts and retry',
+  buildsApproved: 'Allowed. Please click Install/Update again.',
+  updateNoChange: 'No version change detected (possibly blocked by the release-age policy)',
+  releaseAgeHint: ' (pnpm release-age limit is {0} days)',
   toastReady: 'installed and live',
   gotIt: 'Got it',
 }
@@ -137,7 +149,7 @@ const CSS = `
 .dshm-top{position:absolute;right:18px;bottom:18px;z-index:20;width:38px;height:38px;border-radius:99px;border:1px solid var(--dsw-alias-border-l1,#e5e7eb);background:var(--dsw-alias-bg-layer-1,#fff);color:var(--dsw-alias-label-secondary,#6b7280);font-size:16px;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.12)}
 .dshm-top:hover{color:var(--dsw-alias-brand-primary,#4f6ef7)}
 .dshm-chip{font:inherit;font-size:12px;border:1px solid var(--dsw-alias-border-l1,#e5e7eb);background:var(--dsw-alias-bg-layer-1,#fff);border-radius:99px;padding:3px 11px;cursor:pointer;color:var(--dsw-alias-label-secondary,#6b7280)}
-.dshm-chip.on{background:var(--dsw-alias-brand-primary,#4f6ef7);border-color:var(--dsw-alias-brand-primary,#4f6ef7);color:var(--dsw-alias-label-primary-inverted,#fff)}
+.dshm-chip.on{background:var(--dsw-alias-button-primary-fill,#4f6ef7);border-color:var(--dsw-alias-button-primary-fill,#4f6ef7);color:var(--dsw-alias-label-primary-foreground,#fff)}
 .dshm-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px}
 .dshm-card{background:var(--dsw-alias-bg-layer-1,#fff);border:1px solid var(--dsw-alias-border-l1,#e5e7eb);border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;gap:6px}
 .dshm-row1{display:flex;align-items:center;gap:9px;min-width:0}
@@ -151,7 +163,7 @@ const CSS = `
 .dshm-src{font-size:11px;color:var(--dsw-alias-label-secondary,#9ca3af);text-decoration:none}
 .dshm-src:hover{color:var(--dsw-alias-brand-primary,#4f6ef7)}
 .dshm-btn{border:none;border-radius:7px;padding:5px 14px;font:inherit;font-size:12px;cursor:pointer;font-weight:600}
-.dshm-btn.install{background:var(--dsw-alias-brand-primary,#4f6ef7);color:var(--dsw-alias-label-primary-inverted,#fff)}
+.dshm-btn.install{background:var(--dsw-alias-button-primary-fill,#4f6ef7);color:var(--dsw-alias-label-primary-foreground,#fff)}
 .dshm-btn.busy{opacity:.65;cursor:default}
 .dshm-btn.done{background:transparent;color:var(--dsw-alias-state-success-primary,#16a34a);cursor:default}
 .dshm-btn.ghost{background:var(--dsw-alias-bg-layer-2,#f3f4f6);color:var(--dsw-alias-label-secondary,#6b7280)}
@@ -275,6 +287,10 @@ function MarketSection(props) {
   const [envFixing, setEnvFixing] = useState(false)
   const [envFailed, setEnvFailed] = useState(false)
   const [bootId, setBootId] = useState(null)
+  const [buildsPending, setBuildsPending] = useState(null)
+  const [buildsApproved, setBuildsApproved] = useState(false)
+  const [inertWarn, setInertWarn] = useState(null)
+  const [updateNoChange, setUpdateNoChange] = useState(null)
   const [showTop, setShowTop] = useState(false)
   const [busyHint, setBusyHint] = useState(null)
   const bodyRef = React.useRef(null)
@@ -418,6 +434,9 @@ function MarketSection(props) {
   const doInstall = useCallback((plugin) => {
     setConfirming(null)
     setInstallError(null)
+    setInertWarn(null)
+    setUpdateNoChange(null)
+    setBuildsApproved(false)
     setBusyUrl(plugin.url)
     sessionStorage.setItem('dshm-pending', JSON.stringify({ url: plugin.url }))
     fetch('/dsh-market/install', {
@@ -438,11 +457,22 @@ function MarketSection(props) {
           } else {
             setDoneUrls(urls => urls.includes(plugin.url) ? urls : urls.concat(plugin.url))
           }
+          if (Array.isArray(body.ignoredBuilds) && body.ignoredBuilds.length > 0) setBuildsPending(body.ignoredBuilds)
+          if (Array.isArray(body.added)) {
+            const inert = body.added.filter(a => a.bundle === false).map(a => a.name)
+            if (inert.length > 0) setInertWarn(inert.join(', '))
+          }
           refreshInstalled()
         } else {
           const text = v => typeof v === 'string' ? v : (v && typeof v.text === 'string') ? v.text : v == null ? '' : JSON.stringify(v)
           const detail = text(body.error) || text(body.stderr) || text(body.stdout) || ('exit ' + body.exitCode)
           setInstallError(t('installFail') + ': ' + plugin.name + ' — ' + detail.trim().slice(-600))
+          if (Array.isArray(body.ignoredBuilds) && body.ignoredBuilds.length > 0) {
+            setBuildsPending(body.ignoredBuilds)
+          } else if (/Ignored build scripts/i.test(detail)) {
+            const m = /Ignored build scripts:?\s*([^\n]+)/i.exec(detail)
+            if (m) setBuildsPending(m[1].split(',').map(s => s.trim().split('@').slice(0, -1).join('@')).filter(Boolean))
+          }
         }
       })
       .catch(error => {
@@ -454,6 +484,7 @@ function MarketSection(props) {
 
   const doUpdate = useCallback((name) => {
     setInstallError(null)
+    setUpdateNoChange(null)
     setUpdatingName(name)
     fetch('/dsh-market/update', {
       method: 'POST',
@@ -464,18 +495,39 @@ function MarketSection(props) {
       .then(({ status, body }) => {
         if (status === 200 && body.cancelled) {
           refreshInstalled()
+        } else if (status === 200 && body.ok && body.updated === false) {
+          setUpdateNoChange(name + (body.releaseAgeDays ? t('releaseAgeHint').replace('{0}', body.releaseAgeDays) : ''))
+          refreshInstalled()
         } else if (status === 200 && body.ok) {
           setUpdatedNames(names => names.concat(name))
+          if (Array.isArray(body.ignoredBuilds) && body.ignoredBuilds.length > 0) setBuildsPending(body.ignoredBuilds)
           refreshInstalled()
         } else {
           const text = v => typeof v === 'string' ? v : (v && typeof v.text === 'string') ? v.text : v == null ? '' : JSON.stringify(v)
           const detail = text(body.error) || text(body.stderr) || text(body.stdout) || ('exit ' + body.exitCode)
           setInstallError(t('updateFail') + ': ' + name + ' — ' + detail.trim().slice(-600))
+          if (Array.isArray(body.ignoredBuilds) && body.ignoredBuilds.length > 0) setBuildsPending(body.ignoredBuilds)
         }
       })
       .catch(error => setInstallError(t('updateFail') + ': ' + String(error)))
       .finally(() => setUpdatingName(null))
   }, [refreshInstalled, t])
+
+  const doApproveBuilds = useCallback((packages) => {
+    fetch('/dsh-market/approve-builds', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ packages }),
+    })
+      .then(res => res.json())
+      .then(body => {
+        if (body.ok) {
+          setBuildsPending(null)
+          setBuildsApproved(true)
+        }
+      })
+      .catch(() => {})
+  }, [])
 
   const doUninstall = useCallback((name) => {
     setRemoveArmed(null)
@@ -556,6 +608,7 @@ function MarketSection(props) {
       !envReady && h('div', { className: 'dshm-restart' },
         h('span', null, '🧩'),
         h('span', { className: 'dshm-grow' }, envFailed ? t('envFixFail') : t('envMissing')),
+        envFailed && h('a', { className: 'dshm-btn ghost', href: '/dsh-market/logs', download: 'dsh-market-log.txt' }, t('exportLog')),
         !envFailed && h('button', {
           className: 'dshm-btn install' + (envFixing ? ' busy' : ''),
           disabled: envFixing,
@@ -576,8 +629,20 @@ function MarketSection(props) {
         h('span', null, '🔄'),
         h('span', { className: 'dshm-grow' }, h('b', null, pendingRestart), ' ', t('restartBanner')),
         h('span', { title: t('restartHint') }, 'ℹ️'))),
-    installError !== null && h('div', { className: 'dshm-err' }, installError),
+    installError !== null && h('div', { className: 'dshm-err' }, installError,
+      h('a', { className: 'dshm-btn ghost', style: { marginLeft: 8, whiteSpace: 'nowrap' }, href: '/dsh-market/logs', download: 'dsh-market-log.txt' }, t('exportLog'))),
     busyHint !== null && h('div', { className: 'dshm-hint' }, busyHint),
+    buildsPending && buildsPending.length > 0 && h('div', { className: 'dshm-restart' },
+      h('span', null, '🛠️'),
+      h('span', { className: 'dshm-grow' }, t('buildsIgnored').replace('{0}', buildsPending.join(', '))),
+      h('button', { className: 'dshm-btn install', onClick: () => doApproveBuilds(buildsPending) }, t('approveBuilds'))),
+    buildsApproved && h('div', { className: 'dshm-hint' }, t('buildsApproved')),
+    inertWarn !== null && h('div', { className: 'dshm-restart' },
+      h('span', null, '⚠️'),
+      h('span', { className: 'dshm-grow' }, t('installInert').replace('{0}', inertWarn))),
+    updateNoChange !== null && h('div', { className: 'dshm-restart' },
+      h('span', null, '⏸️'),
+      h('span', { className: 'dshm-grow' }, t('updateNoChange') + ' ' + updateNoChange)),
     h('div', {
       className: 'dshm-body',
       ref: bodyRef,
