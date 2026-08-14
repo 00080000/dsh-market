@@ -267,7 +267,7 @@ async function loadStars(): Promise<Record<string, number>> {
     const data: Record<string, number> = {}
     for (let page = 1; page <= 3; page++) {
       const body = (await fetchJson(
-        `https://api.github.com/search/repositories?q=topic:dsh-plugin&per_page=100&page=${String(page)}`,
+        `https://api.github.com/search/repositories?q=topic:dsh-plugin&sort=stars&order=desc&per_page=100&page=${String(page)}`,
       )) as { items?: Array<{ html_url?: string; stargazers_count?: number }> }
       const items = body.items ?? []
       for (const item of items) {
