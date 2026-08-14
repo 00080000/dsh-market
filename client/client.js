@@ -44,6 +44,7 @@ const zh = {
   upToDate: '已是最新',
   linkedDev: '本地开发链接',
   exportLog: '导出日志',
+  readme: '使用说明',
   loading: '正在加载插件目录…',
   progressHint: '首次安装需要下载与解析依赖，大插件可能要 1-3 分钟',
   toastReady: '已装好并已生效',
@@ -80,6 +81,7 @@ const en = {
   upToDate: 'Up to date',
   linkedDev: 'linked (dev)',
   exportLog: 'Export log',
+  readme: 'README',
   loading: 'Loading the catalog…',
   progressHint: 'First installs download and resolve dependencies — large plugins can take 1-3 minutes',
   toastReady: 'installed and live',
@@ -428,14 +430,19 @@ function MarketSection(props) {
                 || (repoOf(p.url) !== null && String(spec).toLowerCase().includes(('github:' + repoOf(p.url)).toLowerCase())))
               const status = updates[name]
               const version = status && status.version ? 'v' + status.version : ''
+              const specText = String(spec)
+              const ghSpec = /^github:([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+?)(?:#|$)/.exec(specText)
+              const repoUrl = entry !== undefined ? entry.url : ghSpec !== null ? 'https://github.com/' + ghSpec[1] : null
               return h('div', { key: name, className: 'dshm-irow' },
                 h('div', { style: { minWidth: 0 } },
                   h('div', { className: 'dshm-nm' }, name, version && h('span', { className: 'dshm-owner' }, ' ' + version)),
-                  h('div', { className: 'dshm-spec' }, String(spec)),
+                  repoUrl !== null
+                    ? h('a', { className: 'dshm-spec dshm-src', href: repoUrl, target: '_blank', rel: 'noreferrer', style: { display: 'inline-block' } }, specText)
+                    : h('div', { className: 'dshm-spec' }, specText),
                   entry !== undefined && h('div', { className: 'dshm-desc', style: { minHeight: 0 } },
                     (entry.description && (entry.description[lang] || entry.description.en)) || '')),
                 h('span', { className: 'dshm-grow' }),
-                entry !== undefined && h('a', { className: 'dshm-src', href: entry.url, target: '_blank', rel: 'noreferrer' }, t('viewSource')),
+                repoUrl !== null && h('a', { className: 'dshm-src', href: repoUrl + '#readme', target: '_blank', rel: 'noreferrer' }, t('readme')),
                 updatedNames.includes(name)
                   ? h('button', { className: 'dshm-btn done' }, t('updated'))
                   : updatingName === name
