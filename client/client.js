@@ -137,7 +137,7 @@ const CSS = `
 .dshm-tab.on{color:var(--dsw-alias-brand-primary,#4f6ef7);border-bottom-color:var(--dsw-alias-brand-primary,#4f6ef7);font-weight:600}
 .dshm-restart{display:flex;align-items:center;gap:8px;background:var(--dsw-alias-bg-layer-2,#fdf3e3);border:1px solid var(--dsw-alias-border-l1,#f3e3c3);border-radius:8px;padding:8px 12px;font-size:12px;margin:10px 4px 0}
 .dshm-body{flex:1;overflow-y:auto;padding:12px 4px 24px}
-.dshm-cats{display:flex;gap:6px;flex-wrap:wrap;position:sticky;top:-13px;z-index:5;background:var(--dsw-alias-bg-layer-1,#fff);padding:10px 0;margin:-10px 0 6px;align-items:center}
+.dshm-cats{display:flex;gap:6px;flex-wrap:wrap;position:sticky;top:-13px;z-index:5;background:color-mix(in srgb,var(--dsw-alias-bg-layer-1,#fff) 72%,transparent);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-radius:0 0 10px 10px;padding:10px 8px;margin:-10px -8px 6px;align-items:center}
 .dshm-sort{margin-left:auto;display:flex;gap:2px;background:var(--dsw-alias-bg-layer-2,#f3f4f6);border-radius:8px;padding:2px;flex-shrink:0}
 .dshm-sort button{border:none;background:none;font:inherit;font-size:12px;color:var(--dsw-alias-label-secondary,#6b7280);padding:3px 10px;border-radius:6px;cursor:pointer}
 .dshm-sort button.on{background:var(--dsw-alias-bg-layer-1,#fff);color:var(--dsw-alias-label-primary,#1f2328);font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,.08)}
