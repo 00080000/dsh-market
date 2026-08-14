@@ -21,8 +21,9 @@
     "plugin-manager"
   ],
   "scripts": {
-    "typecheck": "tsc -p tsconfig.json --noEmit",
-    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.client.json --noEmit",
+    "build": "tsc -p tsconfig.json && npm run build:client",
+    "build:client": "tsdown && node scripts/normalize-client-banner.mjs",
     "check": "npm run typecheck && npm run build",
     "prepack": "npm run build && node scripts/preflight.mjs",
     "prepare": "npm run build",
@@ -65,6 +66,10 @@
   "devDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
     "@types/node": "^26.2.0",
+    "@types/react": "~18.3.1",
+    "lightningcss": "^1.33.0",
+    "react": "^18.3.1",
+    "tsdown": "^0.22.14",
     "typescript": "^7.0.2"
   },
   "publishConfig": {

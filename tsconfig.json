@@ -23,6 +23,7 @@
   ],
   "exclude": [
     "tests",
-    "lib"
+    "lib",
+    "src/client"
   ]
 }
