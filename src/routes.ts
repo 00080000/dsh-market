@@ -60,6 +60,7 @@ interface InstallResult {
   timedOut: boolean
   stdout: string
   stderr: string
+  cancelled: boolean
 }
 
 /** Whether `pnpm` resolves on PATH; success is cached, absence is re-probed. */
@@ -113,6 +114,8 @@ interface InstallProgress {
 }
 
 const progress: InstallProgress = { active: false, target: '', startedAt: 0, lastLine: '' }
+let activeChild: ReturnType<typeof spawn> | null = null
+let cancelRequested = false
 
 /** Identifies this host process; the client scopes its pending-restart flags to it. */
 const BOOT_ID = `${String(process.pid)}-${String(Date.now())}`
@@ -137,6 +140,8 @@ function runDshPlugin(profile: string, pluginArgs: string[]): Promise<InstallRes
       env: { ...process.env, CI: 'true' },
       stdio: ['ignore', 'pipe', 'pipe'],
     })
+    activeChild = child
+    cancelRequested = false
     let stdout = ''
     let stderr = ''
     let timedOut = false
@@ -157,13 +162,37 @@ function runDshPlugin(profile: string, pluginArgs: string[]): Promise<InstallRes
     child.on('error', (error) => {
       clearTimeout(timer)
       progress.active = false
-      resolvePromise({ exitCode: 127, timedOut: false, stdout, stderr: `${stderr}\n${error.message}` })
+      if (activeChild === child) activeChild = null
+      resolvePromise({ exitCode: 127, timedOut: false, stdout, stderr: `${stderr}\n${error.message}`, cancelled: false })
     })
     child.on('close', (code) => {
       clearTimeout(timer)
       progress.active = false
-      resolvePromise({ exitCode: code, timedOut, stdout, stderr })
+      if (activeChild === child) activeChild = null
+      resolvePromise({ exitCode: code, timedOut, stdout, stderr, cancelled: cancelRequested })
     })
+  })
+}
+
+function killTree(child: ReturnType<typeof spawn> | null): Promise<boolean> {
+  return new Promise((resolvePromise) => {
+    if (child === null || child.pid === undefined) {
+      resolvePromise(false)
+      return
+    }
+    if (process.platform === 'win32') {
+      const killer = spawn('taskkill', ['/PID', String(child.pid), '/T', '/F'], { stdio: 'ignore' })
+      killer.on('close', () => resolvePromise(true))
+      killer.on('error', () => {
+        try { child.kill('SIGKILL') } catch { /* already gone */ }
+        resolvePromise(true)
+      })
+    }
+    else {
+      try { child.kill('SIGTERM') } catch { /* already gone */ }
+      setTimeout(() => { try { child.kill('SIGKILL') } catch { /* already gone */ } }, 5000).unref?.()
+      resolvePromise(true)
+    }
   })
 }
 
@@ -455,12 +484,14 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
           installing = true
           try {
             const result = await runDshPlugin(config.profile, ['add', target])
-            const ok = result.exitCode === 0 && !result.timedOut
+            const cancelled = result.cancelled === true
+            const ok = result.exitCode === 0 && !result.timedOut && !cancelled
             if (ok) updatesCache = null
             logEvent(ok ? 'info' : 'error', 'update',
-              `${name} -> ${target} exit=${String(result.exitCode)}${result.timedOut ? ' TIMEOUT' : ''}${ok ? '' : ` stderr=${result.stderr.slice(-300)}`}`)
-            sendJson(response, ok ? 200 : 502, {
+              `${name} -> ${target} exit=${String(result.exitCode)}${result.timedOut ? ' TIMEOUT' : ''}${cancelled ? ' CANCELLED' : ''}${ok ? '' : ` stderr=${result.stderr.slice(-300)}`}`)
+            sendJson(response, ok || cancelled ? 200 : 502, {
               ok,
+              cancelled,
               exitCode: result.exitCode,
               timedOut: result.timedOut,
               stdout: result.stdout,
@@ -531,16 +562,18 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
           installing = true
           try {
             const result = await runDshPlugin(config.profile, ['remove', name])
-            const ok = result.exitCode === 0 && !result.timedOut
+            const cancelled = result.cancelled === true
+            const ok = result.exitCode === 0 && !result.timedOut && !cancelled
             let hot = false
             if (ok) {
               updatesCache = null
               hot = await hotUnmount(name)
             }
             logEvent(ok ? 'info' : 'error', 'uninstall',
-              `${name} exit=${String(result.exitCode)}${ok ? ` live-removed=${String(hot)}` : ` stderr=${result.stderr.slice(-300)}`}`)
-            sendJson(response, ok ? 200 : 502, {
+              `${name} exit=${String(result.exitCode)}${cancelled ? ' CANCELLED' : ''}${ok ? ` live-removed=${String(hot)}` : ` stderr=${result.stderr.slice(-300)}`}`)
+            sendJson(response, ok || cancelled ? 200 : 502, {
               ok,
+              cancelled,
               hot,
               exitCode: result.exitCode,
               stdout: result.stdout,
@@ -602,7 +635,8 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
           try {
             const before = new Set(Object.keys(readInstalled(config.profile)))
             const result = await runDshPlugin(config.profile, ['add', target])
-            const ok = result.exitCode === 0 && !result.timedOut
+            const cancelled = result.cancelled === true
+            const ok = result.exitCode === 0 && !result.timedOut && !cancelled
             if (ok) updatesCache = null
             const installed = readInstalled(config.profile)
             let hot = false
@@ -616,9 +650,10 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
               }
             }
             logEvent(ok ? 'info' : 'error', 'install',
-              `${target} exit=${String(result.exitCode)}${result.timedOut ? ' TIMEOUT' : ''}${ok ? ` hot=${String(hot)}` : ` stderr=${result.stderr.slice(-300)}`}`)
-            sendJson(response, ok ? 200 : 502, {
+              `${target} exit=${String(result.exitCode)}${result.timedOut ? ' TIMEOUT' : ''}${cancelled ? ' CANCELLED' : ''}${ok ? ` hot=${String(hot)}` : ` stderr=${result.stderr.slice(-300)}`}`)
+            sendJson(response, ok || cancelled ? 200 : 502, {
               ok,
+              cancelled,
               hot,
               exitCode: result.exitCode,
               timedOut: result.timedOut,
@@ -635,6 +670,29 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
           logEvent('error', 'install', `route error: ${message}`)
           sendJson(response, 500, { error: message })
         }
+      },
+    }),
+    host.webServer.register({
+      kind: 'exact',
+      path: '/dsh-market/cancel',
+      handler: async (request, response) => {
+        if (request.method !== 'POST') {
+          response.writeHead(405, { allow: 'POST' })
+          response.end()
+          return
+        }
+        if (!sameOrigin(request)) {
+          sendJson(response, 403, { error: 'untrusted origin' })
+          return
+        }
+        if (!progress.active || activeChild === null) {
+          sendJson(response, 400, { error: 'no operation is running' })
+          return
+        }
+        cancelRequested = true
+        await killTree(activeChild)
+        logEvent('info', 'cancel', `cancelled ${progress.target || 'operation'}`)
+        sendJson(response, 200, { ok: true, cancelled: true, target: progress.target })
       },
     }),
   ]

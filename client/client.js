@@ -59,6 +59,8 @@ const zh = {
   sortNew: '最新',
   marketUpdate: '市场有新版本，升级',
   progressHint: '首次安装需要下载与解析依赖，大插件可能要 1-3 分钟',
+  busyWait: '已有操作正在进行中，请稍候（同一时间只支持一个安装/更新/卸载）',
+  cancelled: '已取消',
   toastReady: '已装好并已生效',
   gotIt: '知道了',
 }
@@ -108,6 +110,8 @@ const en = {
   sortNew: 'New',
   marketUpdate: 'Market update available — upgrade',
   progressHint: 'First installs download and resolve dependencies — large plugins can take 1-3 minutes',
+  busyWait: 'Another operation is already running — please wait (only one install/update/uninstall at a time)',
+  cancelled: 'Cancelled',
   toastReady: 'installed and live',
   gotIt: 'Got it',
 }
@@ -133,7 +137,7 @@ const CSS = `
 .dshm-top{position:absolute;right:18px;bottom:18px;z-index:20;width:38px;height:38px;border-radius:99px;border:1px solid var(--dsw-alias-border-l1,#e5e7eb);background:var(--dsw-alias-bg-layer-1,#fff);color:var(--dsw-alias-label-secondary,#6b7280);font-size:16px;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.12)}
 .dshm-top:hover{color:var(--dsw-alias-brand-primary,#4f6ef7)}
 .dshm-chip{font:inherit;font-size:12px;border:1px solid var(--dsw-alias-border-l1,#e5e7eb);background:var(--dsw-alias-bg-layer-1,#fff);border-radius:99px;padding:3px 11px;cursor:pointer;color:var(--dsw-alias-label-secondary,#6b7280)}
-.dshm-chip.on{background:var(--dsw-alias-brand-primary,#4f6ef7);border-color:var(--dsw-alias-brand-primary,#4f6ef7);color:#fff}
+.dshm-chip.on{background:var(--dsw-alias-brand-primary,#4f6ef7);border-color:var(--dsw-alias-brand-primary,#4f6ef7);color:var(--dsw-alias-label-primary-inverted,#fff)}
 .dshm-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px}
 .dshm-card{background:var(--dsw-alias-bg-layer-1,#fff);border:1px solid var(--dsw-alias-border-l1,#e5e7eb);border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;gap:6px}
 .dshm-row1{display:flex;align-items:center;gap:9px;min-width:0}
@@ -147,18 +151,22 @@ const CSS = `
 .dshm-src{font-size:11px;color:var(--dsw-alias-label-secondary,#9ca3af);text-decoration:none}
 .dshm-src:hover{color:var(--dsw-alias-brand-primary,#4f6ef7)}
 .dshm-btn{border:none;border-radius:7px;padding:5px 14px;font:inherit;font-size:12px;cursor:pointer;font-weight:600}
-.dshm-btn.install{background:var(--dsw-alias-brand-primary,#4f6ef7);color:#fff}
+.dshm-btn.install{background:var(--dsw-alias-brand-primary,#4f6ef7);color:var(--dsw-alias-label-primary-inverted,#fff)}
 .dshm-btn.busy{opacity:.65;cursor:default}
 .dshm-btn.done{background:transparent;color:var(--dsw-alias-state-success-primary,#16a34a);cursor:default}
 .dshm-btn.ghost{background:var(--dsw-alias-bg-layer-2,#f3f4f6);color:var(--dsw-alias-label-secondary,#6b7280)}
-.dshm-btn.upd{background:var(--dsw-alias-state-warn-primary,#ea580c);color:#fff}
+.dshm-btn.upd{background:var(--dsw-alias-state-warn-primary,#ea580c);color:var(--dsw-alias-label-primary-inverted,#fff)}
 .dshm-btn.danger{background:transparent;border:1px solid var(--dsw-alias-state-error-primary,#dc2626);color:var(--dsw-alias-state-error-primary,#dc2626)}
-.dshm-btn.danger.armed{background:var(--dsw-alias-state-error-primary,#dc2626);color:#fff}
+.dshm-btn.danger.armed{background:var(--dsw-alias-state-error-primary,#dc2626);color:var(--dsw-alias-label-primary-inverted,#fff)}
 .dshm-dot{display:inline-block;width:7px;height:7px;border-radius:99px;background:var(--dsw-alias-state-error-primary,#ef4444);margin-left:5px;vertical-align:2px}
 .dshm-loading{display:flex;flex-direction:column;align-items:center;gap:12px;padding:48px;color:var(--dsw-alias-label-secondary,#9ca3af);font-size:13px}
 .dshm-spin{width:22px;height:22px;border:3px solid var(--dsw-alias-border-l1,#e5e7eb);border-top-color:var(--dsw-alias-brand-primary,#4f6ef7);border-radius:99px;animation:dshm-sp .8s linear infinite}
 @keyframes dshm-sp{to{transform:rotate(360deg)}}
 .dshm-progress{display:flex;align-items:center;gap:9px;background:var(--dsw-alias-bg-layer-2,#f3f4f6);border:1px solid var(--dsw-alias-border-l1,#e5e7eb);border-radius:8px;padding:8px 12px;font-size:12px;margin:10px 4px 0;color:var(--dsw-alias-label-secondary,#6b7280)}
+.dshm-bar{position:relative;height:6px;border-radius:99px;background:var(--dsw-alias-bg-layer-2,#f3f4f6);overflow:hidden}
+.dshm-bar i{position:absolute;top:0;bottom:0;left:0;width:40%;border-radius:99px;background:linear-gradient(90deg,transparent,var(--dsw-alias-state-business-primary,#4f6ef7),transparent);animation:dshm-bar 1.3s ease-in-out infinite}
+@keyframes dshm-bar{0%{transform:translateX(-110%)}100%{transform:translateX(260%)}}
+.dshm-hint{background:color-mix(in srgb,var(--dsw-alias-state-business-primary,#4f6ef7) 10%,transparent);border:1px solid color-mix(in srgb,var(--dsw-alias-state-business-primary,#4f6ef7) 30%,transparent);color:var(--dsw-alias-label-primary,#1f2328);border-radius:8px;padding:8px 12px;font-size:12px;margin:10px 4px 0}
 .dshm-progress .dshm-spin{width:14px;height:14px;border-width:2px;flex-shrink:0}
 .dshm-progress code{font-family:ui-monospace,Menlo,monospace;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dshm-toast{position:fixed;right:22px;bottom:22px;z-index:2000;background:var(--dsw-alias-bg-layer-1,#fff);border:1px solid var(--dsw-alias-border-l1,#e5e7eb);border-radius:12px;padding:13px 16px;box-shadow:0 12px 40px rgba(0,0,0,.18);display:flex;align-items:center;gap:10px;font-size:13px;color:var(--dsw-alias-label-primary,#1f2328);pointer-events:auto;max-width:340px}
@@ -251,6 +259,7 @@ function MarketSection(props) {
   const [envFailed, setEnvFailed] = useState(false)
   const [bootId, setBootId] = useState(null)
   const [showTop, setShowTop] = useState(false)
+  const [busyHint, setBusyHint] = useState(null)
   const bodyRef = React.useRef(null)
   const [sort, setSort] = useState('hot')
 
@@ -330,6 +339,12 @@ function MarketSection(props) {
   }, [])
 
   useEffect(() => {
+    if (busyHint === null) return
+    const timer = setTimeout(() => setBusyHint(null), 3500)
+    return () => clearTimeout(timer)
+  }, [busyHint])
+
+  useEffect(() => {
     if (busyUrl === null && updatingName === null) {
       setProgressLine(null)
       return
@@ -393,7 +408,9 @@ function MarketSection(props) {
       .then(res => res.json().then(body => ({ status: res.status, body })))
       .then(({ status, body }) => {
         sessionStorage.removeItem('dshm-pending')
-        if (status === 200 && body.ok) {
+        if (status === 200 && body.cancelled) {
+          refreshInstalled()
+        } else if (status === 200 && body.ok) {
           sessionStorage.setItem('dshm-tab', 'installed')
           if (body.hot) {
             setHotUrls(urls => urls.includes(plugin.url) ? urls : urls.concat(plugin.url))
@@ -425,7 +442,9 @@ function MarketSection(props) {
     })
       .then(res => res.json().then(body => ({ status: res.status, body })))
       .then(({ status, body }) => {
-        if (status === 200 && body.ok) {
+        if (status === 200 && body.cancelled) {
+          refreshInstalled()
+        } else if (status === 200 && body.ok) {
           setUpdatedNames(names => names.concat(name))
           refreshInstalled()
         } else {
@@ -449,7 +468,9 @@ function MarketSection(props) {
     })
       .then(res => res.json().then(body => ({ status: res.status, body })))
       .then(({ status, body }) => {
-        if (status === 200 && body.ok) {
+        if (status === 200 && body.cancelled) {
+          refreshInstalled()
+        } else if (status === 200 && body.ok) {
           if (!body.hot) setRemovedCount(n => n + 1)
           refreshInstalled()
         } else {
@@ -460,6 +481,26 @@ function MarketSection(props) {
       .catch(error => setInstallError(String(error)))
       .finally(() => setRemovingName(null))
   }, [refreshInstalled])
+
+  const doCancel = useCallback(() => {
+    fetch('/dsh-market/cancel', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{}',
+    })
+      .then(res => res.json().then(body => ({ status: res.status, body })))
+      .then(({ status, body }) => {
+        if (status === 200 && body.cancelled) {
+          setBusyUrl(null)
+          setUpdatingName(null)
+          setRemovingName(null)
+          setProgressLine(null)
+          setBusyHint(t('cancelled'))
+          refreshInstalled()
+        }
+      })
+      .catch(() => {})
+  }, [refreshInstalled, t])
 
   const pendingRestart = doneUrls.length + updatedNames.length + removedCount
   const hasUpdates = Object.keys(installed).some(
@@ -516,6 +557,7 @@ function MarketSection(props) {
         h('span', { className: 'dshm-grow' }, h('b', null, pendingRestart), ' ', t('restartBanner')),
         h('span', { title: t('restartHint') }, 'ℹ️'))),
     installError !== null && h('div', { className: 'dshm-err' }, installError),
+    busyHint !== null && h('div', { className: 'dshm-hint' }, busyHint),
     h('div', {
       className: 'dshm-body',
       ref: bodyRef,
@@ -570,12 +612,14 @@ function MarketSection(props) {
                                 ? h('button', { className: 'dshm-btn install busy' }, t('installing'))
                                 : h('button', {
                                     className: 'dshm-btn install',
-                                    disabled: busyUrl !== null || !envReady,
-                                    onClick: () => setConfirming(p),
+                                    disabled: !envReady,
+                                    onClick: () => busyUrl !== null ? setBusyHint(t('busyWait')) : setConfirming(p),
                                   }, t('install'))),
-                        busy && h('div', { className: 'dshm-progress', style: { margin: '6px 0 0' } },
-                          h('span', { className: 'dshm-spin' }),
-                          h('code', { className: 'dshm-grow' }, progressLine || t('progressHint'))))
+                        busy && h('div', { className: 'dshm-progress', style: { margin: '6px 0 0', flexDirection: 'column', alignItems: 'stretch', gap: 6 } },
+                          h('div', { className: 'dshm-bar' }, h('i')),
+                          h('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } },
+                            h('code', { style: { flex: 1, minWidth: 0 } }, progressLine || t('progressHint')),
+                            h('button', { className: 'dshm-btn ghost', onClick: doCancel }, t('cancel')))))
                     })))
         : Object.keys(installed).length === 0
           ? h('div', { className: 'dshm-empty' }, t('installedEmpty'))
@@ -595,9 +639,11 @@ function MarketSection(props) {
                     : h('div', { className: 'dshm-spec' }, specText),
                   entry !== undefined && h('div', { className: 'dshm-desc', style: { minHeight: 0 } },
                     (entry.description && (entry.description[lang] || entry.description.en)) || ''),
-                  updatingName === name && h('div', { className: 'dshm-progress', style: { margin: '6px 0 0' } },
-                    h('span', { className: 'dshm-spin' }),
-                    h('code', { className: 'dshm-grow' }, progressLine || t('progressHint')))),
+                  updatingName === name && h('div', { className: 'dshm-progress', style: { margin: '6px 0 0', flexDirection: 'column', alignItems: 'stretch', gap: 6 } },
+                    h('div', { className: 'dshm-bar' }, h('i')),
+                    h('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } },
+                      h('code', { style: { flex: 1, minWidth: 0 } }, progressLine || t('progressHint')),
+                      h('button', { className: 'dshm-btn ghost', onClick: doCancel }, t('cancel'))))),
                 h('span', { className: 'dshm-grow' }),
                 repoUrl !== null && h('a', { className: 'dshm-src', href: repoUrl + '#readme', target: '_blank', rel: 'noreferrer' }, t('readme')),
                 updatedNames.includes(name)
@@ -607,15 +653,18 @@ function MarketSection(props) {
                     : status && status.updateAvailable
                       ? h('button', {
                           className: 'dshm-btn upd',
-                          disabled: updatingName !== null,
-                          onClick: () => doUpdate(name),
+                          onClick: () => updatingName !== null || busyUrl !== null || removingName !== null
+                            ? setBusyHint(t('busyWait'))
+                            : doUpdate(name),
                         }, t('update'))
                       : status && status.kind === 'linked'
                         ? h('span', { className: 'dshm-owner' }, t('linkedDev'))
                         : h('span', { className: 'dshm-owner' }, t('upToDate')),
                 name !== 'dsh-market' && name !== 'dshmarket' && (
                   removingName === name
-                    ? h('button', { className: 'dshm-btn danger busy' }, t('uninstalling'))
+                    ? h('span', { style: { display: 'inline-flex', gap: 6, alignItems: 'center' } },
+                        h('button', { className: 'dshm-btn danger busy' }, t('uninstalling')),
+                        h('button', { className: 'dshm-btn ghost', onClick: doCancel }, t('cancel')))
                     : removeArmed === name
                       ? h('button', {
                           className: 'dshm-btn danger armed',
@@ -624,8 +673,9 @@ function MarketSection(props) {
                         }, t('confirmRemove'))
                       : h('button', {
                           className: 'dshm-btn danger',
-                          disabled: removingName !== null || busyUrl !== null || updatingName !== null,
-                          onClick: () => setRemoveArmed(name),
+                          onClick: () => removingName !== null || busyUrl !== null || updatingName !== null
+                            ? setBusyHint(t('busyWait'))
+                            : setRemoveArmed(name),
                         }, t('uninstall'))))
             })),
     showTop && h('button', {
