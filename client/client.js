@@ -58,6 +58,7 @@ const zh = {
   sortFeatured: '推荐',
   sortHot: '最热',
   sortNew: '最新',
+  marketUpdate: '市场有新版本，升级',
   progressHint: '首次安装需要下载与解析依赖，大插件可能要 1-3 分钟',
   toastReady: '已装好并已生效',
   gotIt: '知道了',
@@ -107,6 +108,7 @@ const en = {
   sortFeatured: 'Featured',
   sortHot: 'Top',
   sortNew: 'New',
+  marketUpdate: 'Market update available — upgrade',
   progressHint: 'First installs download and resolve dependencies — large plugins can take 1-3 minutes',
   toastReady: 'installed and live',
   gotIt: 'Got it',
@@ -475,7 +477,15 @@ function MarketSection(props) {
 
   return h('div', { className: 'dshm-root' },
     h('div', { className: 'dshm-head' },
-      h('h2', { className: 'dshm-title' }, t('nav')),
+      h('div', { style: { display: 'flex', alignItems: 'center', gap: '10px' } },
+        h('h2', { className: 'dshm-title' }, t('nav')),
+        updates['dsh-market'] && updates['dsh-market'].updateAvailable && !updatedNames.includes('dsh-market')
+          && h('button', {
+            className: 'dshm-btn upd',
+            style: { fontSize: '11px', padding: '3px 10px' },
+            disabled: updatingName !== null || busyUrl !== null,
+            onClick: () => { setTab('installed'); doUpdate('dsh-market') },
+          }, updatingName === 'dsh-market' ? t('updating') : t('marketUpdate'))),
       h('div', { className: 'dshm-sub' },
         t('subtitle') + (data ? ' · ' + data.count : '') + ' · ',
         h('a', { className: 'dshm-src', href: '/dsh-market/logs', download: 'dsh-market-log.txt' }, t('exportLog'))),
