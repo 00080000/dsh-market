@@ -12,6 +12,30 @@ import type {
   InstalledMap, Registry, RegistryPlugin, ThemeSnapshot, Translate, UpdateStatus,
 } from './market-data.ts'
 
+/**
+ * Card avatar: the plugin owner's GitHub avatar (no API, browser-cached),
+ * falling back to the initial-letter tile when it can't load.
+ */
+function OwnerAvatar({ name, owner }: { name: string; owner: string }) {
+  const [failed, setFailed] = useState(false)
+  if (failed || owner === '') {
+    return (
+      <div className={css.av} style={{ background: avatarColor(name) }}>
+        {name.replace(/^dsh[-_]/i, '').charAt(0).toUpperCase() || 'P'}
+      </div>
+    )
+  }
+  return (
+    <img
+      className={css.av}
+      src={`https://github.com/${encodeURIComponent(owner)}.png?size=96`}
+      alt=""
+      loading="lazy"
+      onError={() => setFailed(true)}
+    />
+  )
+}
+
 export interface MarketSectionProps {
   t: Translate
   locale: {
@@ -346,9 +370,7 @@ export function MarketSection(props: MarketSectionProps) {
     return (
       <div key={p.url} className={css.card}>
         <div className={css.row1}>
-          <div className={css.av} style={{ background: avatarColor(p.name) }}>
-            {p.name.replace(/^dsh[-_]/i, '').charAt(0).toUpperCase() || 'P'}
-          </div>
+          <OwnerAvatar name={p.name} owner={p.owner || ''} />
           <div style={{ minWidth: 0 }}>
             <div className={css.nm}>{p.name}</div>
             <div className={css.owner}>
@@ -415,9 +437,7 @@ export function MarketSection(props: MarketSectionProps) {
     return (
       <div key={p.url} className={css.card}>
         <div className={css.row1}>
-          <div className={css.av} style={{ background: avatarColor(p.name) }}>
-            {p.name.replace(/^dsh[-_]/i, '').charAt(0).toUpperCase() || 'P'}
-          </div>
+          <OwnerAvatar name={p.name} owner={p.owner || ''} />
           <div style={{ minWidth: 0 }}>
             <div className={css.nm}>{p.name}</div>
             <div className={css.owner}>
@@ -568,14 +588,16 @@ export function MarketSection(props: MarketSectionProps) {
               : (
                   <>
                     <div className={css.cats}>
-                      <button className={cat === 'all' ? `${css.chip} ${css.on}` : css.chip} onClick={() => setCat('all')}>{t('all')}</button>
-                      {categories.map(id => (
-                        <button
-                          key={id}
-                          className={cat === id ? `${css.chip} ${css.on}` : css.chip}
-                          onClick={() => setCat(id)}
-                        >{(data.categories[id] && (data.categories[id]![lang] || data.categories[id]!.en)) || id}</button>
-                      ))}
+                      <div className={css.catScroll}>
+                        <button className={cat === 'all' ? `${css.chip} ${css.on}` : css.chip} onClick={() => setCat('all')}>{t('all')}</button>
+                        {categories.map(id => (
+                          <button
+                            key={id}
+                            className={cat === id ? `${css.chip} ${css.on}` : css.chip}
+                            onClick={() => setCat(id)}
+                          >{(data.categories[id] && (data.categories[id]![lang] || data.categories[id]!.en)) || id}</button>
+                        ))}
+                      </div>
                       <div className={css.sort}>
                         {['hot', 'new'].map(key => (
                           <button
