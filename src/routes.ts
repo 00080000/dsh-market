@@ -257,33 +257,6 @@ export interface UpdateStatus {
   updateAvailable: boolean
 }
 
-const STARS_TTL_MS = 60 * 60 * 1000
-let starsCache: { at: number; data: Record<string, number> } | null = null
-
-/** Star counts per repo URL from the GitHub `dsh-plugin` topic (3 pages ≈ whole ecosystem); stale cache beats an empty answer. */
-async function loadStars(): Promise<Record<string, number>> {
-  if (starsCache && Date.now() - starsCache.at < STARS_TTL_MS) return starsCache.data
-  try {
-    const data: Record<string, number> = {}
-    for (let page = 1; page <= 3; page++) {
-      const body = (await fetchJson(
-        `https://api.github.com/search/repositories?q=topic:dsh-plugin&sort=stars&order=desc&per_page=100&page=${String(page)}`,
-      )) as { items?: Array<{ html_url?: string; stargazers_count?: number }> }
-      const items = body.items ?? []
-      for (const item of items) {
-        if (typeof item.html_url === 'string' && typeof item.stargazers_count === 'number') {
-          data[item.html_url.toLowerCase()] = item.stargazers_count
-        }
-      }
-      if (items.length < 100) break
-    }
-    if (Object.keys(data).length > 0) starsCache = { at: Date.now(), data }
-    return starsCache?.data ?? {}
-  } catch {
-    return starsCache?.data ?? {}
-  }
-}
-
 const UPDATES_TTL_MS = 30 * 60 * 1000
 let updatesCache: { at: number; data: Record<string, UpdateStatus> } | null = null
 
@@ -378,19 +351,6 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
           return
         }
         sendJson(response, 200, { profile: config.profile, installed: readInstalled(config.profile) })
-      },
-    }),
-
-    host.webServer.register({
-      kind: 'exact',
-      path: '/dsh-market/stars',
-      handler: async (request, response) => {
-        if (request.method !== 'GET') {
-          response.writeHead(405, { allow: 'GET' })
-          response.end()
-          return
-        }
-        sendJson(response, 200, { stars: await loadStars() })
       },
     }),
 

@@ -254,7 +254,6 @@ function MarketSection(props) {
   const [bootId, setBootId] = useState(null)
   const [showTop, setShowTop] = useState(false)
   const bodyRef = React.useRef(null)
-  const [stars, setStars] = useState({})
   const [sort, setSort] = useState('featured')
 
   const refreshInstalled = useCallback((force) => {
@@ -280,10 +279,6 @@ function MarketSection(props) {
         setEnvReady(status.pnpm !== false)
         if (typeof status.boot === 'string') setBootId(status.boot)
       })
-      .catch(() => {})
-    fetch('/dsh-market/stars', { cache: 'no-store' })
-      .then(res => res.json())
-      .then(body => setStars(body.stars || {}))
       .catch(() => {})
     refreshInstalled()
   }, [refreshInstalled])
@@ -379,13 +374,13 @@ function MarketSection(props) {
         || desc.toLowerCase().includes(query)
     })
     if (sort === 'hot') {
-      return [...list].sort((a, b) => (stars[b.url.toLowerCase()] ?? -1) - (stars[a.url.toLowerCase()] ?? -1))
+      return [...list].sort((a, b) => (b.stars ?? -1) - (a.stars ?? -1))
     }
     if (sort === 'new') {
       return [...list].sort((a, b) => String(b.added).localeCompare(String(a.added)))
     }
     return list
-  }, [data, q, cat, lang, sort, stars])
+  }, [data, q, cat, lang, sort])
 
   const doInstall = useCallback((plugin) => {
     setConfirming(null)
@@ -558,7 +553,7 @@ function MarketSection(props) {
                           h('div', { style: { minWidth: 0 } },
                             h('div', { className: 'dshm-nm' }, p.name),
                             h('div', { className: 'dshm-owner' }, p.owner,
-                              stars[p.url.toLowerCase()] !== undefined && h('span', { className: 'dshm-star' }, ' · ★ ' + stars[p.url.toLowerCase()]))),
+                              typeof p.stars === 'number' && h('span', { className: 'dshm-star' }, ' · ★ ' + p.stars))),
                           h('span', { className: 'dshm-grow' }),
                           h('a', { className: 'dshm-src', href: p.url, target: '_blank', rel: 'noreferrer', style: { alignSelf: 'flex-start', flexShrink: 0 } }, t('viewSource'))),
                         h('div', { className: 'dshm-desc' }, desc),
