@@ -123,6 +123,9 @@ export function MarketSection(props: MarketSectionProps) {
   const [envFixing, setEnvFixing] = useState(false)
   const [envFailed, setEnvFailed] = useState(false)
   const [bootId, setBootId] = useState<string | null>(null)
+  /** One-click restart (#14 by @ysyyhhh): server capability + in-flight state. */
+  const [restartEnabled, setRestartEnabled] = useState(false)
+  const [restarting, setRestarting] = useState(false)
   const [showTop, setShowTop] = useState(false)
   const bodyRef = useRef<HTMLDivElement | null>(null)
   const [sort, setSort] = useState('hot')
@@ -157,6 +160,7 @@ export function MarketSection(props: MarketSectionProps) {
       .then(status => {
         setEnvReady(status.pnpm !== false)
         if (typeof status.boot === 'string') setBootId(status.boot)
+        setRestartEnabled(status.restart === true)
       })
       .catch(() => {})
     refreshInstalled()
@@ -308,6 +312,53 @@ export function MarketSection(props: MarketSectionProps) {
       })
       .finally(() => setBusyUrl(null))
   }, [refreshInstalled, t])
+
+  /**
+   * Restart the host and reload once the boot id changes (#14 by @ysyyhhh).
+   * The 202 races the process's SIGTERM, so network errors on the initial
+   * request are expected and treated as "restart under way".
+   */
+  const doRestart = useCallback(() => {
+    if (bootId === null || restarting) return
+    const previousBoot = bootId
+    setRestarting(true)
+    setInstallError(null)
+    const awaitNewBoot = () => {
+      const deadline = Date.now() + 60000
+      const poll = () => {
+        fetch('/dsh-market/status', { cache: 'no-store' })
+          .then(res => res.json())
+          .then((next) => {
+            if (typeof next.boot === 'string' && next.boot !== previousBoot) {
+              location.reload()
+              return
+            }
+            retry()
+          })
+          .catch(retry)
+      }
+      const retry = () => {
+        if (Date.now() > deadline) {
+          setRestarting(false)
+          setInstallError(t('restartTimeout'))
+          return
+        }
+        setTimeout(poll, 1500)
+      }
+      poll()
+    }
+    fetch('/dsh-market/restart', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })
+      .then(res => res.json().then(body => ({ status: res.status, body })))
+      .then(({ status, body }) => {
+        if (status !== 202 || body.ok !== true) {
+          setRestarting(false)
+          setInstallError(t('restartFail') + ': ' + String(body.error || ('HTTP ' + String(status))))
+          return
+        }
+        awaitNewBoot()
+      })
+      .catch(awaitNewBoot) // the host may die mid-response; keep polling
+  }, [bootId, restarting, t])
 
   /** Cancel the running plugin command (#6 by @qichuang321). */
   const doCancel = useCallback(() => {
@@ -638,6 +689,14 @@ export function MarketSection(props: MarketSectionProps) {
             <span>🔄</span>
             <span className={css.grow}><b>{pendingRestart}</b> {t('restartBanner')}</span>
             <span title={t('restartHint')}>ℹ️</span>
+            {restartEnabled && (
+              <Button
+                variant="primary"
+                size="sm"
+                disabled={restarting || busyUrl !== null || updatingName !== null || removingName !== null}
+                onClick={doRestart}
+              >{restarting ? t('restarting') : t('restartNow')}</Button>
+            )}
           </div>
         )}
       </div>

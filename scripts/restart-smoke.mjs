@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict'
 import { dirname, join, resolve } from 'node:path'
-import { restartAllowed, restartLaunch, trustedRestartRequest } from '../lib/routes.js'
+import { restartAllowed, restartLaunch, trustedRestartRequest } from '../lib/restart.js'
 
 function request(remoteAddress, origin = 'http://127.0.0.1:3080', host = '127.0.0.1:3080') {
   return { socket: { remoteAddress }, headers: { origin, host } }
