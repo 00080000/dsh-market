@@ -21,7 +21,7 @@ import { BOOT_ID, cancelActive, probePnpm, progress, provisionPnpm, runDshPlugin
 import { profileDir, readInstalled, readInstalledVersion, readLockCommits, setAllowBuilds } from './profile.ts'
 import { findInstalledAlias, installTargetFor } from './sources.ts'
 import { isStaleUpdate, parseIgnoredBuilds, RELEASE_AGE_OVERRIDE, retargetCollections, validateAddedPlugins, withHoistRecovery } from './install.ts'
-import { checkUpdates, invalidateUpdates } from './updates.ts'
+import { checkUpdates, invalidateUpdates, latestPublishedRecently } from './updates.ts'
 import { createThemeManager, type LoaderEntry } from './themes.ts'
 import { readJsonBody, sameOrigin, sendJson } from './http.ts'
 import { restartAllowed, scheduleRestart, trustedRestartRequest } from './restart.ts'
@@ -349,12 +349,20 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
               invalidateUpdates()
               activation = { [name]: verifyActivation(config.profile, name, liveNames()) }
             }
-            const staleError = stale
-              ? '这个新版本刚发布不久。为了安全，系统默认会等它发布满一天后再安装——刚发布的版本偶尔会被发现问题然后撤回。可以明天再试，或点「立即更新」不再等待。 / This version was just released; for safety, installs normally wait about a day after a release. Try again tomorrow, or click "Update now" to install it right away.'
-              : null
+            // Diagnose the stale outcome with EVIDENCE (#45 by @ayingQAQ):
+            // only blame pnpm's fresh-release wait when the target's latest
+            // release really is young; otherwise be honest that the cause is
+            // unconfirmed. Git installs never hit the age gate.
+            const youngRelease = stale && !isGit ? await latestPublishedRecently(name) : false
+            const staleReason = stale ? (youngRelease === true ? 'release-age' : 'unknown') : null
+            const staleError = !stale
+              ? null
+              : staleReason === 'release-age'
+                ? '这个新版本刚发布不久。为了安全，系统默认会等它发布满一天后再安装——刚发布的版本偶尔会被发现问题然后撤回。可以明天再试，或点「立即更新」不再等待。 / This version was just released; for safety, installs normally wait about a day after a release. Try again tomorrow, or click "Update now" to install it right away.'
+                : '更新命令执行完成，但版本没有变化，原因未能确认。点「立即更新」重试通常能解决；若仍不行，请导出日志反馈。 / The update command completed but the version did not change; the cause could not be confirmed. Clicking "Update now" to retry usually resolves it — if not, export the log and report it.'
             const cancelDiff = cancelled ? changedSince(beforeInstalled) : null
             logEvent(ok || cancelled ? 'info' : 'error', 'update',
-              `${name} -> ${target} exit=${String(result.exitCode)}${result.timedOut ? ' TIMEOUT' : ''}${cancelled ? ' CANCELLED' : ''}${stale ? ' STALE(minimumReleaseAge?)' : ''}${ok || cancelled ? '' : ` stderr=${result.stderr.slice(-300)}`}`)
+              `${name} -> ${target} exit=${String(result.exitCode)}${result.timedOut ? ' TIMEOUT' : ''}${cancelled ? ' CANCELLED' : ''}${stale ? ` STALE(${staleReason ?? 'unknown'})` : ''}${ok || cancelled ? '' : ` stderr=${result.stderr.slice(-300)}`}`)
             // A user-cancelled run is a quiet outcome, not an error.
             sendJson(response, ok || cancelled ? 200 : 502, {
               ok,
@@ -363,6 +371,7 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
               partial: cancelDiff?.partial,
               changed: cancelDiff?.changed,
               activation,
+              staleReason: staleReason ?? undefined,
               error: staleError ?? undefined,
               exitCode: result.exitCode,
               timedOut: result.timedOut,

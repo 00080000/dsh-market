@@ -75,7 +75,7 @@ describe('MarketSection (jsdom)', () => {
     })
   })
 
-  it('category pills filter and the New sort reorders', async () => {
+  it('category pills filter and the New/Oldest sorts reorder', async () => {
     render(<MarketSection {...props()} />)
     await screen.findByText('dsh-loop')
     fireEvent.click(screen.getByRole('button', { name: 'Themes' }))
@@ -88,6 +88,11 @@ describe('MarketSection (jsdom)', () => {
     await waitFor(() => {
       const names = screen.getAllByText(/^(dsh-loop|dsh-notify|whale-skin)$/).map(n => n.textContent)
       expect(names[0]).toBe('whale-skin') // newest added first
+    })
+    fireEvent.click(screen.getByRole('button', { name: en.sortOld }))
+    await waitFor(() => {
+      const names = screen.getAllByText(/^(dsh-loop|dsh-notify|whale-skin)$/).map(n => n.textContent)
+      expect(names[0]).toBe('dsh-loop') // oldest added first
     })
   })
 

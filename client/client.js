@@ -66,6 +66,7 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 			catsLess: "收起",
 			sortHot: "最热",
 			sortNew: "最新",
+			sortOld: "最早",
 			prevPage: "上一页",
 			nextPage: "下一页",
 			firstPage: "首页",
@@ -153,6 +154,7 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 			catsLess: "Less",
 			sortHot: "Top",
 			sortNew: "New",
+			sortOld: "Oldest",
 			prevPage: "Previous",
 			nextPage: "Next",
 			firstPage: "First",
@@ -217,6 +219,7 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 			});
 			if (options.sort === "hot") return [...list].sort((a, b) => (b.stars ?? -1) - (a.stars ?? -1));
 			if (options.sort === "new") return [...list].sort((a, b) => String(b.added).localeCompare(String(a.added)));
+			if (options.sort === "old") return [...list].sort((a, b) => String(a.added).localeCompare(String(b.added)));
 			return list;
 		}
 		/** The themes tab listing: theme category only, most-starred first. */
@@ -353,80 +356,80 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 			document.head.appendChild(tag);
 		}
 		var Market_module_css_default = {
-			"body": "dvLfbW_body",
-			"pageEllipsis": "dvLfbW_pageEllipsis",
-			"descTight": "dvLfbW_descTight",
-			"catsCollapsed": "dvLfbW_catsCollapsed",
-			"pageBtn": "dvLfbW_pageBtn",
-			"loading": "dvLfbW_loading",
+			"staleAction": "dvLfbW_staleAction",
+			"spec": "dvLfbW_spec",
 			"searchInline": "dvLfbW_searchInline",
-			"grid": "dvLfbW_grid",
-			"av": "dvLfbW_av",
-			"bar": "dvLfbW_bar",
-			"warnLine": "dvLfbW_warnLine",
-			"row1": "dvLfbW_row1",
-			"actWarn": "dvLfbW_actWarn",
-			"top": "dvLfbW_top",
-			"catsWrap": "dvLfbW_catsWrap",
-			"on": "dvLfbW_on",
-			"progress": "dvLfbW_progress",
 			"cmdSummary": "dvLfbW_cmdSummary",
-			"dshmSlide": "dvLfbW_dshmSlide",
-			"pageInfo": "dvLfbW_pageInfo",
+			"owner": "dvLfbW_owner",
+			"irow": "dvLfbW_irow",
 			"tab": "dvLfbW_tab",
 			"restart": "dvLfbW_restart",
-			"title": "dvLfbW_title",
-			"err": "dvLfbW_err",
-			"pagerSize": "dvLfbW_pagerSize",
-			"head": "dvLfbW_head",
-			"card": "dvLfbW_card",
-			"catsRow": "dvLfbW_catsRow",
-			"spin": "dvLfbW_spin",
-			"actWhy": "dvLfbW_actWhy",
-			"root": "dvLfbW_root",
-			"grow": "dvLfbW_grow",
-			"pct": "dvLfbW_pct",
-			"cancelBtn": "dvLfbW_cancelBtn",
-			"sub": "dvLfbW_sub",
-			"sizeLabel": "dvLfbW_sizeLabel",
-			"titleRow": "dvLfbW_titleRow",
-			"empty": "dvLfbW_empty",
-			"foot": "dvLfbW_foot",
-			"sizeBtn": "dvLfbW_sizeBtn",
-			"catsToggle": "dvLfbW_catsToggle",
-			"tag": "dvLfbW_tag",
-			"barFill": "dvLfbW_barFill",
-			"modalNote": "dvLfbW_modalNote",
-			"swatches": "dvLfbW_swatches",
-			"nm": "dvLfbW_nm",
-			"act": "dvLfbW_act",
-			"cmdDetails": "dvLfbW_cmdDetails",
-			"sort": "dvLfbW_sort",
-			"dangerArmed": "dvLfbW_dangerArmed",
-			"themesGrid": "dvLfbW_themesGrid",
 			"sp": "dvLfbW_sp",
-			"barWave": "dvLfbW_barWave",
-			"spec": "dvLfbW_spec",
-			"staleAction": "dvLfbW_staleAction",
-			"pager": "dvLfbW_pager",
-			"pagerPages": "dvLfbW_pagerPages",
-			"sizeOn": "dvLfbW_sizeOn",
 			"tabs": "dvLfbW_tabs",
-			"cmd": "dvLfbW_cmd",
-			"pageOn": "dvLfbW_pageOn",
-			"sect": "dvLfbW_sect",
-			"src": "dvLfbW_src",
-			"cats": "dvLfbW_cats",
-			"warnBtn": "dvLfbW_warnBtn",
+			"catsRow": "dvLfbW_catsRow",
+			"top": "dvLfbW_top",
+			"pageInfo": "dvLfbW_pageInfo",
+			"sort": "dvLfbW_sort",
 			"dangerBtn": "dvLfbW_dangerBtn",
-			"owner": "dvLfbW_owner",
+			"pageEllipsis": "dvLfbW_pageEllipsis",
+			"swatches": "dvLfbW_swatches",
+			"sizeLabel": "dvLfbW_sizeLabel",
+			"progress": "dvLfbW_progress",
+			"modalNote": "dvLfbW_modalNote",
+			"sub": "dvLfbW_sub",
 			"desc": "dvLfbW_desc",
-			"actLive": "dvLfbW_actLive",
-			"irow": "dvLfbW_irow",
-			"okState": "dvLfbW_okState",
+			"on": "dvLfbW_on",
+			"act": "dvLfbW_act",
+			"loading": "dvLfbW_loading",
+			"src": "dvLfbW_src",
+			"dangerArmed": "dvLfbW_dangerArmed",
+			"head": "dvLfbW_head",
+			"cancelBtn": "dvLfbW_cancelBtn",
+			"card": "dvLfbW_card",
+			"pageBtn": "dvLfbW_pageBtn",
+			"err": "dvLfbW_err",
+			"sizeOn": "dvLfbW_sizeOn",
+			"cmdDetails": "dvLfbW_cmdDetails",
+			"pct": "dvLfbW_pct",
+			"grid": "dvLfbW_grid",
+			"catsToggle": "dvLfbW_catsToggle",
+			"themesGrid": "dvLfbW_themesGrid",
+			"titleRow": "dvLfbW_titleRow",
 			"actBroken": "dvLfbW_actBroken",
+			"pagerPages": "dvLfbW_pagerPages",
+			"catsCollapsed": "dvLfbW_catsCollapsed",
+			"pager": "dvLfbW_pager",
+			"pagerSize": "dvLfbW_pagerSize",
+			"title": "dvLfbW_title",
+			"catsWrap": "dvLfbW_catsWrap",
+			"tag": "dvLfbW_tag",
+			"barWave": "dvLfbW_barWave",
+			"sect": "dvLfbW_sect",
+			"warnBtn": "dvLfbW_warnBtn",
+			"actWhy": "dvLfbW_actWhy",
+			"bar": "dvLfbW_bar",
+			"okState": "dvLfbW_okState",
+			"root": "dvLfbW_root",
+			"dshmSlide": "dvLfbW_dshmSlide",
+			"sizeBtn": "dvLfbW_sizeBtn",
+			"cmd": "dvLfbW_cmd",
+			"foot": "dvLfbW_foot",
+			"star": "dvLfbW_star",
+			"descTight": "dvLfbW_descTight",
+			"spin": "dvLfbW_spin",
+			"nm": "dvLfbW_nm",
+			"actLive": "dvLfbW_actLive",
+			"empty": "dvLfbW_empty",
 			"dot": "dvLfbW_dot",
-			"star": "dvLfbW_star"
+			"actWarn": "dvLfbW_actWarn",
+			"cats": "dvLfbW_cats",
+			"warnLine": "dvLfbW_warnLine",
+			"av": "dvLfbW_av",
+			"pageOn": "dvLfbW_pageOn",
+			"row1": "dvLfbW_row1",
+			"barFill": "dvLfbW_barFill",
+			"body": "dvLfbW_body",
+			"grow": "dvLfbW_grow"
 		};
 		//#endregion
 		//#region src/client/MarketSection.tsx
@@ -522,6 +525,17 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 			96
 		];
 		const DEFAULT_PAGE_SIZE = 24;
+		/** Sort orders offered by the Discover toolbar, in display order. */
+		const SORT_KEYS = [
+			"hot",
+			"new",
+			"old"
+		];
+		const SORT_LABELS = {
+			hot: "sortHot",
+			new: "sortNew",
+			old: "sortOld"
+		};
 		function MarketSection(props) {
 			const t = props.t;
 			const localeSnap = (0, react.useSyncExternalStore)((cb) => props.locale.subscribe(cb), () => props.locale.getSnapshot());
@@ -1494,10 +1508,10 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 									})()
 								}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
 									className: Market_module_css_default.sort,
-									children: ["hot", "new"].map((key) => /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
+									children: SORT_KEYS.map((key) => /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
 										className: sort === key ? Market_module_css_default.on : "",
 										onClick: () => setSort(key),
-										children: t(key === "hot" ? "sortHot" : "sortNew")
+										children: t(SORT_LABELS[key])
 									}, key))
 								})]
 							})

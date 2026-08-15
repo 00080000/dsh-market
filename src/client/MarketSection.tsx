@@ -11,7 +11,7 @@ import {
   pageItems, readSession, repoOf, themePlugins as themePluginsOf, themeSwatch, visiblePlugins,
 } from './market-data.ts'
 import type {
-  ActivationInfo, ActivationState, InstalledMap, MarketStatus, Registry, RegistryPlugin, ThemeSnapshot, Translate, UpdateStatus,
+  ActivationInfo, ActivationState, InstalledMap, MarketStatus, Registry, RegistryPlugin, SortKey, ThemeSnapshot, Translate, UpdateStatus,
 } from './market-data.ts'
 
 /** The state label + dot for one activation result (P0-2). */
@@ -80,6 +80,14 @@ let cachedInstalled: InstalledMap | null = null
 /** Discover grid page-size choices — the catalog grows daily, so cap each page. */
 const PAGE_SIZES = [24, 48, 96]
 const DEFAULT_PAGE_SIZE = 24
+
+/** Sort orders offered by the Discover toolbar, in display order. */
+const SORT_KEYS = ['hot', 'new', 'old'] as const
+const SORT_LABELS: Record<(typeof SORT_KEYS)[number], string> = {
+  hot: 'sortHot',
+  new: 'sortNew',
+  old: 'sortOld',
+}
 
 export interface MarketSectionProps {
   t: Translate
@@ -163,7 +171,7 @@ export function MarketSection(props: MarketSectionProps) {
   const [restarting, setRestarting] = useState(false)
   const [showTop, setShowTop] = useState(false)
   const bodyRef = useRef<HTMLDivElement | null>(null)
-  const [sort, setSort] = useState('hot')
+  const [sort, setSort] = useState<SortKey>('hot')
   const [catsOpen, setCatsOpen] = useState(false)
   // How many category pills fit in the two collapsed rows (measured once —
   // the settings panel width is fixed); null = measuring render with all
@@ -923,12 +931,12 @@ export function MarketSection(props: MarketSectionProps) {
                         })()}
                       </div>
                       <div className={css.sort}>
-                        {['hot', 'new'].map(key => (
+                        {SORT_KEYS.map(key => (
                           <button
                             key={key}
                             className={sort === key ? css.on : ''}
                             onClick={() => setSort(key)}
-                          >{t(key === 'hot' ? 'sortHot' : 'sortNew')}</button>
+                          >{t(SORT_LABELS[key])}</button>
                         ))}
                       </div>
                       </div>
