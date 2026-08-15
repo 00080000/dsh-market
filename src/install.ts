@@ -1,0 +1,121 @@
+/**
+ * Install orchestration: collection-repo retargeting, post-install
+ * validation that keeps broken pieces from bricking the next boot, and
+ * update staleness detection. Every function takes the plugin runner as a
+ * parameter so tests can substitute a recording fake.
+ */
+
+import { existsSync } from 'node:fs'
+import { join } from 'node:path'
+import type { InstallResult, PluginRunner } from './dsh-cli.ts'
+import { classifyPnpmFailure } from './pnpm-compat.ts'
+import { entryArtifactExists, hasDshManifest, pluginSubdirs, profileDir, readInstalled } from './profile.ts'
+import { logEvent } from './log.ts'
+
+/**
+ * Run one plugin command with automatic recovery from the pnpm-major drift
+ * failure (#20 bug 2): when the modules directory was built by a different
+ * pnpm major, pnpm's documented remedy is one `install` to recreate it —
+ * do that silently and retry the original command once. Any recognized
+ * failure that survives gets its bilingual explanation appended to stderr
+ * so the UI shows an actionable message instead of a wall of text (#20 bug 3).
+ */
+export async function withHoistRecovery(run: PluginRunner, profile: string, pluginArgs: string[]): Promise<InstallResult> {
+  let result = await run(profile, pluginArgs)
+  const ok = (r: InstallResult): boolean => r.exitCode === 0 && !r.timedOut
+  if (!ok(result) && classifyPnpmFailure(`${result.stderr}\n${result.stdout}`)?.code === 'hoist-pattern-diff') {
+    logEvent('warn', 'install', `modules dir was built by a different pnpm major — rebuilding (pnpm install) and retrying once`)
+    // --no-frozen-lockfile: the market runs pnpm with CI=true (TTY hangs),
+    // where a lockfile written by the old major would otherwise be refused.
+    const rebuild = await run(profile, ['install', '--no-frozen-lockfile'])
+    if (ok(rebuild)) result = await run(profile, pluginArgs)
+  }
+  if (!ok(result)) {
+    const failure = classifyPnpmFailure(`${result.stderr}\n${result.stdout}`)
+    if (failure !== null) result = { ...result, stderr: `${result.stderr}\n\n${failure.message}` }
+  }
+  return result
+}
+
+/**
+ * Some registry entries point at collection repos whose actual plugin lives
+ * in a subdirectory — the root has no package.json (or a workspace root with
+ * no dsh surface), and pnpm installs the bare fileset with exit 0. Detect
+ * that junk install, drop it, and re-add each plugin subdirectory through
+ * pnpm's `#path:` selector (#18).
+ * @returns overall success (true when nothing needed retargeting).
+ */
+export async function retargetCollections(
+  run: PluginRunner, profile: string, before: Set<string>, target: string,
+): Promise<boolean> {
+  if (!target.startsWith('github:')) return true
+  const junk = Object.keys(readInstalled(profile)).filter((name) => {
+    if (before.has(name)) return false
+    const root = join(profileDir(profile), 'node_modules', name)
+    if (!existsSync(join(root, 'package.json'))) return true
+    return !hasDshManifest(root)
+  })
+  let allOk = true
+  for (const name of junk) {
+    const root = join(profileDir(profile), 'node_modules', name)
+    const candidates = pluginSubdirs(root)
+    logEvent('info', 'install', `${name}: collection repo (root declares no dsh manifest); plugins inside: ${candidates.join(', ') || 'none'}`)
+    await run(profile, ['remove', name])
+    if (candidates.length === 0) {
+      allOk = false
+      continue
+    }
+    for (const sub of candidates) {
+      const result = await run(profile, ['add', `${target}#path:/${sub}`])
+      if (result.exitCode !== 0 || result.timedOut) {
+        allOk = false
+        logEvent('error', 'install',
+          `${target}#path:/${sub}: exit=${String(result.exitCode)}${result.timedOut ? ' TIMEOUT' : ''} — ${(result.stderr || result.stdout).slice(-220)}`)
+      }
+    }
+  }
+  return allOk
+}
+
+/**
+ * Fake-success guard (#18): validate every package the install added. A
+ * piece without a dsh manifest or without its declared entry artifact
+ * (source-only checkout, build blocked by pnpm allowBuilds) would brick the
+ * next boot, so it is removed on the spot.
+ * @returns names kept and names removed as broken.
+ */
+export async function validateAddedPlugins(
+  run: PluginRunner, profile: string, before: Set<string>,
+): Promise<{ keep: string[]; removedBroken: string[] }> {
+  const addedNow = Object.keys(readInstalled(profile)).filter(n => !before.has(n))
+  const keep: string[] = []
+  const removedBroken: string[] = []
+  for (const n of addedNow) {
+    const dir = join(profileDir(profile), 'node_modules', n)
+    if (hasDshManifest(dir) && entryArtifactExists(dir)) {
+      keep.push(n)
+    } else {
+      removedBroken.push(n)
+      await run(profile, ['remove', n])
+    }
+  }
+  return { keep, removedBroken }
+}
+
+/**
+ * Whether a clean-exit update actually changed nothing — pnpm's
+ * minimumReleaseAge silently keeps the old version and exits 0 when the new
+ * release is "too young" (#13, #22), so a clean exit alone does not mean the
+ * update happened.
+ */
+export function isStaleUpdate(check: {
+  isGit: boolean
+  beforeVersion: string | null
+  afterVersion: string | null
+  beforeCommit: string | null
+  afterCommit: string | null
+}): boolean {
+  return check.isGit
+    ? check.beforeCommit !== null && check.afterCommit === check.beforeCommit
+    : check.beforeVersion !== null && check.afterVersion === check.beforeVersion
+}

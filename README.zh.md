@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/logo.svg" width="96" alt="dsh-market logo">
+</p>
+
 # dsh-market
 
 [English](README.md) | 中文
@@ -9,6 +13,10 @@
 
 ![dsh-market](assets/demo-zh.png)
 
+主题一键换——装完即生效，点一下切换，不用重启：
+
+![主题](assets/themes-zh.png)
+
 ## 安装
 
 ```sh
@@ -19,9 +27,10 @@ dsh plugin --profile web add dshmarket
 
 ## 你会得到
 
-- **逛与搜**——完整社区目录（230+ 插件，每天在涨），分类筛选、star 数、最热/最新排序，中英描述跟随界面语言
+- **逛与搜**——完整社区目录（300+ 插件，每天在涨），分类筛选、star 数、最热/最新排序，中英描述跟随界面语言
+- **主题**——独立主题页：装完立即生效，点一下切换（主题互斥、选择跨重启保留），卸载即恢复
 - **一键安装**——确认来源，实时进度；多数插件刷新页面即可用，无需重启
-- **更新**——逐插件检测（npm 版本或锁定 commit 对比 HEAD），一键更新；市场自己也走同一通道升级
+- **更新**——逐插件检测（npm 版本或锁定 commit 对比 HEAD），一键更新或全部更新；市场自己也走同一通道升级
 - **卸载**——两步确认防误触；本次会话装的插件即点即卸
 - **零术语**——缺组件（pnpm）时市场自己发现、一键自动装好，全程不见命令行
 - **导出日志**——一键生成脱敏纯文本日志方便反馈（home 路径与密钥形状已打码；任何数据都不会被上传）
@@ -41,6 +50,14 @@ dsh plugin --profile web add dshmarket
 ## 数据源
 
 实时来自 [awesome-dsh-plugin.com/plugins.json](https://awesome-dsh-plugin.com/plugins.json)——精选条目、npm 映射、star 数由 CI 每日刷新——内置快照做离线兜底。
+
+## 友情链接
+
+### DeepSeek Harness Desktop
+
+[DeepSeek Harness Desktop](https://github.com/anywhere-labs/deepseek-harness-desktop) 是一款为 DeepSeek Harness 生态打造的现代化桌面端，让用户无需配置 Node.js 或执行命令，即可启动和管理本地 Harness 服务。项目后续还将支持插件市场、移动端远程控制和 IM Channels。
+
+[访问官网](https://www.dshdesktop.cn) · [GitHub](https://github.com/anywhere-labs/deepseek-harness-desktop)
 
 ## 许可
 

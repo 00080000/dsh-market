@@ -16,9 +16,21 @@ export type Config = Partial<MarketConfig>
  * @param ctx - Host context that may acquire webServer and shell services.
  * @param config - Optional profile override from the loader.
  */
+/**
+ * The profile this host process actually booted (`--profile <name>` on the
+ * dsh CLI invocation). Without it the market would default to `web` and
+ * installs from a test/secondary profile would mutate the real one.
+ */
+function argvProfile(): string | undefined {
+  const argv = process.argv
+  const flag = argv.indexOf('--profile')
+  if (flag !== -1 && flag + 1 < argv.length && !argv[flag + 1].startsWith('-')) return argv[flag + 1]
+  return undefined
+}
+
 export function apply(ctx: Context, config?: Config): void {
-  const resolved: MarketConfig = { profile: config?.profile ?? 'web' }
-  ctx.inject(['webServer'], (hostCtx: Context) => {
+  const resolved: MarketConfig = { profile: config?.profile ?? argvProfile() ?? 'web' }
+  ctx.inject(['webServer', 'loader'], (hostCtx: Context) => {
     const host = hostCtx as unknown as MarketHost & {
       effect(callback: () => () => void, label: string): void
     }
