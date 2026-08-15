@@ -8,7 +8,7 @@
 
 import { describe, expect, it } from 'vitest'
 import {
-  entryForDep, isInstalled, matchInstalledName, orderedCategories, themePlugins, visiblePlugins,
+  entryForDep, isInstalled, matchInstalledName, orderedCategories, pageItems, themePlugins, visiblePlugins,
 } from '../src/client/market-data.ts'
 import type { RegistryPlugin } from '../src/client/market-data.ts'
 
@@ -115,5 +115,18 @@ describe('discover list (visiblePlugins)', () => {
     expect(orderedCategories(cats, 'memory', false)).toEqual(['memory', 'tool', 'theme'])
     expect(orderedCategories(cats, 'memory', true)).toEqual(cats)
     expect(orderedCategories(cats, 'all', false)).toEqual(cats)
+  })
+})
+
+describe('discover pager (pageItems)', () => {
+  it('lists every page when few enough to show without ellipses', () => {
+    expect(pageItems(1, 1)).toEqual([1])
+    expect(pageItems(3, 7)).toEqual([1, 2, 3, 4, 5, 6, 7])
+  })
+
+  it('windows around the current page with leading/trailing ellipses', () => {
+    expect(pageItems(1, 17)).toEqual([1, 2, 3, 4, 5, '…', 17])
+    expect(pageItems(9, 17)).toEqual([1, '…', 8, 9, 10, '…', 17])
+    expect(pageItems(17, 17)).toEqual([1, '…', 13, 14, 15, 16, 17])
   })
 })

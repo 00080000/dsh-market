@@ -134,6 +134,30 @@ export function orderedCategories(categories: string[], active: string, open: bo
 }
 
 /**
+ * Page-number list for the discover pager. With few pages it is simply
+ * 1..total; with many it windows around the current page and inserts '…'
+ * so a 400-plugin catalog stays a compact `1 … 4 5 6 … 17` instead of a
+ * long row of numbered buttons. Always begins with 1 and ends with total.
+ */
+export function pageItems(current: number, total: number): Array<number | '…'> {
+  if (total <= 7) {
+    const all: number[] = []
+    for (let i = 1; i <= total; i++) all.push(i)
+    return all
+  }
+  const items: Array<number | '…'> = [1]
+  let start = Math.max(2, current - 1)
+  let end = Math.min(total - 1, current + 1)
+  if (current <= 4) end = 5
+  if (current >= total - 3) start = total - 4
+  if (start > 2) items.push('…')
+  for (let i = start; i <= end; i++) items.push(i)
+  if (end < total - 1) items.push('…')
+  items.push(total)
+  return items
+}
+
+/**
  * Unified installed-state matching (#15): both sides collapse to lowercase
  * identity sets — the registry entry contributes its bare name, npm name and
  * owner/repo; the dependency contributes its key and the repo inside its

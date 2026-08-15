@@ -114,6 +114,74 @@ describe('MarketSection (jsdom)', () => {
     // The 502-stale path surfaces the plain-words error plus the one-time bypass.
     expect(await screen.findByRole('button', { name: en.updateNow })).toBeTruthy()
   })
+
+  it('paginates the discover grid and navigates by page number', async () => {
+    const plugins = Array.from({ length: 30 }, (_, i) => ({
+      name: 'dsh-p' + (i + 1),
+      owner: 'alice',
+      url: 'https://github.com/alice/dsh-p' + (i + 1),
+      category: 'tools',
+      npm: null,
+      stars: 30 - i,
+      added: '2026-08-01',
+      description: { en: 'Plugin ' + (i + 1) },
+      install: '',
+    }))
+    stubFetch({
+      '/dsh-market/registry': {
+        source: 'snapshot',
+        registry: { updated: '', count: 30, categories: { tools: { en: 'Tools', zh: '工具' } }, plugins },
+      },
+    })
+    render(<MarketSection {...props()} />)
+    await screen.findByText('dsh-p1')
+    // Hot sort (stars desc) keeps dsh-p1..dsh-p24 on page 1; page 2 is hidden.
+    expect(screen.getByText('dsh-p24')).toBeTruthy()
+    expect(screen.queryByText('dsh-p25')).toBeNull()
+    // The numbered pager jumps to page 2 and back.
+    fireEvent.click(screen.getByRole('button', { name: '2' }))
+    await waitFor(() => {
+      expect(screen.getByText('dsh-p25')).toBeTruthy()
+      expect(screen.queryByText('dsh-p1')).toBeNull()
+    })
+    fireEvent.click(screen.getByRole('button', { name: en.prevPage }))
+    await waitFor(() => expect(screen.getByText('dsh-p1')).toBeTruthy())
+  })
+
+  it('switches page size and exposes first/last shortcuts', async () => {
+    const plugins = Array.from({ length: 30 }, (_, i) => ({
+      name: 'dsh-q' + (i + 1),
+      owner: 'bob',
+      url: 'https://github.com/bob/dsh-q' + (i + 1),
+      category: 'tools',
+      npm: null,
+      stars: 30 - i,
+      added: '2026-08-01',
+      description: { en: 'Plugin ' + (i + 1) },
+      install: '',
+    }))
+    stubFetch({
+      '/dsh-market/registry': {
+        source: 'snapshot',
+        registry: { updated: '', count: 30, categories: { tools: { en: 'Tools', zh: '工具' } }, plugins },
+      },
+    })
+    render(<MarketSection {...props()} />)
+    await screen.findByText('dsh-q1')
+    // First/last shortcuts jump straight to the edges.
+    expect(screen.getByRole('button', { name: en.firstPage })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: en.lastPage }))
+    await waitFor(() => expect(screen.getByText('dsh-q30')).toBeTruthy())
+    // A larger page size collapses the 30 plugins to a single page and hides
+    // the numbered pager while keeping the size switcher visible.
+    fireEvent.click(screen.getByRole('button', { name: '48' }))
+    await waitFor(() => {
+      expect(screen.getByText('dsh-q1')).toBeTruthy()
+      expect(screen.getByText('dsh-q30')).toBeTruthy()
+      expect(screen.queryByRole('button', { name: '2' })).toBeNull()
+      expect(screen.getByRole('button', { name: '96' })).toBeTruthy()
+    })
+  })
 })
 
 describe('stuck pending recovery (#32)', () => {

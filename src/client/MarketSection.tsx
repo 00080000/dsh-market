@@ -8,7 +8,7 @@ import { Button, IconChevronDownOutline14, IconChevronUpOutline14, IconSearchOut
 import css from './Market.module.css'
 import {
   avatarColor, entryForDep, isInstalled, looksTerminal, matchInstalledName, orderedCategories,
-  readSession, repoOf, themePlugins as themePluginsOf, themeSwatch, visiblePlugins,
+  pageItems, readSession, repoOf, themePlugins as themePluginsOf, themeSwatch, visiblePlugins,
 } from './market-data.ts'
 import type {
   InstalledMap, Registry, RegistryPlugin, ThemeSnapshot, Translate, UpdateStatus,
@@ -61,6 +61,10 @@ function MarketLogo({ size = 16, style }: { size?: number; style?: CSSProperties
 let cachedRegistry: Registry | null = null
 let cachedInstalled: InstalledMap | null = null
 
+/** Discover grid page-size choices — the catalog grows daily, so cap each page. */
+const PAGE_SIZES = [24, 48, 96]
+const DEFAULT_PAGE_SIZE = 24
+
 export interface MarketSectionProps {
   t: Translate
   locale: {
@@ -108,21 +112,10 @@ export function MarketSection(props: MarketSectionProps) {
   const [updatingName, setUpdatingName] = useState<string | null>(null)
   // Plugin blocked by pnpm's fresh-release safety wait; arms the update-now button.
   const [staleName, setStaleName] = useState<string | null>(null)
-  /**
-   * Cards rendered so far — the discover grid renders incrementally (60,
-   * then +120 as the sentinel scrolls into view) instead of all 400+ at
-   * once, which built a ~70k px DOM and made section switches lag (#30).
-   */
-  const [visibleCount, setVisibleCount] = useState(60)
-  const sentinelRef = useCallback((node: HTMLDivElement | null) => {
-    if (node === null) return
-    const observer = new IntersectionObserver((entries) => {
-      if (entries.some(entry => entry.isIntersecting)) setVisibleCount(count => count + 120)
-    }, { rootMargin: '600px' })
-    observer.observe(node)
-    // Cleanup runs when React detaches the node and calls back with null;
-    // the observer dies with the node, so a one-shot observe suffices.
-  }, [])
+  /** 1-based discover page; reset to 1 whenever the list shape changes. */
+  const [page, setPage] = useState(1)
+  /** Cards per discover page; changing it jumps back to page 1. */
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
 
   /** Determinate percent parsed from pnpm's Progress line, when available. */
   const [progressPct, setProgressPct] = useState<number | null>(null)
@@ -285,7 +278,32 @@ export function MarketSection(props: MarketSectionProps) {
     () => (data === null ? [] : visiblePlugins(data.plugins, { category: cat, query: q, lang, sort })),
     [data, q, cat, lang, sort])
 
-  useEffect(() => { setVisibleCount(60) }, [q, cat, sort])
+  useEffect(() => { setPage(1) }, [q, cat, sort])
+
+  const totalPages = Math.max(1, Math.ceil(plugins.length / pageSize))
+  // Clamp in case the list shrank while the user was on a later page.
+  const currentPage = Math.min(page, totalPages)
+  const pagePlugins = plugins.slice((currentPage - 1) * pageSize, currentPage * pageSize)
+
+  const scrollToTop = () => {
+    const el = bodyRef.current
+    if (el) {
+      // jsdom (tests) lacks Element.scrollTo — fall back to the assignment.
+      if (typeof el.scrollTo === 'function') el.scrollTo({ top: 0, behavior: 'smooth' })
+      else el.scrollTop = 0
+    }
+  }
+
+  const goToPage = (next: number) => {
+    setPage(Math.max(1, Math.min(next, totalPages)))
+    scrollToTop()
+  }
+
+  const changePageSize = (size: number) => {
+    setPageSize(size)
+    setPage(1)
+    scrollToTop()
+  }
 
   const doInstall = useCallback((plugin: RegistryPlugin) => {
     setBuildsSkipped(null)
@@ -821,8 +839,43 @@ export function MarketSection(props: MarketSectionProps) {
                       ? <div className={css.empty}>{t('empty')}</div>
                       : (
                           <>
-                            <div className={css.grid}>{plugins.slice(0, visibleCount).map(pluginCard)}</div>
-                            {plugins.length > visibleCount && <div ref={sentinelRef} className={css.sentinel} />}
+                            <div className={css.grid}>{pagePlugins.map(pluginCard)}</div>
+                            <div className={css.pager}>
+                              <div className={css.pagerPages}>
+                                {totalPages > 1 && (
+                                  <>
+                                    <button type="button" className={css.pageBtn} disabled={currentPage === 1} onClick={() => goToPage(1)} aria-label={t('firstPage')}>«</button>
+                                    <button type="button" className={css.pageBtn} disabled={currentPage === 1} onClick={() => goToPage(currentPage - 1)}>{t('prevPage')}</button>
+                                    {pageItems(currentPage, totalPages).map((item, i) => (
+                                      item === '…'
+                                        ? <span key={'e' + i} className={css.pageEllipsis}>…</span>
+                                        : (
+                                            <button
+                                              key={item}
+                                              type="button"
+                                              className={item === currentPage ? `${css.pageBtn} ${css.pageOn}` : css.pageBtn}
+                                              onClick={() => goToPage(item)}
+                                            >{item}</button>
+                                          )
+                                    ))}
+                                    <button type="button" className={css.pageBtn} disabled={currentPage === totalPages} onClick={() => goToPage(currentPage + 1)}>{t('nextPage')}</button>
+                                    <button type="button" className={css.pageBtn} disabled={currentPage === totalPages} onClick={() => goToPage(totalPages)} aria-label={t('lastPage')}>»</button>
+                                    <span className={css.pageInfo}>{t('pageInfo').replace('{0}', String(currentPage)).replace('{1}', String(totalPages))}</span>
+                                  </>
+                                )}
+                              </div>
+                              <div className={css.pagerSize}>
+                                <span className={css.sizeLabel}>{t('perPage')}</span>
+                                {PAGE_SIZES.map(size => (
+                                  <button
+                                    key={size}
+                                    type="button"
+                                    className={size === pageSize ? `${css.sizeBtn} ${css.sizeOn}` : css.sizeBtn}
+                                    onClick={() => changePageSize(size)}
+                                  >{size}</button>
+                                ))}
+                              </div>
+                            </div>
                           </>
                         )}
                   </>
