@@ -130,6 +130,23 @@ describe('setAllowBuilds (#6)', () => {
     expect(yaml).toMatch(/allowBuilds:\n  existing-pkg: true\n  dsh-skin: true/)
   })
 
+  it('drops the pnpm #11535 placeholder corruption while merging (#56)', async () => {
+    const { setAllowBuilds } = await import('../src/profile.ts')
+    const dir = writeProfile({})
+    // pnpm's failed-install bug writes a literal placeholder instead of a
+    // boolean, breaking the file for every later approval.
+    writeFileSync(join(dir, 'pnpm-workspace.yaml'),
+      'packages:\n  - .\n\nallowBuilds:\n  cloudflared: set this to true or false\n  good-pkg: false\n')
+    const approved = setAllowBuilds('web', ['ssh2'])
+    expect(approved).toContain('ssh2')
+    expect(approved).toContain('good-pkg')
+    expect(approved).not.toContain('cloudflared')
+    const yaml = readFileSync(join(dir, 'pnpm-workspace.yaml'), 'utf8')
+    expect(yaml).not.toContain('set this to')
+    expect(yaml).toMatch(/good-pkg: false/)
+    expect(yaml).toMatch(/ssh2: true/)
+  })
+
   it('creates the block when the yaml has none', async () => {
     const { setAllowBuilds } = await import('../src/profile.ts')
     const dir = writeProfile({})

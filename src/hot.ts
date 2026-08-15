@@ -289,13 +289,50 @@ export async function mountClientOnlyDeps(ctx: HotContext, profileDir: string): 
     return []
   }
   const disabled = readDisabledThemes(profileDir)
+  const userManaged = readUserPatchControls(profileDir)
   const mounted: string[] = []
   for (const name of deps) {
     if (hotHandles.has(name) || disabled.has(name)) continue
+    // Packages the USER's patch layer already manages (insert or disable
+    // rows in cordis.patch.yml, e.g. via dsh-web-plugin-manager) are theirs
+    // to control — a shim here would override a user's "disabled" choice on
+    // every restart (#58 by @vikna919).
+    if (patchLayerManages(userManaged, name)) continue
     const dsh = readPkgDsh(profileDir, name)
     if (dsh === null || dsh.client === undefined || dsh.bundle !== undefined) continue
     if ((await hotMount(ctx, profileDir, name)).ok) mounted.push(name)
   }
   return mounted
+}
+
+/**
+ * Row ids and package names the user's own patch layer (cordis.patch.yml)
+ * already contains. Line-wise scan on purpose: the file may hold structures
+ * the market's strict patch parser rejects, but any mention of a row id or
+ * package name is enough to know the user manages it (#58).
+ */
+export function readUserPatchControls(profileDir: string): { ids: Set<string>; names: Set<string> } {
+  const ids = new Set<string>()
+  const names = new Set<string>()
+  try {
+    const text = readFileSync(join(profileDir, 'cordis.patch.yml'), 'utf8')
+    for (const line of text.split('\n')) {
+      const id = /^\s*-?\s*id:\s*['"]?([A-Za-z0-9._/@-]+)/.exec(line)
+      if (id !== null) ids.add(id[1])
+      const name = /^\s*name:\s*['"]?([^'"\s]+)/.exec(line)
+      if (name !== null) names.add(name[1])
+    }
+  } catch { /* no user patch file — nothing is user-managed */ }
+  return { ids, names }
+}
+
+/**
+ * Whether the user patch layer manages `name` — matched by exact package
+ * name or by the plugin-manager row-id convention (strip the leading @,
+ * non-alphanumerics to '-', lowercase).
+ */
+export function patchLayerManages(controls: { ids: Set<string>; names: Set<string> }, name: string): boolean {
+  const rowId = name.replace(/^@/, '').replace(/[^a-z0-9-]/gi, '-').toLowerCase()
+  return controls.ids.has(rowId) || controls.names.has(name)
 }
 
