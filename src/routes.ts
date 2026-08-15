@@ -8,7 +8,8 @@
  * same-origin POSTs and only sources present in the curated registry.
  */
 
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { loadRegistry } from './registry.ts'
 import {
@@ -89,6 +90,20 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
   })
   let installing = false
 
+  /**
+   * Drop live hot mounts whose package was removed outside the market
+   * (e.g. `dsh plugin remove` in a terminal): the stale mount would keep
+   * serving a client bundle that 404s after refresh, wedging the page
+   * until a restart (#29 by @SunYanbox).
+   */
+  async function dropStaleHotMounts(): Promise<void> {
+    for (const name of listHotMounts()) {
+      if (existsSync(join(profileDir(config.profile), 'node_modules', name, 'package.json'))) continue
+      await hotUnmount(name)
+      logEvent('warn', 'hot-sweep', `${name}: package removed outside the market — live mount dropped`)
+    }
+  }
+
   /** Every plugin command goes through the pnpm-drift recovery wrapper (#20). */
   const runPlugin = (profile: string, args: string[]) => withHoistRecovery(runDshPlugin, profile, args)
 
@@ -114,12 +129,13 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
     host.webServer.register({
       kind: 'exact',
       path: '/dsh-market/installed',
-      handler: (request, response) => {
+      handler: async (request, response) => {
         if (request.method !== 'GET') {
           response.writeHead(405, { allow: 'GET' })
           response.end()
           return
         }
+        await dropStaleHotMounts()
         sendJson(response, 200, {
           profile: config.profile,
           installed: readInstalled(config.profile),
@@ -170,6 +186,7 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
           response.end()
           return
         }
+        await dropStaleHotMounts()
         sendJson(response, 200, {
           active: progress.active,
           target: progress.target,

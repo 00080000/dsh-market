@@ -14,7 +14,20 @@ export function profileDir(profile: string): string {
   return join(home, 'profiles', profile)
 }
 
-/** Community dependencies of the profile (official in-box scope filtered out). */
+/**
+ * The in-box bundles dsh's profile templates install themselves — the ONLY
+ * names the market hides from the installed list. Community plugins may
+ * legitimately publish under the official scope (#28), so a whole-scope
+ * filter would make them invisible and fail install validation.
+ * (Diagnosis and fix proposed in #28 by @Lograthmic.)
+ */
+const INBOX_BUNDLES = new Set([
+  '@deepseek-ai/dsh-base',
+  '@deepseek-ai/dsh-web-app',
+  '@deepseek-ai/dsh-headless',
+])
+
+/** Community dependencies of the profile (in-box bundles filtered out). */
 export function readInstalled(profile: string): Record<string, string> {
   try {
     const manifest = JSON.parse(readFileSync(join(profileDir(profile), 'package.json'), 'utf8')) as {
@@ -22,7 +35,7 @@ export function readInstalled(profile: string): Record<string, string> {
     }
     const installed: Record<string, string> = {}
     for (const [name, spec] of Object.entries(manifest.dependencies ?? {})) {
-      if (!name.startsWith('@deepseek-ai/')) installed[name] = spec
+      if (!INBOX_BUNDLES.has(name)) installed[name] = spec
     }
     return installed
   } catch {

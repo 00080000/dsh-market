@@ -30,10 +30,22 @@ function writeProfile(manifest: unknown): string {
 }
 
 describe('readInstalled', () => {
-  it('lists community dependencies, filters the official scope, and is empty when unreadable', () => {
+  it('filters exactly the in-box bundles — scoped COMMUNITY plugins stay (#28)', () => {
     expect(readInstalled('web')).toEqual({})
-    writeProfile({ dependencies: { 'dsh-loop': '^1.0.0', '@deepseek-ai/dsh-base': 'latest', dshmarket: '^1.2.2' } })
-    expect(readInstalled('web')).toEqual({ 'dsh-loop': '^1.0.0', dshmarket: '^1.2.2' })
+    writeProfile({ dependencies: {
+      'dsh-loop': '^1.0.0',
+      '@deepseek-ai/dsh-base': 'latest',
+      '@deepseek-ai/dsh-web-app': 'latest',
+      '@deepseek-ai/dsh-headless': 'latest',
+      // Community plugin published under the official scope (github source).
+      '@deepseek-ai/dsh-security-audit': 'github:omdsh-dev/dsh-security-audit',
+      dshmarket: '^1.2.3',
+    } })
+    expect(readInstalled('web')).toEqual({
+      'dsh-loop': '^1.0.0',
+      '@deepseek-ai/dsh-security-audit': 'github:omdsh-dev/dsh-security-audit',
+      dshmarket: '^1.2.3',
+    })
   })
 })
 

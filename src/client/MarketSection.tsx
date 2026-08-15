@@ -38,6 +38,14 @@ function OwnerAvatar({ name, owner }: { name: string; owner: string }) {
   )
 }
 
+/**
+ * Module-scope caches so re-entering the section renders instantly instead
+ * of refetching and rebuilding from a spinner (#30 by @StarsTom). Module
+ * state survives section switches; a background refetch keeps it current.
+ */
+let cachedRegistry: Registry | null = null
+let cachedInstalled: InstalledMap | null = null
+
 export interface MarketSectionProps {
   t: Translate
   locale: {
@@ -63,9 +71,10 @@ export function MarketSection(props: MarketSectionProps) {
     props.themeStore.subscribe,
     props.themeStore.getSnapshot,
   )
-  const [data, setData] = useState<Registry | null>(null)
+  const [data, setData] = useState<Registry | null>(cachedRegistry)
   const [loadError, setLoadError] = useState(false)
-  const [installed, setInstalled] = useState<InstalledMap>({})
+  const [installed, setInstalledState] = useState<InstalledMap>(cachedInstalled ?? {})
+  const setInstalled = useCallback((value: InstalledMap) => { cachedInstalled = value; setInstalledState(value) }, [])
   const [skins, setSkins] = useState<string[]>([])
   const [tab, setTab] = useState(() => {
     const saved = sessionStorage.getItem('dshm-tab')
@@ -82,6 +91,22 @@ export function MarketSection(props: MarketSectionProps) {
   const [updatingName, setUpdatingName] = useState<string | null>(null)
   // Plugin blocked by pnpm's fresh-release safety wait; arms the update-now button.
   const [staleName, setStaleName] = useState<string | null>(null)
+  /**
+   * Cards rendered so far — the discover grid renders incrementally (60,
+   * then +120 as the sentinel scrolls into view) instead of all 400+ at
+   * once, which built a ~70k px DOM and made section switches lag (#30).
+   */
+  const [visibleCount, setVisibleCount] = useState(60)
+  const sentinelRef = useCallback((node: HTMLDivElement | null) => {
+    if (node === null) return
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some(entry => entry.isIntersecting)) setVisibleCount(count => count + 120)
+    }, { rootMargin: '600px' })
+    observer.observe(node)
+    // Cleanup runs when React detaches the node and calls back with null;
+    // the observer dies with the node, so a one-shot observe suffices.
+  }, [])
+
   /** Determinate percent parsed from pnpm's Progress line, when available. */
   const [progressPct, setProgressPct] = useState<number | null>(null)
   /** Blocked build scripts from the last install: enables approve-and-retry (#6). */
@@ -125,7 +150,7 @@ export function MarketSection(props: MarketSectionProps) {
   useEffect(() => {
     fetch('/dsh-market/registry', { cache: 'no-store' })
       .then(res => { if (!res.ok) throw new Error('HTTP ' + res.status); return res.json() })
-      .then(body => setData(body.registry))
+      .then(body => { cachedRegistry = body.registry; setData(body.registry) })
       .catch(() => setLoadError(true))
     fetch('/dsh-market/status', { cache: 'no-store' })
       .then(res => res.json())
@@ -225,6 +250,8 @@ export function MarketSection(props: MarketSectionProps) {
   const plugins = useMemo(
     () => (data === null ? [] : visiblePlugins(data.plugins, { category: cat, query: q, lang, sort })),
     [data, q, cat, lang, sort])
+
+  useEffect(() => { setVisibleCount(60) }, [q, cat, sort])
 
   const doInstall = useCallback((plugin: RegistryPlugin) => {
     setBuildsSkipped(null)
@@ -703,7 +730,12 @@ export function MarketSection(props: MarketSectionProps) {
                     </div>
                     {plugins.length === 0
                       ? <div className={css.empty}>{t('empty')}</div>
-                      : <div className={css.grid}>{plugins.map(pluginCard)}</div>}
+                      : (
+                          <>
+                            <div className={css.grid}>{plugins.slice(0, visibleCount).map(pluginCard)}</div>
+                            {plugins.length > visibleCount && <div ref={sentinelRef} className={css.sentinel} />}
+                          </>
+                        )}
                   </>
                 )
           : tab === 'themes' && themeSnap !== null

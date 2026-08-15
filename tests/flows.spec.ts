@@ -167,6 +167,7 @@ const REGISTRY = {
     // #27 shape: the same repo listed twice under different names.
     { name: 'dsh-share', owner: 'h', url: 'https://github.com/h/dsh-share', category: 'tool', npm: 'dsh-share', description: {}, install: '', added: '' },
     { name: '@dsh-external/dsh-share', owner: 'h', url: 'https://github.com/h/dsh-share', category: 'tool', npm: null, description: {}, install: '', added: '' },
+    { name: 'dsh-security-audit', owner: 'omdsh-dev', url: 'https://github.com/omdsh-dev/dsh-security-audit', category: 'tool', npm: null, description: {}, install: '', added: '' },
     // Monorepo siblings: distinct plugins sharing one repo.
     { name: 'mono#plug-a', owner: 'm', url: 'https://github.com/m/mono/tree/main/packages/plug-a', category: 'tool', npm: null, description: {}, install: '', added: '' },
     { name: 'mono#plug-b', owner: 'm', url: 'https://github.com/m/mono/tree/main/packages/plug-b', category: 'tool', npm: null, description: {}, install: '', added: '' },
@@ -516,5 +517,39 @@ describe('build-script approval flow (#6)', () => {
     expect(yaml).toMatch(/allowBuilds:[\s\S]*dsh-loop: true/)
     // …and the original workspace settings survive.
     expect(yaml).toContain('packages:')
+  })
+})
+
+describe('official-scope community plugins (#28)', () => {
+  it('installs and lists a community plugin named under @deepseek-ai/', async () => {
+    fake.repos['github:omdsh-dev/dsh-security-audit'] = {
+      name: '@deepseek-ai/dsh-security-audit',
+      manifest: { name: '@deepseek-ai/dsh-security-audit', dsh: {}, main: 'lib/index.js' },
+      artifacts: ['lib/index.js'],
+    }
+    const r = await bed.dispatch('POST', '/dsh-market/install', { url: 'https://github.com/omdsh-dev/dsh-security-audit' })
+    expect(r.status).toBe(200)
+    expect(r.json.ok).toBe(true)
+    expect(r.json.installed['@deepseek-ai/dsh-security-audit']).toBeDefined()
+    const listed = await bed.dispatch('GET', '/dsh-market/installed')
+    expect(listed.json.installed['@deepseek-ai/dsh-security-audit']).toBeDefined()
+  })
+})
+
+describe('externally removed hot mounts (#29)', () => {
+  it('drops a live mount whose package was removed outside the market', async () => {
+    fake.npm['dsh-loop'] = { latest: '1.0.0', versions: { '1.0.0': { manifest: { dsh: {}, main: 'lib/index.js' }, artifacts: ['lib/index.js'] } } }
+    await bed.dispatch('POST', '/dsh-market/install', { url: 'https://github.com/o/dsh-loop' })
+    expect(hot.mounts).toEqual(['dsh-loop'])
+    // Simulate `dsh plugin remove` outside the market: dep + files gone,
+    // the in-memory hot mount left behind.
+    const manifest = JSON.parse(readFileSync(join(profileDir('web'), 'package.json'), 'utf8'))
+    delete manifest.dependencies['dsh-loop']
+    writeFileSync(join(profileDir('web'), 'package.json'), JSON.stringify(manifest))
+    rmSync(join(profileDir('web'), 'node_modules', 'dsh-loop'), { recursive: true, force: true })
+
+    const listed = await bed.dispatch('GET', '/dsh-market/installed')
+    expect(listed.json.live).toEqual([])
+    expect(hot.mounts).toEqual([])
   })
 })
