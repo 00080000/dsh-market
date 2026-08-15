@@ -23,6 +23,13 @@ describe('matchInstalledName / isInstalled', () => {
     expect(matchInstalledName(p, { 'dsh-navbar': 'github:vlln/dsh-navbar#main' })).toBe('dsh-navbar')
   })
 
+  it('normalizes case on the NAME identity alone (no repo/npm fallback available)', () => {
+    // The url's repo does not match the dependency key, so only the
+    // case-normalized name comparison can produce this match.
+    const p = plugin({ name: 'Dsh-Loop', url: 'https://github.com/other/elsewhere' })
+    expect(matchInstalledName(p, { 'dsh-loop': '^1.0.0' })).toBe('dsh-loop')
+  })
+
   it('matches by github spec repo when the dependency key differs from the registry name', () => {
     const p = plugin({ name: 'pretty-name', url: 'https://github.com/owner/actual-repo' })
     expect(matchInstalledName(p, { '@owner/whatever': 'github:Owner/Actual-Repo#main' })).toBe('@owner/whatever')
