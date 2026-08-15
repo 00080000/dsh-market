@@ -14,13 +14,24 @@ function plugin(partial: Partial<RegistryPlugin>): RegistryPlugin {
 
 describe('matchInstalledName / isInstalled', () => {
   it('matches a scoped npm install even when the registry entry has no npm field', () => {
-    const p = plugin({ name: '@scope/plug', url: 'https://github.com/scope/plug' })
+    // The url points at a different repo, so only the scoped NAME comparison
+    // (registry name ↔ dependency key) can produce this match.
+    const p = plugin({ name: '@scope/plug', url: 'https://github.com/other/elsewhere' })
     expect(matchInstalledName(p, { '@scope/plug': '^1.0.0' })).toBe('@scope/plug')
   })
 
-  it('matches case-insensitively across registry and manifest', () => {
-    const p = plugin({ name: 'Dsh-Navbar', url: 'https://github.com/vlln/dsh-navbar' })
-    expect(matchInstalledName(p, { 'dsh-navbar': 'github:vlln/dsh-navbar#main' })).toBe('dsh-navbar')
+  it('normalizes case on the REPO identity alone (dependency key differs from the name)', () => {
+    // Key and name share nothing, so only the case-normalized repo
+    // comparison (URL vs github: spec) can produce this match.
+    const p = plugin({ name: 'entry-name', url: 'https://github.com/VLLN/Dsh-Navbar' })
+    expect(matchInstalledName(p, { 'some-key': 'github:vlln/dsh-navbar#main' })).toBe('some-key')
+  })
+
+  it('derives owner/repo from a scoped dependency KEY (@owner/name ↔ repo identity)', () => {
+    // The registry entry has no npm field and a name unlike the key, so only
+    // the @scope/name → scope/name derivation can reach the repo identity.
+    const p = plugin({ name: 'pretty-name', url: 'https://github.com/scope/plug' })
+    expect(matchInstalledName(p, { '@scope/plug': '^1.0.0' })).toBe('@scope/plug')
   })
 
   it('normalizes case on the NAME identity alone (no repo/npm fallback available)', () => {
@@ -41,8 +52,10 @@ describe('matchInstalledName / isInstalled', () => {
   })
 
   it('matches monorepo /tree/ urls by their repo', () => {
+    // Dependency key differs from the entry name, so the match can only come
+    // from the repo extracted out of the /tree/ url.
     const p = plugin({ name: 'theme-x', url: 'https://github.com/o/collection/tree/main/packages/theme-x' })
-    expect(matchInstalledName(p, { 'theme-x': 'github:o/collection#path:/packages/theme-x' })).toBe('theme-x')
+    expect(matchInstalledName(p, { 'installed-key': 'github:o/collection#path:/packages/theme-x' })).toBe('installed-key')
   })
 })
 

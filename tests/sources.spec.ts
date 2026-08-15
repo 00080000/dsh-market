@@ -23,6 +23,11 @@ describe('parseSourceUrl', () => {
     expect(parseSourceUrl('https://github.com/o/r/tree/main/../../etc')).toBeNull()
   })
 
+  it('rejects subpaths with characters outside the allowlist', () => {
+    expect(parseSourceUrl('https://github.com/o/r/tree/main/pkg%20name')).toBeNull()
+    expect(parseSourceUrl('https://github.com/o/r/tree/main/pkg;rm')).toBeNull()
+  })
+
   it('repoOf extracts owner/repo or null', () => {
     expect(repoOf('https://github.com/o/r/tree/main/sub')).toBe('o/r')
     expect(repoOf('nonsense')).toBeNull()

@@ -47,6 +47,17 @@ describe('withHoistRecovery', () => {
     ])
   })
 
+  it('does not retry when the rebuild itself fails', async () => {
+    const FAILED_REBUILD: InstallResult = { exitCode: 1, timedOut: false, stdout: '', stderr: 'install failed' }
+    const { calls, run } = scriptedRunner([HOIST_DIFF, FAILED_REBUILD])
+    const result = await withHoistRecovery(run, 'web', ['add', 'dsh-loop'])
+    expect(result.exitCode).not.toBe(0)
+    expect(calls).toEqual([
+      ['add', 'dsh-loop'],
+      ['install', '--no-frozen-lockfile'],
+    ])
+  })
+
   it('gives up after one recovery attempt (no retry loops)', async () => {
     const { calls, run } = scriptedRunner([HOIST_DIFF, OK, HOIST_DIFF])
     const result = await withHoistRecovery(run, 'web', ['add', 'dsh-loop'])
