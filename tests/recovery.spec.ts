@@ -11,10 +11,10 @@ import type { InstallResult } from '../src/dsh-cli.ts'
 import { withHoistRecovery } from '../src/install.ts'
 
 const HOIST_DIFF: InstallResult = {
-  exitCode: 1, timedOut: false, stdout: '',
+  exitCode: 1, timedOut: false, stdout: '', cancelled: false,
   stderr: 'ERR_PNPM_PUBLIC_HOIST_PATTERN_DIFF  This modules directory was created using a different public-hoist-pattern value. Run "pnpm install" to recreate the modules directory.',
 }
-const OK: InstallResult = { exitCode: 0, timedOut: false, stdout: '', stderr: '' }
+const OK: InstallResult = { exitCode: 0, timedOut: false, stdout: '', stderr: '', cancelled: false }
 
 function scriptedRunner(script: InstallResult[]): { calls: string[][]; run: (profile: string, args: string[]) => Promise<InstallResult> } {
   const calls: string[][] = []
@@ -33,7 +33,7 @@ describe('withHoistRecovery', () => {
     expect((await withHoistRecovery(clean.run, 'web', ['add', 'dsh-loop'])).exitCode).toBe(0)
     expect(clean.calls).toEqual([['add', 'dsh-loop']])
 
-    const OTHER_FAIL: InstallResult = { exitCode: 1, timedOut: false, stdout: '', stderr: 'ELIFECYCLE build failed' }
+    const OTHER_FAIL: InstallResult = { exitCode: 1, timedOut: false, stdout: '', stderr: 'ELIFECYCLE build failed', cancelled: false }
     const other = scriptedRunner([OTHER_FAIL])
     expect((await withHoistRecovery(other.run, 'web', ['add', 'dsh-loop'])).exitCode).toBe(1)
     expect(other.calls).toEqual([['add', 'dsh-loop']])
@@ -52,7 +52,7 @@ describe('withHoistRecovery', () => {
 
   it('gives up cleanly: no retry after a failed rebuild, one attempt max, bilingual explanation appended', async () => {
     // Rebuild itself fails → the original failure stands, no retry.
-    const FAILED_REBUILD: InstallResult = { exitCode: 1, timedOut: false, stdout: '', stderr: 'install failed' }
+    const FAILED_REBUILD: InstallResult = { exitCode: 1, timedOut: false, stdout: '', stderr: 'install failed', cancelled: false }
     const short = scriptedRunner([HOIST_DIFF, FAILED_REBUILD])
     expect((await withHoistRecovery(short.run, 'web', ['add', 'dsh-loop'])).exitCode).not.toBe(0)
     expect(short.calls).toEqual([['add', 'dsh-loop'], ['install', '--no-frozen-lockfile']])

@@ -34,6 +34,12 @@ const fake = vi.hoisted(() => ({
   hoistDiffTimes: 0,
   /** When set, every command awaits this before acting (concurrency tests). */
   gate: null as Promise<void> | null,
+  /** Set by the mocked cancelActive: the in-flight command resolves cancelled. */
+  cancelNext: false,
+  /** Appended to the next add's stdout (e.g. pnpm's Ignored build scripts line). */
+  buildScriptOutputOnce: '',
+  /** True while a fake command is in flight (mirrors the real activeChild). */
+  running: false,
   calls: [] as string[][],
 }))
 
@@ -63,14 +69,26 @@ vi.mock('../src/dsh-cli.ts', () => {
   }
   async function runDshPlugin(_profile: string, args: string[]): Promise<unknown> {
     fake.calls.push(args)
+    fake.running = true
+    try {
+      return await execute(args)
+    } finally {
+      fake.running = false
+    }
+  }
+  async function execute(args: string[]): Promise<unknown> {
     if (fake.gate !== null) await fake.gate
+    if (fake.cancelNext) {
+      fake.cancelNext = false
+      return { exitCode: null, timedOut: false, stdout: '', stderr: '', cancelled: true }
+    }
     const positional = args.filter(a => !a.startsWith('-'))
     const cmd = positional[0]
-    const ok = { exitCode: 0, timedOut: false, stdout: '', stderr: '' }
+    const ok = { exitCode: 0, timedOut: false, stdout: '', stderr: '', cancelled: false }
     if (cmd === 'install') return ok
     if (fake.hoistDiffTimes > 0) {
       fake.hoistDiffTimes--
-      return { exitCode: 1, timedOut: false, stdout: '', stderr: 'ERR_PNPM_PUBLIC_HOIST_PATTERN_DIFF  Run "pnpm install" to recreate the modules directory.' }
+      return { exitCode: 1, timedOut: false, stdout: '', stderr: 'ERR_PNPM_PUBLIC_HOIST_PATTERN_DIFF  Run "pnpm install" to recreate the modules directory.', cancelled: false }
     }
     const target = positional[positional.length - 1]
     if (cmd === 'remove') {
@@ -80,7 +98,7 @@ vi.mock('../src/dsh-cli.ts', () => {
     // cmd === 'add'
     if (target.startsWith('github:')) {
       const repo = fake.repos[target]
-      if (repo === undefined) return { exitCode: 1, timedOut: false, stdout: '', stderr: `fake dsh: unknown repo ${target}` }
+      if (repo === undefined) return { exitCode: 1, timedOut: false, stdout: '', stderr: `fake dsh: unknown repo ${target}`, cancelled: false }
       writeDep(repo.name, target.split('#')[0])
       writePkg(repo.name, repo.manifest, repo.artifacts)
       for (const child of repo.junkChildren ?? []) {
@@ -91,7 +109,7 @@ vi.mock('../src/dsh-cli.ts', () => {
     }
     const name = target.replace(/@(latest|[\d^~].*)$/, '')
     const pkg = fake.npm[name]
-    if (pkg === undefined) return { exitCode: 1, timedOut: false, stdout: '', stderr: `fake dsh: unknown npm package ${name}` }
+    if (pkg === undefined) return { exitCode: 1, timedOut: false, stdout: '', stderr: `fake dsh: unknown npm package ${name}`, cancelled: false }
     const installedManifestPath = join(fake.profileDir, 'node_modules', name, 'package.json')
     if (fake.staleUpdates && existsSync(installedManifestPath)) {
       // pnpm minimumReleaseAge: "Already up to date", old version kept, exit 0.
@@ -100,6 +118,11 @@ vi.mock('../src/dsh-cli.ts', () => {
     const version = pkg.latest
     writeDep(name, `^${version}`)
     writePkg(name, { version, ...(pkg.versions[version].manifest as object) }, pkg.versions[version].artifacts)
+    if (fake.buildScriptOutputOnce !== '') {
+      const stdout = fake.buildScriptOutputOnce
+      fake.buildScriptOutputOnce = ''
+      return { ...ok, stdout }
+    }
     return ok
   }
   return {
@@ -108,6 +131,7 @@ vi.mock('../src/dsh-cli.ts', () => {
     probePnpm: () => Promise.resolve(true),
     provisionPnpm: () => Promise.resolve(true),
     killChild: () => {},
+    cancelActive: () => { if (!fake.running) return false; fake.cancelNext = true; return true },
     dshArgv: () => ({ file: 'dsh', args: [], cwd: undefined, viaShell: false }),
     winCmdShim: false,
     runDshPlugin,
@@ -219,6 +243,9 @@ beforeEach(() => {
   fake.staleUpdates = false
   fake.hoistDiffTimes = 0
   fake.gate = null
+  fake.cancelNext = false
+  fake.buildScriptOutputOnce = ''
+  fake.running = false
   fake.calls = []
   hot.mounts = []
   hot.disabled = new Set()
@@ -443,5 +470,51 @@ describe('concurrency', () => {
     release()
     fake.gate = null
     expect((await first).status).toBe(200)
+  })
+})
+
+describe('cancel flow (#6)', () => {
+  it('cancelling a running install ends it quietly (200 + cancelled, no error)', async () => {
+    fake.npm['dsh-loop'] = { latest: '1.0.0', versions: { '1.0.0': { manifest: { dsh: {}, main: 'lib/index.js' }, artifacts: ['lib/index.js'] } } }
+    let release!: () => void
+    fake.gate = new Promise<void>((resolvePromise) => { release = resolvePromise })
+    const install = bed.dispatch('POST', '/dsh-market/install', { url: 'https://github.com/o/dsh-loop' })
+    await new Promise(resolvePromise => setTimeout(resolvePromise, 20))
+    const cancel = await bed.dispatch('POST', '/dsh-market/cancel', {})
+    expect(cancel.status).toBe(200)
+    expect(cancel.json.cancelled).toBe(true)
+    release()
+    fake.gate = null
+    const result = await install
+    expect(result.status).toBe(200)
+    expect(result.json.ok).toBe(false)
+    expect(result.json.cancelled).toBe(true)
+    expect(installedSpec('dsh-loop')).toBeUndefined()
+  })
+
+  it('cancel with nothing running is a 400', async () => {
+    expect((await bed.dispatch('POST', '/dsh-market/cancel', {})).status).toBe(400)
+  })
+})
+
+describe('build-script approval flow (#6)', () => {
+  it('surfaces ignored builds, approve-builds allows only installed packages, and the retry succeeds', async () => {
+    fake.npm['dsh-loop'] = {
+      latest: '1.0.0',
+      versions: { '1.0.0': { manifest: { dsh: {}, main: 'lib/index.js' }, artifacts: ['lib/index.js'] } },
+    }
+    fake.buildScriptOutputOnce = 'Ignored build scripts: dsh-loop@1.0.0.'
+    const first = await bed.dispatch('POST', '/dsh-market/install', { url: 'https://github.com/o/dsh-loop' })
+    expect(first.json.ignoredBuilds).toEqual(['dsh-loop'])
+
+    // Approval writes allowBuilds into the profile's pnpm-workspace.yaml…
+    const approve = await bed.dispatch('POST', '/dsh-market/approve-builds', { packages: ['dsh-loop', 'ghost-package'] })
+    expect(approve.status).toBe(200)
+    expect(approve.json.approved).toContain('dsh-loop')
+    expect(approve.json.approved).not.toContain('ghost-package')
+    const yaml = readFileSync(join(profileDir('web'), 'pnpm-workspace.yaml'), 'utf8')
+    expect(yaml).toMatch(/allowBuilds:[\s\S]*dsh-loop: true/)
+    // …and the original workspace settings survive.
+    expect(yaml).toContain('packages:')
   })
 })

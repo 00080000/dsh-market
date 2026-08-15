@@ -14,7 +14,9 @@ import { logEvent } from './log.ts'
 import { pluginArgsFor } from './pnpm-compat.ts'
 import { profileDir } from './profile.ts'
 
-const INSTALL_TIMEOUT_MS = 5 * 60 * 1000
+// 15 min default (slow networks + git installs), overridable for CI/tests.
+// (#6 by @qichuang321.)
+const INSTALL_TIMEOUT_MS = Number(process.env.DSH_MARKET_INSTALL_TIMEOUT_MS) || 15 * 60 * 1000
 
 /**
  * Windows npm/corepack/pnpm are `.cmd` shims. Node's `spawn` without a shell
@@ -47,6 +49,8 @@ export interface InstallResult {
   timedOut: boolean
   stdout: string
   stderr: string
+  /** True when the run ended because the user cancelled it. */
+  cancelled: boolean
 }
 
 /** The shape every orchestration function takes to run plugin commands (injectable in tests). */
@@ -65,6 +69,49 @@ export function killChild(child: ChildProcess): void {
     } catch { /* fall through */ }
   }
   child.kill('SIGKILL')
+}
+
+/** The child of the operation currently running, for /dsh-market/cancel. */
+let activeChild: ChildProcess | null = null
+let cancelRequested = false
+
+/**
+ * Kill a child and its whole tree, gracefully where the platform allows:
+ * taskkill /T /F on Windows (plain kill() leaves pnpm children running),
+ * SIGTERM with a 5s SIGKILL escalation elsewhere so pnpm can clean up.
+ * (Cancel flow contributed in #6 by @qichuang321.)
+ */
+function killTree(child: ChildProcess): void {
+  if (process.platform === 'win32' && child.pid !== undefined) {
+    try {
+      spawn('taskkill', ['/pid', String(child.pid), '/t', '/f'], { stdio: 'ignore' })
+      return
+    } catch { /* fall through */ }
+  }
+  // POSIX: the dsh wrapper runs pnpm as a grandchild (spawnSync), which a
+  // plain child.kill() leaves running — it keeps our stdio pipes open, so
+  // the close event never fires and the market looks stuck "installing".
+  // The child is spawned detached as its own process GROUP; kill the group.
+  const signalTree = (signal: NodeJS.Signals): void => {
+    if (child.pid === undefined) return
+    try { process.kill(-child.pid, signal) } catch {
+      try { child.kill(signal) } catch { /* already gone */ }
+    }
+  }
+  signalTree('SIGTERM')
+  const escalate = setTimeout(() => signalTree('SIGKILL'), 5000)
+  escalate.unref?.()
+}
+
+/**
+ * Cancel the plugin command currently running.
+ * @returns true when there was one to cancel.
+ */
+export function cancelActive(): boolean {
+  if (activeChild === null) return false
+  cancelRequested = true
+  killTree(activeChild)
+  return true
 }
 
 /** Whether `pnpm` resolves on PATH; success is cached, absence is re-probed. */
@@ -147,7 +194,7 @@ export function runDshPlugin(profile: string, pluginArgs: string[]): Promise<Ins
   const target = pluginArgs[pluginArgs.length - 1] ?? ''
   if (!TARGET_RE.test(target)) {
     logEvent('error', 'install', `unsafe plugin target rejected: ${JSON.stringify(target)}`)
-    return Promise.resolve({ exitCode: 1, timedOut: false, stdout: '', stderr: `unsafe plugin target rejected: ${JSON.stringify(target)}` })
+    return Promise.resolve({ exitCode: 1, timedOut: false, stdout: '', stderr: `unsafe plugin target rejected: ${JSON.stringify(target)}`, cancelled: false })
   }
   progress.active = true
   progress.target = target
@@ -162,13 +209,18 @@ export function runDshPlugin(profile: string, pluginArgs: string[]): Promise<Ins
       env: { ...process.env, CI: 'true' },
       stdio: ['ignore', 'pipe', 'pipe'],
       shell: viaShell,
+      // Own process group on POSIX so cancel/timeout can kill the whole
+      // tree (dsh wrapper + pnpm grandchild) with one group signal.
+      detached: process.platform !== 'win32',
     })
+    activeChild = child
+    cancelRequested = false
     let stdout = ''
     let stderr = ''
     let timedOut = false
     const timer = setTimeout(() => {
       timedOut = true
-      killChild(child)
+      killTree(child)
     }, INSTALL_TIMEOUT_MS)
     child.stdout.on('data', (chunk: Buffer) => {
       const text = chunk.toString()
@@ -183,12 +235,14 @@ export function runDshPlugin(profile: string, pluginArgs: string[]): Promise<Ins
     child.on('error', (error) => {
       clearTimeout(timer)
       progress.active = false
-      resolvePromise({ exitCode: 127, timedOut: false, stdout, stderr: `${stderr}\n${error.message}` })
+      if (activeChild === child) activeChild = null
+      resolvePromise({ exitCode: 127, timedOut: false, stdout, stderr: `${stderr}\n${error.message}`, cancelled: false })
     })
     child.on('close', (code) => {
       clearTimeout(timer)
       progress.active = false
-      resolvePromise({ exitCode: code, timedOut, stdout, stderr })
+      if (activeChild === child) activeChild = null
+      resolvePromise({ exitCode: code, timedOut, stdout, stderr, cancelled: cancelRequested })
     })
   })
 }

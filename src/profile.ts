@@ -4,7 +4,7 @@
  * functions of the directory contents; no processes, no network.
  */
 
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 
@@ -117,4 +117,33 @@ export function pluginSubdirs(root: string): string[] {
     if (found.length >= 8) break
   }
   return found.slice(0, 8)
+}
+
+/**
+ * Allow the given packages' build scripts in the profile's
+ * pnpm-workspace.yaml `allowBuilds` block (the key dsh profiles use),
+ * merging with existing entries and leaving the rest of the yaml intact.
+ * (#6 by @qichuang321.)
+ * @returns every package now allowed.
+ */
+export function setAllowBuilds(profile: string, packages: string[]): string[] {
+  const file = join(profileDir(profile), 'pnpm-workspace.yaml')
+  let yaml = ''
+  try { yaml = readFileSync(file, 'utf8') } catch { /* created below */ }
+  const blockRe = /allowBuilds:\n((?:[ \t]+[^\n]*\n?)*)/
+  const map: Record<string, string> = {}
+  const blockMatch = blockRe.exec(yaml)
+  if (blockMatch !== null) {
+    for (const line of blockMatch[1].split('\n')) {
+      const m = /^[ \t]+([^:\s]+(?:\/[^:\s]+)?)\s*:\s*(\S.*)?$/.exec(line)
+      if (m !== null) map[m[1]] = m[2] ?? 'true'
+    }
+  }
+  for (const pkg of packages) {
+    if (/^[A-Za-z0-9@/_.-]+$/.test(pkg)) map[pkg] = 'true'
+  }
+  const block = Object.entries(map).map(([k, v]) => `  ${k}: ${v}`).join('\n')
+  const blockText = `allowBuilds:\n${block}\n`
+  writeFileSync(file, blockMatch !== null ? yaml.replace(blockRe, blockText) : `${yaml.replace(/\n?$/, '\n')}${blockText}`)
+  return Object.keys(map)
 }

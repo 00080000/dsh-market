@@ -4,7 +4,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
@@ -100,5 +100,29 @@ describe('pluginSubdirs', () => {
     mkdirSync(join(root, 'node_modules', 'evil'), { recursive: true })
     writeFileSync(join(root, 'node_modules', 'evil', 'package.json'), '{"dsh":{}}')
     expect(pluginSubdirs(root).sort()).toEqual(['packages/plugin-b', 'plugin-a'])
+  })
+})
+
+describe('setAllowBuilds (#6)', () => {
+  it('merges into an existing allowBuilds block and preserves the rest of the yaml', async () => {
+    const { setAllowBuilds } = await import('../src/profile.ts')
+    const dir = writeProfile({})
+    writeFileSync(join(dir, 'pnpm-workspace.yaml'),
+      'packages:\n  - .\n\nnodeLinker: hoisted\n\nallowBuilds:\n  existing-pkg: true\n')
+    const approved = setAllowBuilds('web', ['dsh-skin', 'evil;rm'])
+    expect(approved).toContain('existing-pkg')
+    expect(approved).toContain('dsh-skin')
+    expect(approved).not.toContain('evil;rm')
+    const yaml = readFileSync(join(dir, 'pnpm-workspace.yaml'), 'utf8')
+    expect(yaml).toContain('nodeLinker: hoisted')
+    expect(yaml).toMatch(/allowBuilds:\n  existing-pkg: true\n  dsh-skin: true/)
+  })
+
+  it('creates the block when the yaml has none', async () => {
+    const { setAllowBuilds } = await import('../src/profile.ts')
+    const dir = writeProfile({})
+    writeFileSync(join(dir, 'pnpm-workspace.yaml'), 'packages:\n  - .\n')
+    setAllowBuilds('web', ['pkg-a'])
+    expect(readFileSync(join(dir, 'pnpm-workspace.yaml'), 'utf8')).toMatch(/packages:[\s\S]*allowBuilds:\n  pkg-a: true/)
   })
 })

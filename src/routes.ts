@@ -16,10 +16,10 @@ import {
   mountClientOnlyDeps, readDisabledThemes,
 } from './hot.ts'
 import { exportLogs, logEvent } from './log.ts'
-import { BOOT_ID, probePnpm, progress, provisionPnpm, runDshPlugin } from './dsh-cli.ts'
-import { profileDir, readInstalled, readInstalledVersion, readLockCommits } from './profile.ts'
+import { BOOT_ID, cancelActive, probePnpm, progress, provisionPnpm, runDshPlugin } from './dsh-cli.ts'
+import { profileDir, readInstalled, readInstalledVersion, readLockCommits, setAllowBuilds } from './profile.ts'
 import { findInstalledAlias, installTargetFor } from './sources.ts'
-import { isStaleUpdate, retargetCollections, validateAddedPlugins, withHoistRecovery } from './install.ts'
+import { isStaleUpdate, parseIgnoredBuilds, retargetCollections, validateAddedPlugins, withHoistRecovery } from './install.ts'
 import { checkUpdates, invalidateUpdates } from './updates.ts'
 import { createThemeManager, type LoaderEntry } from './themes.ts'
 import { readJsonBody, sameOrigin, sendJson } from './http.ts'
@@ -270,7 +270,8 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
             // default one-day safety wait; scoped to this single command.
             const addArgs = force ? ['add', '--config.minimumReleaseAge=0', target] : ['add', target]
             const result = await runPlugin(config.profile, addArgs)
-            let ok = result.exitCode === 0 && !result.timedOut
+            const cancelled = result.cancelled
+            let ok = result.exitCode === 0 && !result.timedOut && !cancelled
             let stale = false
             if (ok) {
               stale = isStaleUpdate({
@@ -286,10 +287,12 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
             const staleError = stale
               ? '这个新版本刚发布不久。为了安全，系统默认会等它发布满一天后再安装——刚发布的版本偶尔会被发现问题然后撤回。可以明天再试，或点「立即更新」不再等待。 / This version was just released; for safety, installs normally wait about a day after a release. Try again tomorrow, or click "Update now" to install it right away.'
               : null
-            logEvent(ok ? 'info' : 'error', 'update',
-              `${name} -> ${target} exit=${String(result.exitCode)}${result.timedOut ? ' TIMEOUT' : ''}${stale ? ' STALE(minimumReleaseAge?)' : ''}${ok ? '' : ` stderr=${result.stderr.slice(-300)}`}`)
-            sendJson(response, ok ? 200 : 502, {
+            logEvent(ok || cancelled ? 'info' : 'error', 'update',
+              `${name} -> ${target} exit=${String(result.exitCode)}${result.timedOut ? ' TIMEOUT' : ''}${cancelled ? ' CANCELLED' : ''}${stale ? ' STALE(minimumReleaseAge?)' : ''}${ok || cancelled ? '' : ` stderr=${result.stderr.slice(-300)}`}`)
+            // A user-cancelled run is a quiet outcome, not an error.
+            sendJson(response, ok || cancelled ? 200 : 502, {
               ok,
+              cancelled: cancelled || undefined,
               stale: stale || undefined,
               error: staleError ?? undefined,
               exitCode: result.exitCode,
@@ -333,6 +336,65 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
 
     host.webServer.register({
       kind: 'exact',
+      path: '/dsh-market/approve-builds',
+      handler: async (request, response) => {
+        if (request.method !== 'POST') {
+          response.writeHead(405, { allow: 'POST' })
+          response.end()
+          return
+        }
+        if (!sameOrigin(request)) {
+          sendJson(response, 403, { error: 'untrusted origin' })
+          return
+        }
+        try {
+          // One-click build-script approval (#6 by @qichuang321): only
+          // packages ALREADY installed in the profile can be allowed — the
+          // list is not free input.
+          const body = (await readJsonBody(request)) as { packages?: unknown }
+          const installed = readInstalled(config.profile)
+          const packages = (Array.isArray(body.packages) ? body.packages.map(String) : [])
+            .filter(name => installed[name] !== undefined)
+          if (packages.length === 0) {
+            sendJson(response, 400, { error: 'no installed packages given' })
+            return
+          }
+          const approved = setAllowBuilds(config.profile, packages)
+          logEvent('info', 'approve-builds', `allowed build scripts: ${approved.join(', ')}`)
+          sendJson(response, 200, { ok: true, approved })
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error)
+          logEvent('error', 'approve-builds', `route error: ${message}`)
+          sendJson(response, 500, { error: message })
+        }
+      },
+    }),
+
+    host.webServer.register({
+      kind: 'exact',
+      path: '/dsh-market/cancel',
+      handler: async (request, response) => {
+        if (request.method !== 'POST') {
+          response.writeHead(405, { allow: 'POST' })
+          response.end()
+          return
+        }
+        if (!sameOrigin(request)) {
+          sendJson(response, 403, { error: 'untrusted origin' })
+          return
+        }
+        // Cancel flow contributed in #6 by @qichuang321.
+        if (!cancelActive()) {
+          sendJson(response, 400, { error: 'no operation is running' })
+          return
+        }
+        logEvent('info', 'cancel', `cancelled ${progress.target || 'operation'}`)
+        sendJson(response, 200, { ok: true, cancelled: true, target: progress.target })
+      },
+    }),
+
+    host.webServer.register({
+      kind: 'exact',
       path: '/dsh-market/uninstall',
       handler: async (request, response) => {
         if (request.method !== 'POST') {
@@ -362,16 +424,18 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
           installing = true
           try {
             const result = await runPlugin(config.profile, ['remove', name])
-            const ok = result.exitCode === 0 && !result.timedOut
+            const cancelled = result.cancelled
+            const ok = result.exitCode === 0 && !result.timedOut && !cancelled
             let hot = false
             if (ok) {
               invalidateUpdates()
               hot = await hotUnmount(name)
             }
-            logEvent(ok ? 'info' : 'error', 'uninstall',
-              `${name} exit=${String(result.exitCode)}${ok ? ` live-removed=${String(hot)}` : ` stderr=${result.stderr.slice(-300)}`}`)
-            sendJson(response, ok ? 200 : 502, {
+            logEvent(ok || cancelled ? 'info' : 'error', 'uninstall',
+              `${name} exit=${String(result.exitCode)}${cancelled ? ' CANCELLED' : ''}${ok ? ` live-removed=${String(hot)}` : cancelled ? '' : ` stderr=${result.stderr.slice(-300)}`}`)
+            sendJson(response, ok || cancelled ? 200 : 502, {
               ok,
+              cancelled: cancelled || undefined,
               hot,
               exitCode: result.exitCode,
               stdout: result.stdout,
@@ -437,7 +501,8 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
           try {
             const before = new Set(Object.keys(readInstalled(config.profile)))
             const result = await runPlugin(config.profile, ['add', target])
-            let ok = result.exitCode === 0 && !result.timedOut
+            const cancelled = result.cancelled
+            let ok = result.exitCode === 0 && !result.timedOut && !cancelled
             if (ok) invalidateUpdates()
             if (ok) {
               // Collection repos (e.g. skin monorepos) install as a junk
@@ -451,7 +516,7 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
             // must never survive to brick the next boot.
             let notAPlugin = false
             let removedBroken: string[] = []
-            if (result.exitCode === 0 && !result.timedOut) {
+            if (result.exitCode === 0 && !result.timedOut && !cancelled) {
               const validated = await validateAddedPlugins(runPlugin, config.profile, before)
               removedBroken = validated.removedBroken
               if (removedBroken.length > 0) {
@@ -482,11 +547,13 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
                 }
               }
             }
-            logEvent(ok ? 'info' : 'error', 'install',
-              `${target} exit=${String(result.exitCode)}${result.timedOut ? ' TIMEOUT' : ''}${ok ? ` hot=${String(hot)}` : ` stderr=${result.stderr.slice(-300)}`}`)
-            sendJson(response, ok ? 200 : 502, {
+            logEvent(ok || cancelled ? 'info' : 'error', 'install',
+              `${target} exit=${String(result.exitCode)}${result.timedOut ? ' TIMEOUT' : ''}${cancelled ? ' CANCELLED' : ''}${ok ? ` hot=${String(hot)}` : cancelled ? '' : ` stderr=${result.stderr.slice(-300)}`}`)
+            sendJson(response, ok || cancelled ? 200 : 502, {
               ok,
+              cancelled: cancelled || undefined,
               hot,
+              ignoredBuilds: (() => { const list = parseIgnoredBuilds(result.stdout, result.stderr); return list.length > 0 ? list : undefined })(),
               error: notAPlugin ? 'nothing installable: the plugin(s) need a build step (blocked by default, see allowBuilds) or ship no prebuilt artifacts / 没有可安装的内容：插件需要构建授权（allowBuilds，默认拦截）或未附带构建产物，详见导出日志' : undefined,
               exitCode: result.exitCode,
               timedOut: result.timedOut,

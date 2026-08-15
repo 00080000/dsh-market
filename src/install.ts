@@ -22,7 +22,7 @@ import { logEvent } from './log.ts'
  */
 export async function withHoistRecovery(run: PluginRunner, profile: string, pluginArgs: string[]): Promise<InstallResult> {
   let result = await run(profile, pluginArgs)
-  const ok = (r: InstallResult): boolean => r.exitCode === 0 && !r.timedOut
+  const ok = (r: InstallResult): boolean => r.exitCode === 0 && !r.timedOut && !r.cancelled
   if (!ok(result) && classifyPnpmFailure(`${result.stderr}\n${result.stdout}`)?.code === 'hoist-pattern-diff') {
     logEvent('warn', 'install', `modules dir was built by a different pnpm major — rebuilding (pnpm install) and retrying once`)
     // --no-frozen-lockfile: the market runs pnpm with CI=true (TTY hangs),
@@ -30,7 +30,7 @@ export async function withHoistRecovery(run: PluginRunner, profile: string, plug
     const rebuild = await run(profile, ['install', '--no-frozen-lockfile'])
     if (ok(rebuild)) result = await run(profile, pluginArgs)
   }
-  if (!ok(result)) {
+  if (!ok(result) && !result.cancelled) {
     const failure = classifyPnpmFailure(`${result.stderr}\n${result.stdout}`)
     if (failure !== null) result = { ...result, stderr: `${result.stderr}\n\n${failure.message}` }
   }
@@ -118,4 +118,24 @@ export function isStaleUpdate(check: {
   return check.isGit
     ? check.beforeCommit !== null && check.afterCommit === check.beforeCommit
     : check.beforeVersion !== null && check.afterVersion === check.beforeVersion
+}
+
+/**
+ * Package names pnpm reported as having their build scripts ignored
+ * ("Ignored build scripts: esbuild, koffi."). Empty when none.
+ * (#6 by @qichuang321.)
+ */
+export function parseIgnoredBuilds(stdout: string, stderr: string): string[] {
+  const m = /Ignored build scripts:?\s*([^\n]+)/i.exec(`${stdout}\n${stderr}`)
+  if (m === null) return []
+  const found: string[] = []
+  for (const chunk of m[1].split(',')) {
+    // Entries may carry a version suffix and the sentence's final period.
+    const trimmed = chunk.trim().replace(/\.$/, '')
+    if (trimmed === '') continue
+    const at = trimmed.lastIndexOf('@')
+    const name = at > 0 ? trimmed.slice(0, at) : trimmed
+    if (name !== '' && !found.includes(name)) found.push(name)
+  }
+  return found
 }
