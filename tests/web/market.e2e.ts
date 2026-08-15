@@ -49,37 +49,42 @@ describe.skipIf(!HAS_DSH)('web e2e: plugin market', () => {
     await scaffold?.close()
   })
 
-  it('opens Settings → Plugin Market and renders the catalog incrementally', async () => {
+  it('opens Settings → Plugin Market and renders the catalog paginated', async () => {
     await page.getByRole('button', { name: /^(设置|Settings)$/ }).first().click()
     await page.getByRole('button', { name: /插件市场|Plugin Market/ }).click()
     await page.waitForSelector('[class*="grid"] [class*="card"]', { timeout: 30_000 })
     const cards = await page.locator('[class*="grid"] [class*="card"]').count()
-    // Incremental rendering (#30): the first page, not the whole catalog.
-    expect(cards).toBeGreaterThanOrEqual(30)
-    expect(cards).toBeLessThanOrEqual(60)
+    // Pagination: a bounded first page (24) instead of the full 400+ catalog,
+    // with a numbered pager underneath.
+    expect(cards).toBe(24)
+    await expect(page.locator('[class*="pager"] [class*="pageBtn"]').first()).toBeVisible()
   })
 
   it('search and category filter the grid', async () => {
     const search = page.getByPlaceholder(/搜索插件|Search plugins/)
-    const total = await page.locator('[class*="grid"] [class*="card"]').count()
+    const gridNames = () => page.locator('[class*="grid"] [class*="nm"]').allTextContents()
+
+    const beforeSearch = await gridNames()
     await search.fill('memory')
     await page.waitForTimeout(400)
-    const filtered = await page.locator('[class*="grid"] [class*="card"]').count()
-    expect(filtered).toBeGreaterThanOrEqual(1)
-    expect(filtered).toBeLessThan(total)
+    const searched = await gridNames()
+    // Pagination caps the grid at a page, so a broad query can still fill all
+    // 24 slots — assert the CONTENT changed instead of the count shrinking.
+    expect(searched.length).toBeGreaterThanOrEqual(1)
+    expect(searched).not.toEqual(beforeSearch)
     await search.fill('')
+    await page.waitForTimeout(200)
 
     // Category chips are data-driven; click the second chip (first is All).
-    // A big category can still fill the whole first page, so assert on the
+    // Same reasoning: a big category fills a whole page, so assert on the
     // grid CONTENT changing rather than the count shrinking.
-    const firstBefore = await page.locator('[class*="grid"] [class*="nm"]').first().textContent()
+    const beforeCats = await gridNames()
     const chips = page.locator('[class*="catsWrap"] [data-chip="1"]')
     await chips.nth(1).click()
     await page.waitForTimeout(400)
-    const categorized = await page.locator('[class*="grid"] [class*="card"]').count()
-    const firstAfter = await page.locator('[class*="grid"] [class*="nm"]').first().textContent()
-    expect(categorized).toBeGreaterThanOrEqual(1)
-    expect(categorized < total || firstAfter !== firstBefore).toBe(true)
+    const categorized = await gridNames()
+    expect(categorized.length).toBeGreaterThanOrEqual(1)
+    expect(categorized).not.toEqual(beforeCats)
     await chips.nth(0).click() // back to All
   })
 
