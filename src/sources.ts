@@ -45,3 +45,40 @@ export function installTargetFor(entry: { url: string; npm?: unknown }): string 
     ? `github:${source.repo}#path:/${source.subpath}`
     : `github:${source.repo}`
 }
+
+/**
+ * The name an entry is ALREADY installed under, or null — the server-side
+ * duplicate guard (#27): the same plugin listed under an alias entry must
+ * never install twice (two loader entries with one id brick the next boot).
+ *
+ * Identity is subpath-aware so monorepo siblings stay independent: an entry
+ * with a /tree/ subpath identifies as repo#path:/sub (never the bare repo),
+ * while an installed dependency contributes its bare repo AND its #path:
+ * form — so a collection root still matches the pieces it was retargeted
+ * into, but two different subpackages of one repo never cross-match.
+ */
+export function findInstalledAlias(
+  entry: { name: string; npm?: unknown; url: string },
+  installed: Record<string, string>,
+): string | null {
+  const source = parseSourceUrl(entry.url)
+  const ids = new Set<string>([entry.name.toLowerCase()])
+  if (typeof entry.npm === 'string' && entry.npm !== '') ids.add(entry.npm.toLowerCase())
+  if (source !== null) {
+    ids.add(source.subpath === null
+      ? source.repo.toLowerCase()
+      : `${source.repo.toLowerCase()}#path:/${source.subpath.toLowerCase()}`)
+  }
+  for (const [name, spec] of Object.entries(installed)) {
+    const dep = new Set<string>([name.toLowerCase()])
+    const scoped = /^@([^/]+)\/(.+)$/.exec(name)
+    if (scoped !== null) dep.add(`${scoped[1]}/${scoped[2]}`.toLowerCase())
+    const m = /github:([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)(?:#path:\/([A-Za-z0-9_./-]+))?/i.exec(spec)
+    if (m !== null) {
+      dep.add(m[1].toLowerCase())
+      if (m[2] !== undefined) dep.add(`${m[1].toLowerCase()}#path:/${m[2].toLowerCase()}`)
+    }
+    for (const id of dep) if (ids.has(id)) return name
+  }
+  return null
+}

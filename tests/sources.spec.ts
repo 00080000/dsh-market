@@ -4,7 +4,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { installTargetFor, parseSourceUrl, repoOf } from '../src/sources.ts'
+import { findInstalledAlias, installTargetFor, parseSourceUrl, repoOf } from '../src/sources.ts'
 
 describe('parseSourceUrl', () => {
   it('accepts github repo urls, plain or with a /tree/<branch>/<subpath> suffix', () => {
@@ -35,5 +35,24 @@ describe('installTargetFor', () => {
       .toBe('github:o/r#path:/packages/x')
     expect(installTargetFor({ url: 'https://github.com/o/r' })).toBe('github:o/r')
     expect(installTargetFor({ url: 'https://gitlab.com/o/r' })).toBeNull()
+  })
+})
+
+describe('findInstalledAlias (#27 duplicate guard)', () => {
+  it('finds the same plugin installed under another name, by repo or npm identity', () => {
+    const alias = { name: '@dsh-external/dsh-share', url: 'https://github.com/h/dsh-share' }
+    expect(findInstalledAlias(alias, { 'dsh-share': 'github:h/dsh-share' })).toBe('dsh-share')
+    expect(findInstalledAlias({ name: 'x', npm: 'dsh-share', url: 'https://github.com/h/other' }, { 'dsh-share': '^0.2.0' })).toBe('dsh-share')
+    expect(findInstalledAlias(alias, {})).toBeNull()
+  })
+
+  it('keeps monorepo siblings independent but matches the exact subpackage', () => {
+    const installed = { 'plug-a': 'github:m/mono#path:/packages/plug-a' }
+    const siblingB = { name: 'mono#plug-b', url: 'https://github.com/m/mono/tree/main/packages/plug-b' }
+    const sameA = { name: 'mono#plug-a', url: 'https://github.com/m/mono/tree/main/packages/plug-a' }
+    expect(findInstalledAlias(siblingB, installed)).toBeNull()
+    expect(findInstalledAlias(sameA, installed)).toBe('plug-a')
+    // A collection root entry still matches the pieces it was retargeted into.
+    expect(findInstalledAlias({ name: 'mono', url: 'https://github.com/m/mono' }, installed)).toBe('plug-a')
   })
 })

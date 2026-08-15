@@ -84,6 +84,55 @@ export function looksTerminal(plugin: RegistryPlugin, lang: string): boolean {
   return /\b(tui|cli|tty|terminal)\b|终端|命令行/i.test(plugin.name + ' ' + desc)
 }
 
+/** Filters and sort order driving the discover list. */
+export interface ListQuery {
+  /** Active category id, or 'all'. */
+  category: string
+  /** Raw search input (trimmed and lowercased internally). */
+  query: string
+  /** UI language for description matching ('zh' / 'en'). */
+  lang: string
+  /** 'hot' (stars desc), 'new' (added desc), anything else keeps registry order. */
+  sort: string
+}
+
+/**
+ * The discover list: category filter, then search across name / owner /
+ * localized description, then the selected sort. Pure — the section renders
+ * exactly this.
+ */
+export function visiblePlugins(plugins: RegistryPlugin[], options: ListQuery): RegistryPlugin[] {
+  const query = options.query.trim().toLowerCase()
+  const list = plugins.filter((p) => {
+    if (options.category !== 'all' && p.category !== options.category) return false
+    if (query === '') return true
+    const desc = (p.description && (p.description[options.lang] || p.description.en)) || ''
+    return p.name.toLowerCase().includes(query)
+      || p.owner.toLowerCase().includes(query)
+      || desc.toLowerCase().includes(query)
+  })
+  if (options.sort === 'hot') {
+    return [...list].sort((a, b) => (b.stars ?? -1) - (a.stars ?? -1))
+  }
+  if (options.sort === 'new') {
+    return [...list].sort((a, b) => String(b.added).localeCompare(String(a.added)))
+  }
+  return list
+}
+
+/** The themes tab listing: theme category only, most-starred first. */
+export function themePlugins(plugins: RegistryPlugin[]): RegistryPlugin[] {
+  return plugins.filter(p => p.category === 'theme').sort((a, b) => (b.stars || 0) - (a.stars || 0))
+}
+
+/**
+ * Category chip order: collapsed with an active non-'all' chip, the active
+ * one moves to the front so it stays visible inside the two-row clip.
+ */
+export function orderedCategories(categories: string[], active: string, open: boolean): string[] {
+  return open || active === 'all' ? categories : [active, ...categories.filter(id => id !== active)]
+}
+
 /**
  * Unified installed-state matching (#15): both sides collapse to lowercase
  * identity sets — the registry entry contributes its bare name, npm name and
@@ -94,8 +143,12 @@ export function looksTerminal(plugin: RegistryPlugin, lang: string): boolean {
 function entryIdentities(plugin: RegistryPlugin): Set<string> {
   const ids = new Set<string>([plugin.name.toLowerCase()])
   if (plugin.npm) ids.add(plugin.npm.toLowerCase())
-  const repo = repoOf(plugin.url)
-  if (repo !== null) ids.add(repo.toLowerCase())
+  // Subpath-aware: a /tree/ entry identifies as repo#path:/sub, never the
+  // bare repo — two subpackages of one monorepo must not cross-match.
+  const m = /^https:\/\/github\.com\/([^/]+\/[^/]+?)(?:\/tree\/[^/]+\/(.+?))?\/?$/.exec(plugin.url)
+  if (m !== null) {
+    ids.add(m[2] !== undefined ? `${m[1]!.toLowerCase()}#path:/${m[2].toLowerCase()}` : m[1]!.toLowerCase())
+  }
   return ids
 }
 
@@ -105,8 +158,11 @@ function depIdentities(name: string, spec: string): Set<string> {
   // npm-installed plugin still matches an entry whose npm field is unset.
   const scoped = /^@([^/]+)\/(.+)$/.exec(name)
   if (scoped !== null) ids.add(`${scoped[1]!.toLowerCase()}/${scoped[2]!.toLowerCase()}`)
-  const match = /github:([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)/i.exec(spec)
-  if (match !== null) ids.add(match[1]!.toLowerCase())
+  const match = /github:([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)(?:#path:\/([A-Za-z0-9_./-]+))?/i.exec(spec)
+  if (match !== null) {
+    ids.add(match[1]!.toLowerCase())
+    if (match[2] !== undefined) ids.add(`${match[1]!.toLowerCase()}#path:/${match[2].toLowerCase()}`)
+  }
   return ids
 }
 

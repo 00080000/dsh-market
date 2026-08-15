@@ -18,7 +18,7 @@ import {
 import { exportLogs, logEvent } from './log.ts'
 import { BOOT_ID, probePnpm, progress, provisionPnpm, runDshPlugin } from './dsh-cli.ts'
 import { profileDir, readInstalled, readInstalledVersion, readLockCommits } from './profile.ts'
-import { installTargetFor } from './sources.ts'
+import { findInstalledAlias, installTargetFor } from './sources.ts'
 import { isStaleUpdate, retargetCollections, validateAddedPlugins, withHoistRecovery } from './install.ts'
 import { checkUpdates, invalidateUpdates } from './updates.ts'
 import { createThemeManager, type LoaderEntry } from './themes.ts'
@@ -245,8 +245,9 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
           return
         }
         try {
-          const body = (await readJsonBody(request)) as { name?: unknown }
+          const body = (await readJsonBody(request)) as { name?: unknown; force?: unknown }
           const name = typeof body.name === 'string' ? body.name : ''
+          const force = body.force === true
           const spec = readInstalled(config.profile)[name]
           if (spec === undefined) {
             sendJson(response, 400, { error: 'plugin is not installed' })
@@ -265,7 +266,10 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
           const beforeCommit = repoKey !== null ? readLockCommits(config.profile).get(repoKey) ?? null : null
           installing = true
           try {
-            const result = await runPlugin(config.profile, ['add', target])
+            // force: the user chose to install a fresh release without the
+            // default one-day safety wait; scoped to this single command.
+            const addArgs = force ? ['add', '--config.minimumReleaseAge=0', target] : ['add', target]
+            const result = await runPlugin(config.profile, addArgs)
             let ok = result.exitCode === 0 && !result.timedOut
             let stale = false
             if (ok) {
@@ -280,12 +284,13 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
             }
             if (ok) invalidateUpdates()
             const staleError = stale
-              ? `still v${beforeVersion ?? beforeCommit?.slice(0, 7) ?? '?'} after the update — pnpm 的 minimumReleaseAge 安全策略会暂时拦下发布不久的新版本（静默保留旧版且返回成功）。请稍后再试；着急可调整 profile pnpm-workspace.yaml 的 minimumReleaseAge / pnpm's minimumReleaseAge holds back very fresh releases; retry later or tune it in the profile's pnpm-workspace.yaml`
+              ? '这个新版本刚发布不久。为了安全，系统默认会等它发布满一天后再安装——刚发布的版本偶尔会被发现问题然后撤回。可以明天再试，或点「立即更新」不再等待。 / This version was just released; for safety, installs normally wait about a day after a release. Try again tomorrow, or click "Update now" to install it right away.'
               : null
             logEvent(ok ? 'info' : 'error', 'update',
               `${name} -> ${target} exit=${String(result.exitCode)}${result.timedOut ? ' TIMEOUT' : ''}${stale ? ' STALE(minimumReleaseAge?)' : ''}${ok ? '' : ` stderr=${result.stderr.slice(-300)}`}`)
             sendJson(response, ok ? 200 : 502, {
               ok,
+              stale: stale || undefined,
               error: staleError ?? undefined,
               exitCode: result.exitCode,
               timedOut: result.timedOut,
@@ -415,6 +420,17 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
           const target = installTargetFor(entry)
           if (target === null) {
             sendJson(response, 400, { error: 'unsupported source url' })
+            return
+          }
+          // Duplicate guard (#27): the same plugin listed under another name
+          // (an alias entry pointing at the same repo) must never install
+          // twice — two loader entries with one id brick the next boot.
+          // Monorepo subpath entries (distinct plugins in one repo) pass:
+          // their entry urls differ by subpath and identity is name-based.
+          const aliasOf = findInstalledAlias(entry, readInstalled(config.profile))
+          if (aliasOf !== null) {
+            logEvent('warn', 'install-rejected', `${entry.name}: same plugin already installed as ${aliasOf}`)
+            sendJson(response, 400, { error: `已以「${aliasOf}」安装过同一个插件，无需重复安装 / this plugin is already installed as "${aliasOf}"` })
             return
           }
           installing = true

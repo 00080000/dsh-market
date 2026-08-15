@@ -7,7 +7,8 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, use
 import { Button, IconChevronDownOutline14, IconChevronUpOutline14, IconSearchOutline16, Input, Modal, Pill, StateDot } from '@deepseek-ai/dsh-client-ui-primitives'
 import css from './Market.module.css'
 import {
-  avatarColor, entryForDep, isInstalled, LOGO_URI, looksTerminal, matchInstalledName, readSession, repoOf, themeSwatch,
+  avatarColor, entryForDep, isInstalled, LOGO_URI, looksTerminal, matchInstalledName, orderedCategories,
+  readSession, repoOf, themePlugins as themePluginsOf, themeSwatch, visiblePlugins,
 } from './market-data.ts'
 import type {
   InstalledMap, Registry, RegistryPlugin, ThemeSnapshot, Translate, UpdateStatus,
@@ -79,6 +80,8 @@ export function MarketSection(props: MarketSectionProps) {
   const [installError, setInstallError] = useState<string | null>(null)
   const [updates, setUpdates] = useState<Record<string, UpdateStatus>>({})
   const [updatingName, setUpdatingName] = useState<string | null>(null)
+  // Plugin blocked by pnpm's fresh-release safety wait; arms the update-now button.
+  const [staleName, setStaleName] = useState<string | null>(null)
   const [updatingAll, setUpdatingAll] = useState(false)
   const [updatedNames, setUpdatedNames] = useState<string[]>([])
   const [hotUrls, setHotUrls] = useState<string[]>([])
@@ -209,25 +212,9 @@ export function MarketSection(props: MarketSectionProps) {
     return () => clearInterval(timer)
   }, [busyUrl, updatingName, data])
 
-  const plugins = useMemo(() => {
-    if (data === null) return []
-    const query = q.trim().toLowerCase()
-    const list = data.plugins.filter(p => {
-      if (cat !== 'all' && p.category !== cat) return false
-      if (query === '') return true
-      const desc = (p.description && (p.description[lang] || p.description.en)) || ''
-      return p.name.toLowerCase().includes(query)
-        || p.owner.toLowerCase().includes(query)
-        || desc.toLowerCase().includes(query)
-    })
-    if (sort === 'hot') {
-      return [...list].sort((a, b) => (b.stars ?? -1) - (a.stars ?? -1))
-    }
-    if (sort === 'new') {
-      return [...list].sort((a, b) => String(b.added).localeCompare(String(a.added)))
-    }
-    return list
-  }, [data, q, cat, lang, sort])
+  const plugins = useMemo(
+    () => (data === null ? [] : visiblePlugins(data.plugins, { category: cat, query: q, lang, sort })),
+    [data, q, cat, lang, sort])
 
   const doInstall = useCallback((plugin: RegistryPlugin) => {
     setConfirming(null)
@@ -272,13 +259,14 @@ export function MarketSection(props: MarketSectionProps) {
       .finally(() => setBusyUrl(null))
   }, [refreshInstalled, t])
 
-  const doUpdate = useCallback((name: string) => {
+  const doUpdate = useCallback((name: string, force = false) => {
     setInstallError(null)
+    setStaleName(null)
     setUpdatingName(name)
     return fetch('/dsh-market/update', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ name }),
+      body: JSON.stringify(force ? { name, force: true } : { name }),
     })
       .then(res => res.json().then(body => ({ status: res.status, body })))
       .then(({ status, body }) => {
@@ -286,6 +274,7 @@ export function MarketSection(props: MarketSectionProps) {
           setUpdatedNames(names => names.concat(name))
           refreshInstalled()
         } else {
+          if (body.stale === true) setStaleName(name)
           const text = (v: unknown) => typeof v === 'string' ? v : (v && typeof (v as any).text === 'string') ? (v as any).text : v == null ? '' : JSON.stringify(v)
           const detail = text(body.error) || [text(body.stderr), text(body.stdout)].filter(Boolean).join('\n').trim() || ('exit ' + body.exitCode)
           setInstallError(t('updateFail') + ': ' + name + ' — ' + detail.trim().slice(-600))
@@ -365,9 +354,7 @@ export function MarketSection(props: MarketSectionProps) {
     name => !updatedNames.includes(name) && updates[name] && updates[name].updateAvailable,
   )
 
-  const themePlugins = data === null ? [] : data.plugins
-    .filter(p => p.category === 'theme')
-    .sort((a, b) => (b.stars || 0) - (a.stars || 0))
+  const themePlugins = data === null ? [] : themePluginsOf(data.plugins)
 
   const pluginCard = (p: RegistryPlugin) => {
     const desc = (p.description && (p.description[lang] || p.description.en)) || ''
@@ -591,7 +578,16 @@ export function MarketSection(props: MarketSectionProps) {
           </div>
         )}
       </div>
-      {installError !== null && <div className={css.err}>{installError}</div>}
+      {installError !== null && (
+        <div className={css.err}>
+          {installError}
+          {staleName !== null && (
+            <div className={css.staleAction}>
+              <Button size="sm" onClick={() => doUpdate(staleName, true)}>{t('updateNow')}</Button>
+            </div>
+          )}
+        </div>
+      )}
       <div
         className={css.body}
         ref={bodyRef}
@@ -609,7 +605,7 @@ export function MarketSection(props: MarketSectionProps) {
                       <div ref={catsWrapRef} className={catsOpen || visibleCats === null ? `${css.catsWrap} ${css.catsCollapsed}` : css.catsWrap}>
                         {(() => {
                           // Collapsed, the selected category is pulled to the front so it never hides.
-                          const ordered = catsOpen || cat === 'all' ? categories : [cat, ...categories.filter(id => id !== cat)]
+                          const ordered = orderedCategories(categories, cat, catsOpen)
                           const shown = catsOpen || visibleCats === null ? ordered : ordered.slice(0, Math.max(0, visibleCats - 1))
                           return (
                             <>

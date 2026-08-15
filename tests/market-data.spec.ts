@@ -7,7 +7,9 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { entryForDep, isInstalled, matchInstalledName } from '../src/client/market-data.ts'
+import {
+  entryForDep, isInstalled, matchInstalledName, orderedCategories, themePlugins, visiblePlugins,
+} from '../src/client/market-data.ts'
 import type { RegistryPlugin } from '../src/client/market-data.ts'
 
 function plugin(partial: Partial<RegistryPlugin>): RegistryPlugin {
@@ -46,6 +48,12 @@ describe('matchInstalledName / isInstalled', () => {
       { 'installed-key': 'github:o/collection#path:/packages/theme-x' },
     )).toBe('installed-key')
 
+    // Monorepo siblings never cross-match: same repo, different subpath.
+    expect(isInstalled(
+      plugin({ name: 'mono#plug-b', url: 'https://github.com/m/mono/tree/main/packages/plug-b' }),
+      { 'plug-a': 'github:m/mono#path:/packages/plug-a' },
+    )).toBe(false)
+
     // Identities are exact — a mere name prefix must NOT match.
     expect(isInstalled(
       plugin({ name: 'dsh-loop', url: 'https://github.com/o/dsh-loop' }),
@@ -63,5 +71,49 @@ describe('entryForDep', () => {
     expect(entryForDep(plugins, 'b-npm', '^1.0.0')?.name).toBe('b')
     expect(entryForDep(plugins, 'anything', 'github:o/a#main')?.name).toBe('a')
     expect(entryForDep(plugins, 'unknown', '^1.0.0')).toBeUndefined()
+  })
+})
+
+describe('discover list (visiblePlugins)', () => {
+  const CATALOG: RegistryPlugin[] = [
+    plugin({ name: 'dsh-loop', owner: 'alice', category: 'tool', stars: 50, added: '2026-08-01', description: { zh: '循环执行任务', en: 'Loop task runner' } }),
+    plugin({ name: 'dsh-notify', owner: 'bob', category: 'tool', stars: 120, added: '2026-08-10', description: { zh: '桌面通知', en: 'Desktop notifications' } }),
+    plugin({ name: 'whale-skin', owner: 'carol', category: 'theme', stars: 80, added: '2026-08-14', description: { zh: '鲸鱼主题', en: 'Whale theme' } }),
+    plugin({ name: 'no-stars', owner: 'dave', category: 'memory', added: '2026-07-01', description: { en: 'Vector memory store' } }),
+  ]
+
+  it('searches across name, owner, and the localized description, case-insensitively', () => {
+    expect(visiblePlugins(CATALOG, { category: 'all', query: 'LOOP', lang: 'en', sort: 'x' }).map(p => p.name)).toEqual(['dsh-loop'])
+    expect(visiblePlugins(CATALOG, { category: 'all', query: 'carol', lang: 'en', sort: 'x' }).map(p => p.name)).toEqual(['whale-skin'])
+    // zh UI searches the zh description; en falls back when zh is absent.
+    expect(visiblePlugins(CATALOG, { category: 'all', query: '通知', lang: 'zh', sort: 'x' }).map(p => p.name)).toEqual(['dsh-notify'])
+    expect(visiblePlugins(CATALOG, { category: 'all', query: 'vector', lang: 'zh', sort: 'x' }).map(p => p.name)).toEqual(['no-stars'])
+    // Empty query = everything, registry order preserved.
+    expect(visiblePlugins(CATALOG, { category: 'all', query: '  ', lang: 'en', sort: 'x' })).toHaveLength(4)
+  })
+
+  it('filters by category and combines with search', () => {
+    expect(visiblePlugins(CATALOG, { category: 'tool', query: '', lang: 'en', sort: 'x' }).map(p => p.name)).toEqual(['dsh-loop', 'dsh-notify'])
+    expect(visiblePlugins(CATALOG, { category: 'tool', query: 'notify', lang: 'en', sort: 'x' }).map(p => p.name)).toEqual(['dsh-notify'])
+    expect(visiblePlugins(CATALOG, { category: 'ghost-cat', query: '', lang: 'en', sort: 'x' })).toEqual([])
+  })
+
+  it('sorts hot by stars (unstarred last) and new by added date', () => {
+    expect(visiblePlugins(CATALOG, { category: 'all', query: '', lang: 'en', sort: 'hot' }).map(p => p.name))
+      .toEqual(['dsh-notify', 'whale-skin', 'dsh-loop', 'no-stars'])
+    expect(visiblePlugins(CATALOG, { category: 'all', query: '', lang: 'en', sort: 'new' }).map(p => p.name))
+      .toEqual(['whale-skin', 'dsh-notify', 'dsh-loop', 'no-stars'])
+  })
+
+  it('themePlugins lists only themes, most-starred first', () => {
+    const themes = themePlugins([...CATALOG, plugin({ name: 'starless-theme', category: 'theme' })])
+    expect(themes.map(p => p.name)).toEqual(['whale-skin', 'starless-theme'])
+  })
+
+  it('orderedCategories pulls the active chip forward only while collapsed', () => {
+    const cats = ['tool', 'theme', 'memory']
+    expect(orderedCategories(cats, 'memory', false)).toEqual(['memory', 'tool', 'theme'])
+    expect(orderedCategories(cats, 'memory', true)).toEqual(cats)
+    expect(orderedCategories(cats, 'all', false)).toEqual(cats)
   })
 })
