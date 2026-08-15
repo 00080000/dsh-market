@@ -350,12 +350,21 @@ describe('update flow — no npm publishing required', () => {
     await bed.dispatch('POST', '/dsh-market/install', { url: 'https://github.com/o/dsh-loop' })
   })
 
-  function advanceNpmLatest(version: string): void {
+  function advanceNpmLatest(version: string, publishedHoursAgo = 1): void {
     fake.npm['dsh-loop'].latest = version
     fake.npm['dsh-loop'].versions[version] = { manifest: { dsh: {}, main: 'lib/index.js' }, artifacts: ['lib/index.js'] }
+    const publishedAt = new Date(Date.now() - publishedHoursAgo * 3_600_000).toISOString()
     vi.stubGlobal('fetch', (url: string) => {
-      if (String(url).includes('registry.npmjs.org')) {
+      const u = String(url)
+      if (u.endsWith('/latest') && u.includes('registry.npmjs.org')) {
         return Promise.resolve(new Response(JSON.stringify({ version }), { status: 200 }))
+      }
+      if (u.includes('registry.npmjs.org')) {
+        // Full metadata doc: dist-tags + publish times (the #45 evidence check).
+        return Promise.resolve(new Response(JSON.stringify({
+          'dist-tags': { latest: version },
+          time: { [version]: publishedAt },
+        }), { status: 200 }))
       }
       return Promise.reject(new Error(`unexpected fetch: ${String(url)}`))
     })
@@ -372,12 +381,14 @@ describe('update flow — no npm publishing required', () => {
   })
 
   it('surfaces the silent fresh-release hold as an actionable error, and force applies it (#22)', async () => {
-    advanceNpmLatest('1.2.0')
+    advanceNpmLatest('1.2.0') // published 1h ago — inside the safety window
     fake.staleUpdates = true // pnpm keeps 1.0.0 and exits 0
     const r = await bed.dispatch('POST', '/dsh-market/update', { name: 'dsh-loop' })
     expect(r.status).toBe(502)
     expect(r.json.ok).toBe(false)
     expect(r.json.stale).toBe(true)
+    // Evidence-backed diagnosis (#45): the release really is young.
+    expect(r.json.staleReason).toBe('release-age')
     expect(String(r.json.error)).toMatch(/立即更新|Update now/)
     expect(installedSpec('dsh-loop')).toBe('^1.0.0')
 
@@ -388,6 +399,19 @@ describe('update flow — no npm publishing required', () => {
     expect(installedSpec('dsh-loop')).toBe('^1.2.0')
     const lastAdd = fake.calls[fake.calls.length - 1]
     expect(lastAdd).toContain('--config.minimumReleaseAge=0')
+  })
+
+  it('does NOT blame the safety wait when the target release is old — honest unknown-cause message (#45)', async () => {
+    advanceNpmLatest('1.2.0', 27) // published 27h ago — OUTSIDE the ~24h window
+    fake.staleUpdates = true // version still did not move
+    const r = await bed.dispatch('POST', '/dsh-market/update', { name: 'dsh-loop' })
+    expect(r.status).toBe(502)
+    expect(r.json.stale).toBe(true)
+    expect(r.json.staleReason).toBe('unknown')
+    // No unfounded "just released, wait a day" story…
+    expect(String(r.json.error)).not.toMatch(/刚发布|just released/)
+    // …but still an actionable next step (retry usually resolves it).
+    expect(String(r.json.error)).toMatch(/立即更新|Update now/)
   })
 })
 
