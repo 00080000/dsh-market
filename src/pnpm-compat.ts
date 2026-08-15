@@ -35,7 +35,7 @@ export function pluginArgsFor(profileDir: string, pluginArgs: string[]): string[
 
 /** One recognized pnpm failure, with a bilingual explanation for the UI. */
 export interface PnpmFailure {
-  code: 'adding-to-root' | 'not-a-workspace' | 'hoist-pattern-diff' | 'pnpm-missing'
+  code: 'adding-to-root' | 'not-a-workspace' | 'hoist-pattern-diff' | 'pnpm-missing' | 'release-age-violation'
   /** Bilingual, actionable message shown to the user instead of the raw wall of text. */
   message: string
   /** True when re-running `pnpm install` in the profile is the documented recovery. */
@@ -70,6 +70,20 @@ export function classifyPnpmFailure(output: string): PnpmFailure | null {
       code: 'not-a-workspace',
       recoverable: false,
       message: 'profile 目录不是 pnpm workspace，却传入了 -w。这是市场的 bug，请升级 dshmarket 到最新版 / -w was passed but the profile is not a pnpm workspace; this is a market bug — please update dshmarket',
+    }
+  }
+  // #39: once a release younger than minimumReleaseAge is in the lockfile
+  // (fresh install or a force-update), pnpm 11 verifies the WHOLE lockfile
+  // before ANY later mutation — uninstalling even an unrelated plugin fails
+  // (MINIMUM_RELEASE_AGE_VIOLATION), and a later add can fail re-resolving
+  // the young dep (NO_MATURE_MATCHING_VERSION). Recovery is a one-shot
+  // --config.minimumReleaseAge=0 retry, automated in withHoistRecovery.
+  if (output.includes('ERR_PNPM_MINIMUM_RELEASE_AGE_VIOLATION')
+    || output.includes('ERR_PNPM_NO_MATURE_MATCHING_VERSION')) {
+    return {
+      code: 'release-age-violation',
+      recoverable: false,
+      message: '这个 profile 里有一个刚发布不久的插件版本，pnpm 的安全等待期检查因此拒绝了本次改动（即使改的是别的插件）。市场已自动放行重试一次；若仍看到本条，请导出日志反馈 / a recently-published plugin version in this profile trips pnpm\'s fresh-release safety check, blocking any change (even to other plugins); the market retries once with a one-shot bypass — if you still see this, export the log and report it',
     }
   }
   if (output.includes('pnpm not found on PATH')) {

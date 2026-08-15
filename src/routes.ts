@@ -20,7 +20,7 @@ import { exportLogs, logEvent } from './log.ts'
 import { BOOT_ID, cancelActive, probePnpm, progress, provisionPnpm, runDshPlugin } from './dsh-cli.ts'
 import { profileDir, readInstalled, readInstalledVersion, readLockCommits, setAllowBuilds } from './profile.ts'
 import { findInstalledAlias, installTargetFor } from './sources.ts'
-import { isStaleUpdate, parseIgnoredBuilds, retargetCollections, validateAddedPlugins, withHoistRecovery } from './install.ts'
+import { isStaleUpdate, parseIgnoredBuilds, RELEASE_AGE_OVERRIDE, retargetCollections, validateAddedPlugins, withHoistRecovery } from './install.ts'
 import { checkUpdates, invalidateUpdates } from './updates.ts'
 import { createThemeManager, type LoaderEntry } from './themes.ts'
 import { readJsonBody, sameOrigin, sendJson } from './http.ts'
@@ -290,7 +290,7 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
           try {
             // force: the user chose to install a fresh release without the
             // default one-day safety wait; scoped to this single command.
-            const addArgs = force ? ['add', '--config.minimumReleaseAge=0', target] : ['add', target]
+            const addArgs = force ? ['add', RELEASE_AGE_OVERRIDE, target] : ['add', target]
             const result = await runPlugin(config.profile, addArgs)
             const cancelled = result.cancelled
             let ok = result.exitCode === 0 && !result.timedOut && !cancelled

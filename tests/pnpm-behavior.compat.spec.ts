@@ -115,13 +115,13 @@ describe('#20 bug 2 — modules dir built by pnpm 9, mutated by pnpm 11', () => 
   })
 })
 
-describe('#21/#22 — minimumReleaseAge resolution traps', () => {
-  /** Minutes such that is-odd@3.0.1 (2018-05-31) is "too young" but 3.0.0 (2018-05-30) is mature. */
-  function ageWindowMinutes(): number {
-    const cutoff = Date.parse('2018-05-31T07:00:00Z') // between the two publish instants
-    return Math.round((Date.now() - cutoff) / 60_000)
-  }
+/** Minutes such that is-odd@3.0.1 (2018-05-31) is "too young" but 3.0.0 (2018-05-30) is mature. */
+function ageWindowMinutes(): number {
+  const cutoff = Date.parse('2018-05-31T07:00:00Z') // between the two publish instants
+  return Math.round((Date.now() - cutoff) / 60_000)
+}
 
+describe('#21/#22 — minimumReleaseAge resolution traps', () => {
   it('a dist-tag add silently resolves to an OLD version and exits 0 (the #21/#22 silent trap)', () => {
     const dir = profileFixture({ workspace: true, extraWorkspaceYaml: `minimumReleaseAge: ${String(ageWindowMinutes())}\n` })
     const { code } = pnpm(PNPM[11], ['add', 'is-odd'], dir)
@@ -134,5 +134,35 @@ describe('#21/#22 — minimumReleaseAge resolution traps', () => {
     const { code, out } = pnpm(PNPM[11], ['add', 'is-odd@3.0.1'], dir)
     expect(code).not.toBe(0)
     expect(out).toContain('ERR_PNPM_NO_MATURE_MATCHING_VERSION')
+  })
+})
+
+describe('#39 — a too-young lockfile entry blocks every later mutation', () => {
+  it('remove fails ERR_PNPM_MINIMUM_RELEASE_AGE_VIOLATION on pnpm 11; the one-shot override recovers', () => {
+    const dir = profileFixture({ workspace: true, extraWorkspaceYaml: `minimumReleaseAge: ${String(ageWindowMinutes())}\n` })
+    // A young release lands in the lockfile via the bypass (force-update path).
+    const seed = pnpm(PNPM[11], ['add', '-w', '--config.minimumReleaseAge=0', 'is-odd@3.0.1'], dir)
+    expect(seed.code, seed.out.slice(-400)).toBe(0)
+
+    // pnpm verifies the WHOLE lockfile before applying the mutation — even
+    // removing the young package itself fails.
+    const blocked = pnpm(PNPM[11], ['remove', '-w', 'is-odd'], dir)
+    expect(blocked.code).not.toBe(0)
+    expect(blocked.out).toContain('ERR_PNPM_MINIMUM_RELEASE_AGE_VIOLATION')
+    expect(classifyPnpmFailure(blocked.out)?.code).toBe('release-age-violation')
+
+    // The recovery the market automates: same command + the one-shot override.
+    const recovered = pnpm(PNPM[11], ['remove', '-w', '--config.minimumReleaseAge=0', 'is-odd'], dir)
+    expect(recovered.code, recovered.out.slice(-400)).toBe(0)
+    expect(installedVersion(dir, 'is-odd')).toBeNull()
+  })
+
+  it('the override flag is harmless on pnpm 9/10 remove', () => {
+    for (const version of [PNPM[9], PNPM[10]]) {
+      const dir = profileFixture({ workspace: true })
+      expect(pnpm(version, ['add', '-w', 'is-odd@3.0.0'], dir).code, `pnpm ${version} add`).toBe(0)
+      const removed = pnpm(version, ['remove', '-w', '--config.minimumReleaseAge=0', 'is-odd'], dir)
+      expect(removed.code, `pnpm ${version}: ${removed.out.slice(-300)}`).toBe(0)
+    }
   })
 })

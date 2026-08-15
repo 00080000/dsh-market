@@ -49,6 +49,13 @@ describe('classifyPnpmFailure', () => {
 
     expect(classifyPnpmFailure('[ERROR] --workspace-root may only be used inside a workspace')?.code).toBe('not-a-workspace')
     expect(classifyPnpmFailure('dsh: pnpm not found on PATH — install pnpm to manage profile plugins')?.code).toBe('pnpm-missing')
+
+    // #39 — both faces of pnpm's release-age gate on an already-written
+    // young lockfile entry: lockfile verification (remove/any mutation) and
+    // re-resolution of the young dep during a later add.
+    const violation = classifyPnpmFailure('[ERR_PNPM_MINIMUM_RELEASE_AGE_VIOLATION] 1 lockfile entries failed verification:\n  is-odd@3.0.1 was published at 2018-05-31T20:04:53.306Z, within the minimumReleaseAge cutoff')
+    expect(violation?.code).toBe('release-age-violation')
+    expect(classifyPnpmFailure('[ERR_PNPM_NO_MATURE_MATCHING_VERSION] 1 version does not meet the minimumReleaseAge constraint:')?.code).toBe('release-age-violation')
     // Unrecognized output → null, the raw text is then surfaced as-is.
     expect(classifyPnpmFailure('some other failure')).toBeNull()
   })
