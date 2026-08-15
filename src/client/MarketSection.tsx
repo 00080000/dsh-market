@@ -82,6 +82,10 @@ export function MarketSection(props: MarketSectionProps) {
   const [updatingName, setUpdatingName] = useState<string | null>(null)
   // Plugin blocked by pnpm's fresh-release safety wait; arms the update-now button.
   const [staleName, setStaleName] = useState<string | null>(null)
+  /** Determinate percent parsed from pnpm's Progress line, when available. */
+  const [progressPct, setProgressPct] = useState<number | null>(null)
+  /** Blocked build scripts from the last install: enables approve-and-retry (#6). */
+  const [buildsSkipped, setBuildsSkipped] = useState<{ plugin: RegistryPlugin; names: string[] } | null>(null)
   const [updatingAll, setUpdatingAll] = useState(false)
   const [updatedNames, setUpdatedNames] = useState<string[]>([])
   const [hotUrls, setHotUrls] = useState<string[]>([])
@@ -192,8 +196,14 @@ export function MarketSection(props: MarketSectionProps) {
         .then(status => {
           if (status.active) {
             setProgressLine((status.lastLine || '…') + '  (' + status.seconds + 's)')
+            const m = /resolved (\d+), reused (\d+), downloaded (\d+), added (\d+)/.exec(status.lastLine || '')
+            if (m !== null && Number(m[1]) > 0) {
+              const done = Number(m[2]) + Number(m[3]) + Number(m[4])
+              setProgressPct(Math.max(4, Math.min(96, Math.round(done / Number(m[1]) * 100))))
+            }
           } else {
             setProgressLine(null)
+            setProgressPct(null)
             setInstalled(status.installed || {})
             const pending = readSession('dshm-pending')
             if (pending !== null && busyUrl !== null) {
@@ -217,6 +227,7 @@ export function MarketSection(props: MarketSectionProps) {
     [data, q, cat, lang, sort])
 
   const doInstall = useCallback((plugin: RegistryPlugin) => {
+    setBuildsSkipped(null)
     setConfirming(null)
     setInstallError(null)
     setBusyUrl(plugin.url)
@@ -237,6 +248,11 @@ export function MarketSection(props: MarketSectionProps) {
           location.reload()
           return
         }
+        if (body.cancelled === true) {
+          // User-cancelled: quiet reset, nothing to report.
+          refreshInstalled()
+          return
+        }
         if (status === 200 && body.ok) {
           sessionStorage.setItem('dshm-tab', 'installed')
           if (body.hot) {
@@ -247,6 +263,13 @@ export function MarketSection(props: MarketSectionProps) {
           }
           refreshInstalled()
         } else {
+          if (status === 409) {
+            setInstallError(t('busyWait'))
+            return
+          }
+          if (Array.isArray(body.ignoredBuilds) && body.ignoredBuilds.length > 0) {
+            setBuildsSkipped({ plugin, names: body.ignoredBuilds.map(String) })
+          }
           const text = (v: unknown) => typeof v === 'string' ? v : (v && typeof (v as any).text === 'string') ? (v as any).text : v == null ? '' : JSON.stringify(v)
           const detail = text(body.error) || [text(body.stderr), text(body.stdout)].filter(Boolean).join('\n').trim() || ('exit ' + body.exitCode)
           setInstallError(t('installFail') + ': ' + plugin.name + ' — ' + detail.trim().slice(-600))
@@ -259,6 +282,12 @@ export function MarketSection(props: MarketSectionProps) {
       .finally(() => setBusyUrl(null))
   }, [refreshInstalled, t])
 
+  /** Cancel the running plugin command (#6 by @qichuang321). */
+  const doCancel = useCallback(() => {
+    fetch('/dsh-market/cancel', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })
+      .catch(() => {})
+  }, [])
+
   const doUpdate = useCallback((name: string, force = false) => {
     setInstallError(null)
     setStaleName(null)
@@ -270,10 +299,15 @@ export function MarketSection(props: MarketSectionProps) {
     })
       .then(res => res.json().then(body => ({ status: res.status, body })))
       .then(({ status, body }) => {
+        if (body.cancelled === true) {
+          refreshInstalled()
+          return
+        }
         if (status === 200 && body.ok) {
           setUpdatedNames(names => names.concat(name))
           refreshInstalled()
         } else {
+          if (status === 409) { setInstallError(t('busyWait')); return }
           if (body.stale === true) setStaleName(name)
           const text = (v: unknown) => typeof v === 'string' ? v : (v && typeof (v as any).text === 'string') ? (v as any).text : v == null ? '' : JSON.stringify(v)
           const detail = text(body.error) || [text(body.stderr), text(body.stdout)].filter(Boolean).join('\n').trim() || ('exit ' + body.exitCode)
@@ -400,6 +434,8 @@ export function MarketSection(props: MarketSectionProps) {
           <div className={css.progress}>
             <span className={css.spin} />
             <code className={css.grow}>{progressLine || t('progressHint')}</code>
+            {progressPct !== null && <span className={css.pct}>{progressPct}%</span>}
+            <button type="button" className={css.cancelBtn} onClick={doCancel}>{t('cancelOp')}</button>
           </div>
         )}
       </div>
@@ -578,6 +614,30 @@ export function MarketSection(props: MarketSectionProps) {
           </div>
         )}
       </div>
+      {buildsSkipped !== null && (
+        <div className={css.restart}>
+          <span className={css.grow}>{t('buildsSkipped')} {buildsSkipped.names.join(', ')}</span>
+          <Button
+            size="sm"
+            disabled={busyUrl !== null}
+            onClick={() => {
+              const { plugin, names } = buildsSkipped
+              setBuildsSkipped(null)
+              fetch('/dsh-market/approve-builds', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ packages: names }),
+              })
+                .then(res => res.json())
+                .then((body) => {
+                  if (body.ok) doInstall(plugin)
+                  else setInstallError(String(body.error || 'approve failed'))
+                })
+                .catch(error => setInstallError(String(error)))
+            }}
+          >{t('approveBuilds')}</Button>
+        </div>
+      )}
       {installError !== null && (
         <div className={css.err}>
           {installError}
@@ -692,6 +752,8 @@ export function MarketSection(props: MarketSectionProps) {
                           <div className={css.progress}>
                             <span className={css.spin} />
                             <code className={css.grow}>{progressLine || t('progressHint')}</code>
+                            {progressPct !== null && <span className={css.pct}>{progressPct}%</span>}
+                            <button type="button" className={css.cancelBtn} onClick={doCancel}>{t('cancelOp')}</button>
                           </div>
                         )}
                       </div>

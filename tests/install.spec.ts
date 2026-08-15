@@ -9,7 +9,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { InstallResult } from '../src/dsh-cli.ts'
-import { isStaleUpdate, retargetCollections, validateAddedPlugins } from '../src/install.ts'
+import { isStaleUpdate, parseIgnoredBuilds, retargetCollections, validateAddedPlugins } from '../src/install.ts'
 import { profileDir } from '../src/profile.ts'
 
 let home: string
@@ -22,7 +22,7 @@ afterEach(() => {
   rmSync(home, { recursive: true, force: true })
 })
 
-const ok: InstallResult = { exitCode: 0, timedOut: false, stdout: '', stderr: '' }
+const ok: InstallResult = { exitCode: 0, timedOut: false, stdout: '', stderr: '', cancelled: false }
 
 function recordingRunner(): { calls: string[][]; run: (profile: string, args: string[]) => Promise<InstallResult> } {
   const calls: string[][] = []
@@ -112,5 +112,15 @@ describe('isStaleUpdate (#22: clean exit, nothing changed)', () => {
     // First install: no before state, nothing to be stale against.
     expect(isStaleUpdate({ isGit: false, beforeVersion: null, afterVersion: '1.0.0', beforeCommit: null, afterCommit: null })).toBe(false)
     expect(isStaleUpdate({ isGit: true, beforeVersion: null, afterVersion: null, beforeCommit: null, afterCommit: 'aaa' })).toBe(false)
+  })
+})
+
+describe('parseIgnoredBuilds (#6)', () => {
+  it('extracts names from pnpm output, stripping versions and the trailing period', () => {
+    expect(parseIgnoredBuilds('Ignored build scripts: esbuild@0.25.0, koffi.', ''))
+      .toEqual(['esbuild', 'koffi'])
+    expect(parseIgnoredBuilds('', 'warn Ignored build scripts: @scope/pkg@1.0.0'))
+      .toEqual(['@scope/pkg'])
+    expect(parseIgnoredBuilds('all good', '')).toEqual([])
   })
 })
