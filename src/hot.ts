@@ -14,7 +14,7 @@
  * for the in-tree precedent).
  */
 
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { logEvent } from './log.ts'
@@ -139,16 +139,12 @@ export function cleanHotDir(profileDir: string): void {
   }
 }
 
-/** A skin package by the ecosystem's own convention: ships a `skin.json`. */
-export function isSkinPkg(profileDir: string, packageName: string): boolean {
-  return existsSync(join(profileDir, 'node_modules', packageName, 'skin.json'))
-}
-
 function stateFile(profileDir: string): string {
   return join(profileDir, HOT_DIR, 'state.json')
 }
 
-function readDisabledSkins(profileDir: string): Set<string> {
+/** Themes the user switched away from; skipped by the boot re-mount. */
+export function readDisabledThemes(profileDir: string): Set<string> {
   try {
     const state = JSON.parse(readFileSync(stateFile(profileDir), 'utf8')) as { disabledSkins?: string[] }
     return new Set(Array.isArray(state.disabledSkins) ? state.disabledSkins : [])
@@ -157,14 +153,14 @@ function readDisabledSkins(profileDir: string): Set<string> {
   }
 }
 
-function writeDisabledSkins(profileDir: string, disabled: Set<string>): void {
+export function writeDisabledThemes(profileDir: string, disabled: Set<string>): void {
   mkdirSync(join(profileDir, HOT_DIR), { recursive: true, mode: 0o700 })
   writeFileSync(stateFile(profileDir), JSON.stringify({ disabledSkins: [...disabled] }))
 }
 
-/** Currently shim-mounted package names (client-only plugins that are live). */
-export function listShimMounts(): string[] {
-  return [...shimNames].filter(name => hotHandles.has(name))
+/** Package names currently live through a market hot mount (patch or shim). */
+export function listHotMounts(): string[] {
+  return [...hotHandles.keys()]
 }
 
 let hotSequence = 0
@@ -225,19 +221,6 @@ export async function hotMount(ctx: HotContext, profileDir: string, packageName:
       // is the whole activation.
       const dsh = readPkgDsh(profileDir, packageName)
       if (dsh === null || dsh.client === undefined || dsh.bundle !== undefined) return false
-      if (isSkinPkg(profileDir, packageName)) {
-        // Skins are exclusive: activating one deactivates the others, and the
-        // choice survives restarts through state.json.
-        const disabled = readDisabledSkins(profileDir)
-        for (const other of listShimMounts()) {
-          if (other !== packageName && isSkinPkg(profileDir, other)) {
-            await hotUnmount(other)
-            disabled.add(other)
-          }
-        }
-        disabled.delete(packageName)
-        writeDisabledSkins(profileDir, disabled)
-      }
       shimNames.add(packageName)
       rows = [{ id: `client-${packageName.replace(/[^A-Za-z0-9_.-]/g, '-')}`, name: packageName }]
     }
@@ -282,7 +265,7 @@ export async function mountClientOnlyDeps(ctx: HotContext, profileDir: string): 
   } catch {
     return []
   }
-  const disabled = readDisabledSkins(profileDir)
+  const disabled = readDisabledThemes(profileDir)
   const mounted: string[] = []
   for (const name of deps) {
     if (hotHandles.has(name) || disabled.has(name)) continue
@@ -293,12 +276,3 @@ export async function mountClientOnlyDeps(ctx: HotContext, profileDir: string): 
   return mounted
 }
 
-/**
- * Switch the active skin: mount `packageName` and deactivate every other
- * mounted skin (the exclusivity lives in {@link hotMount}).
- * @returns true when the skin is now live.
- */
-export async function useSkin(ctx: HotContext, profileDir: string, packageName: string): Promise<boolean> {
-  if (hotHandles.has(packageName)) return true
-  return hotMount(ctx, profileDir, packageName)
-}

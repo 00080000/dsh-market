@@ -4,7 +4,7 @@ on:
     tags: ['v*']
 
 permissions:
-  contents: read
+  contents: write # GitHub Release creation
   id-token: write # npm trusted publishing (OIDC)
 
 jobs:
@@ -33,3 +33,12 @@ jobs:
             exit 1
           fi
       - run: npm publish
+      - name: create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --title "dshmarket ${GITHUB_REF_NAME#v}" \
+            --generate-notes \
+            --notes "npm: https://www.npmjs.com/package/dshmarket/v/${GITHUB_REF_NAME#v}"
+

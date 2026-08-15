@@ -33,7 +33,7 @@ export function apply(ctx: Context, config?: Config): void {
     profile: config?.profile ?? argvProfile() ?? 'web',
     allowRestart: config?.allowRestart ?? true,
   }
-  ctx.inject(['webServer'], (hostCtx: Context) => {
+  ctx.inject(['webServer', 'loader'], (hostCtx: Context) => {
     const host = hostCtx as unknown as MarketHost & {
       effect(callback: () => () => void, label: string): void
     }

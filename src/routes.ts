@@ -1,20 +1,32 @@
 /**
- * HTTP routes bridging the browser market UI to the host: registry fallback,
- * installed-plugin listing, and the install executor.
+ * HTTP routes bridging the browser market UI to the host. This layer only
+ * parses requests, calls the service modules, and serializes responses —
+ * process spawning lives in dsh-cli.ts, filesystem reads in profile.ts,
+ * orchestration in install.ts / themes.ts / updates.ts.
  *
  * Security: the install route executes a shell command, so it accepts only
  * same-origin POSTs and only sources present in the curated registry.
  */
 
-import { spawn } from 'node:child_process'
-import type { ChildProcess } from 'node:child_process'
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
-import { homedir, tmpdir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
+import { existsSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { loadRegistry } from './registry.ts'
-import { cleanHotDir, hotMount, hotUnmount, isSkinPkg, listShimMounts, mountClientOnlyDeps, useSkin } from './hot.ts'
+import {
+  cleanHotDir, hotMount, hotUnmount, listHotMounts,
+  mountClientOnlyDeps, readDisabledThemes,
+} from './hot.ts'
 import { exportLogs, logEvent } from './log.ts'
+import { BOOT_ID, cancelActive, probePnpm, progress, provisionPnpm, runDshPlugin } from './dsh-cli.ts'
+import { profileDir, readInstalled, readInstalledVersion, readLockCommits, setAllowBuilds } from './profile.ts'
+import { findInstalledAlias, installTargetFor } from './sources.ts'
+import { isStaleUpdate, parseIgnoredBuilds, retargetCollections, validateAddedPlugins, withHoistRecovery } from './install.ts'
+import { checkUpdates, invalidateUpdates } from './updates.ts'
+import { createThemeManager, type LoaderEntry } from './themes.ts'
+import { readJsonBody, sameOrigin, sendJson } from './http.ts'
+
+export type { LoaderEntry } from './themes.ts'
+export type { UpdateStatus } from './updates.ts'
 
 export interface WebServerService {
   register(route: {
@@ -26,446 +38,18 @@ export interface WebServerService {
 
 export interface MarketHost {
   webServer: WebServerService
+  loader: { entries(): Iterable<LoaderEntry> }
   plugin(plugin: unknown, config: unknown): { await(): Promise<unknown>; dispose(): Promise<unknown> | void }
+  on?(event: string, callback: (fiber: { entry?: { options?: { name?: string } } }) => void): () => void
   logger?: { info?(message: string): void; warn(message: string): void }
 }
 
 export interface MarketConfig {
   /** Profile the market installs into; matches the profile serving this UI. */
   profile: string
-  /** Detached self-restart is unsafe under systemd/launchd/pm2; operators can disable it. */
-  allowRestart?: boolean
-}
-
-/** Self-restart is enabled by default and disabled only by an explicit false. */
-export function restartAllowed(config: Pick<MarketConfig, 'allowRestart'>): boolean {
-  return config.allowRestart !== false
 }
 
 const PROFILE_RE = /^[A-Za-z0-9_-]+$/
-const REPO_RE = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/
-const INSTALL_TIMEOUT_MS = 5 * 60 * 1000
-
-/**
- * Argv re-invoking the CLI that launched this host process, so installs work
- * whether dsh runs from a global bin, a local install, or repo source
- * (`node --import tsx/esm .../bin.ts`). Falls back to a PATH `dsh`.
- *
- * Installs run through node:child_process, not ctx.shell: the shell service is
- * the agent's sandboxed executor and denies writes to the profile directory.
- */
-interface DshLaunch {
-  file: string
-  args: string[]
-  cwd: string | undefined
-  viaShell: boolean
-}
-
-function dshArgv(): DshLaunch {
-  const entry = process.argv[1]
-  if (entry !== undefined && /[\\/](?:bin\.(?:js|ts)|dsh)$/.test(entry)) {
-    // Absolute paths are required: source launches (`pnpm dsh`) pass a
-    // relative entry, which the child resolves against its OWN cwd and dies
-    // with MODULE_NOT_FOUND (#13). cwd near the entry keeps execArgv imports
-    // (tsx/esm) resolvable on source launches.
-    const abs = resolve(entry)
-    return { file: process.execPath, args: [...process.execArgv, abs], cwd: dirname(abs), viaShell: false }
-  }
-  // Bare `dsh` is a .cmd shim on Windows that only a shell can start (#13).
-  return { file: 'dsh', args: [], cwd: undefined, viaShell: winCmdShim }
-}
-
-/** Resolve the exact boot invocation used by the detached restart helper. */
-export function restartLaunch(): DshLaunch & { cwd: string } {
-  const launch = dshArgv()
-  return {
-    ...launch,
-    args: [...launch.args, ...process.argv.slice(2)],
-    cwd: launch.cwd ?? process.cwd(),
-  }
-}
-
-interface InstallResult {
-  exitCode: number | null
-  timedOut: boolean
-  stdout: string
-  stderr: string
-}
-
-/** Whether `pnpm` resolves on PATH; success is cached, absence is re-probed. */
-let pnpmReady = false
-
-/**
- * Windows npm/corepack/pnpm are `.cmd` shims. Node's `spawn` without a shell
- * cannot start them (ENOENT / EINVAL). Same pattern as dsh's `plugin` forwarder.
- */
-const winCmdShim = process.platform === 'win32'
-
-/**
- * Kill a spawned child and, on Windows, its whole process tree — `kill()`
- * there only terminates the wrapper, leaving pnpm children running.
- * (Contributed in #7 by @mraing.)
- */
-function killChild(child: ChildProcess): void {
-  if (process.platform === 'win32' && child.pid !== undefined) {
-    try {
-      spawn('taskkill', ['/pid', String(child.pid), '/t', '/f'], { stdio: 'ignore' })
-      return
-    } catch { /* fall through */ }
-  }
-  child.kill('SIGKILL')
-}
-
-function probePnpm(): Promise<boolean> {
-  if (pnpmReady) return Promise.resolve(true)
-  return new Promise((resolvePromise) => {
-    const child = spawn('pnpm', ['--version'], { stdio: 'ignore', shell: winCmdShim })
-    child.on('error', () => resolvePromise(false))
-    child.on('close', (code) => {
-      pnpmReady = code === 0
-      resolvePromise(pnpmReady)
-    })
-  })
-}
-
-function runQuiet(file: string, args: string[], timeoutMs: number): Promise<{ code: number | null; output: string }> {
-  return new Promise((resolvePromise) => {
-    const child = spawn(file, args, {
-      env: { ...process.env, CI: 'true' },
-      stdio: ['ignore', 'pipe', 'pipe'],
-      shell: winCmdShim,
-    })
-    let output = ''
-    const timer = setTimeout(() => killChild(child), timeoutMs)
-    const collect = (chunk: Buffer): void => { output = (output + chunk.toString()).slice(-8 * 1024) }
-    child.stdout.on('data', collect)
-    child.stderr.on('data', collect)
-    child.on('error', (error) => { clearTimeout(timer); resolvePromise({ code: 127, output: error.message }) })
-    child.on('close', (code) => { clearTimeout(timer); resolvePromise({ code, output }) })
-  })
-}
-
-/**
- * Provision pnpm without user involvement: corepack (ships with Node) first,
- * a global npm install as fallback.
- * @returns true when `pnpm --version` succeeds afterwards.
- */
-async function provisionPnpm(): Promise<boolean> {
-  const corepack = await runQuiet('corepack', ['enable', 'pnpm'], 60 * 1000)
-  logEvent(corepack.code === 0 ? 'info' : 'warn', 'setup-pnpm', `corepack enable: exit=${String(corepack.code)} ${corepack.output.slice(-200)}`)
-  if (await probePnpm()) return true
-  const npm = await runQuiet('npm', ['install', '-g', 'pnpm'], 3 * 60 * 1000)
-  logEvent(npm.code === 0 ? 'info' : 'error', 'setup-pnpm', `npm -g: exit=${String(npm.code)} ${npm.output.slice(-200)}`)
-  return probePnpm()
-}
-
-/** Live progress of the running plugin command, for the status route. */
-interface InstallProgress {
-  active: boolean
-  target: string
-  startedAt: number
-  lastLine: string
-}
-
-const progress: InstallProgress = { active: false, target: '', startedAt: 0, lastLine: '' }
-
-/** Identifies this host process; the client scopes its pending-restart flags to it. */
-const BOOT_ID = `${String(process.pid)}-${String(Date.now())}`
-
-function trackProgress(chunk: string): void {
-  const lines = chunk.split('\n').map(l => l.trim()).filter(l => l !== '')
-  if (lines.length > 0) progress.lastLine = lines[lines.length - 1].slice(0, 200)
-}
-
-function runDshPlugin(profile: string, pluginArgs: string[]): Promise<InstallResult> {
-  const { file, args, cwd, viaShell } = dshArgv()
-  progress.active = true
-  progress.target = pluginArgs[pluginArgs.length - 1] ?? ''
-  progress.startedAt = Date.now()
-  progress.lastLine = ''
-  return new Promise((resolvePromise) => {
-    const child = spawn(file, [...args, 'plugin', '--profile', profile, ...pluginArgs], {
-      cwd,
-      // pnpm v10 blocks forever on a silent interactive prompt without a TTY
-      // (observed on re-add over a pinned git spec); CI mode forces it to act
-      // or fail instead of asking.
-      env: { ...process.env, CI: 'true' },
-      stdio: ['ignore', 'pipe', 'pipe'],
-      shell: viaShell,
-    })
-    let stdout = ''
-    let stderr = ''
-    let timedOut = false
-    const timer = setTimeout(() => {
-      timedOut = true
-      killChild(child)
-    }, INSTALL_TIMEOUT_MS)
-    child.stdout.on('data', (chunk: Buffer) => {
-      const text = chunk.toString()
-      stdout = (stdout + text).slice(-256 * 1024)
-      trackProgress(text)
-    })
-    child.stderr.on('data', (chunk: Buffer) => {
-      const text = chunk.toString()
-      stderr = (stderr + text).slice(-64 * 1024)
-      trackProgress(text)
-    })
-    child.on('error', (error) => {
-      clearTimeout(timer)
-      progress.active = false
-      resolvePromise({ exitCode: 127, timedOut: false, stdout, stderr: `${stderr}\n${error.message}` })
-    })
-    child.on('close', (code) => {
-      clearTimeout(timer)
-      progress.active = false
-      resolvePromise({ exitCode: code, timedOut, stdout, stderr })
-    })
-  })
-}
-
-function sendJson(response: ServerResponse, status: number, payload: unknown): void {
-  response.writeHead(status, {
-    'cache-control': 'no-store',
-    'content-type': 'application/json; charset=utf-8',
-  })
-  response.end(JSON.stringify(payload))
-}
-
-function sameOrigin(request: IncomingMessage): boolean {
-  const origin = request.headers.origin
-  const host = request.headers.host
-  if (origin === undefined || host === undefined) return false
-  try {
-    return new URL(origin).host === host
-  } catch {
-    return false
-  }
-}
-
-/** Whether a process-control request came from this Web host on loopback. */
-export function trustedRestartRequest(request: Pick<IncomingMessage, 'headers' | 'socket'>): boolean {
-  const address = request.socket.remoteAddress
-  if (address !== '127.0.0.1' && address !== '::1' && address !== '::ffff:127.0.0.1') return false
-  if (request.headers.forwarded !== undefined
-    || request.headers['x-forwarded-for'] !== undefined
-    || request.headers['x-real-ip'] !== undefined) return false
-  const origin = request.headers.origin
-  const host = request.headers.host
-  if (origin === undefined || host === undefined) return false
-  try {
-    const parsed = new URL(origin)
-    return (parsed.protocol === 'http:' || parsed.protocol === 'https:') && parsed.host === host
-  } catch {
-    return false
-  }
-}
-
-interface RestartResult {
-  pid: number
-  helperPid: number | undefined
-  logOut: string
-  logErr: string
-}
-
-/** Relaunch this exact DSH entry after a short detached handoff, then stop it. */
-function scheduleRestart(): RestartResult {
-  const launch = restartLaunch()
-  const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
-  const logOut = join(tmpdir(), `dsh-market-restart-${stamp}.out.log`)
-  const logErr = join(tmpdir(), `dsh-market-restart-${stamp}.err.log`)
-  const helperCode = [
-    "const { spawn } = require('node:child_process')",
-    "const fs = require('node:fs')",
-    `const file = ${JSON.stringify(launch.file)}`,
-    `const args = ${JSON.stringify(launch.args)}`,
-    `const cwd = ${JSON.stringify(launch.cwd)}`,
-    `const viaShell = ${JSON.stringify(launch.viaShell)}`,
-    `const logOut = ${JSON.stringify(logOut)}`,
-    `const logErr = ${JSON.stringify(logErr)}`,
-    'setTimeout(() => {',
-    '  try {',
-    '    const out = fs.openSync(logOut, "a")',
-    '    const err = fs.openSync(logErr, "a")',
-    '    const child = spawn(file, args, { cwd, detached: true, stdio: ["ignore", out, err], env: process.env, shell: viaShell })',
-    '    child.unref()',
-    '  } catch {}',
-    '}, 1500)',
-  ].join('\n')
-  const helper = spawn(process.execPath, ['-e', helperCode], {
-    detached: true,
-    stdio: 'ignore',
-    env: process.env,
-  })
-  helper.unref()
-  setTimeout(() => process.kill(process.pid, 'SIGTERM'), 500)
-  return { pid: process.pid, helperPid: helper.pid, logOut, logErr }
-}
-
-async function readJsonBody(request: IncomingMessage): Promise<unknown> {
-  const chunks: Buffer[] = []
-  let size = 0
-  for await (const chunk of request) {
-    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
-    size += buffer.length
-    if (size > 4096) throw new Error('request body too large')
-    chunks.push(buffer)
-  }
-  return JSON.parse(Buffer.concat(chunks).toString('utf8')) as unknown
-}
-
-function profileDir(profile: string): string {
-  const home = process.env.DSH_HOME ?? join(homedir(), '.dsh')
-  return join(home, 'profiles', profile)
-}
-
-/** Community dependencies of the profile (official in-box scope filtered out). */
-function readInstalled(profile: string): Record<string, string> {
-  try {
-    const manifest = JSON.parse(readFileSync(join(profileDir(profile), 'package.json'), 'utf8')) as {
-      dependencies?: Record<string, string>
-    }
-    const installed: Record<string, string> = {}
-    for (const [name, spec] of Object.entries(manifest.dependencies ?? {})) {
-      if (!name.startsWith('@deepseek-ai/')) installed[name] = spec
-    }
-    return installed
-  } catch {
-    return {}
-  }
-}
-
-/** GitHub `owner/repo` for a registry URL, or null when it is not a GitHub repo URL. */
-function repoOf(url: string): string | null {
-  const m = /^https:\/\/github\.com\/([^/]+\/[^/]+?)\/?$/.exec(url)
-  if (m === null || !REPO_RE.test(m[1])) return null
-  return m[1]
-}
-
-/** Pinned commit per `owner/repo` from the profile lockfile's codeload tarball URLs. */
-function readLockCommits(profile: string): Map<string, string> {
-  const commits = new Map<string, string>()
-  try {
-    const lock = readFileSync(join(profileDir(profile), 'pnpm-lock.yaml'), 'utf8')
-    for (const m of lock.matchAll(/codeload\.github\.com\/([^/\s]+\/[^/\s]+)\/tar\.gz\/([0-9a-f]{40})/g)) {
-      commits.set(m[1].toLowerCase(), m[2])
-    }
-  } catch { /* no lockfile — no git installs to report */ }
-  return commits
-}
-
-/**
- * Some registry entries point at collection repos whose actual plugin lives
- * in a subdirectory — the root has no package.json, and pnpm installs the
- * bare fileset with exit 0. Detect that junk install, drop it, and re-add
- * each plugin subdirectory through pnpm's `#path:` selector.
- * @returns overall success (true when nothing needed retargeting).
- */
-async function retargetCollections(profile: string, before: Set<string>, target: string): Promise<boolean> {
-  if (!target.startsWith('github:')) return true
-  const junk = Object.keys(readInstalled(profile)).filter(name => !before.has(name)
-    && !existsSync(join(profileDir(profile), 'node_modules', name, 'package.json')))
-  let allOk = true
-  for (const name of junk) {
-    const root = join(profileDir(profile), 'node_modules', name)
-    let candidates: string[] = []
-    try {
-      candidates = readdirSync(root, { withFileTypes: true })
-        .filter(dirent => dirent.isDirectory() && /^[A-Za-z0-9_.-]+$/.test(dirent.name))
-        .filter((dirent) => {
-          try {
-            const manifest = JSON.parse(readFileSync(join(root, dirent.name, 'package.json'), 'utf8')) as { dsh?: unknown }
-            return manifest.dsh !== undefined
-          } catch {
-            return false
-          }
-        })
-        .map(dirent => dirent.name)
-        .slice(0, 5)
-    } catch {
-      candidates = []
-    }
-    logEvent('info', 'install', `${name}: collection repo (no root package.json); plugins inside: ${candidates.join(', ') || 'none'}`)
-    await runDshPlugin(profile, ['remove', name])
-    if (candidates.length === 0) {
-      allOk = false
-      continue
-    }
-    for (const sub of candidates) {
-      const result = await runDshPlugin(profile, ['add', `${target}#path:${sub}`])
-      if (result.exitCode !== 0 || result.timedOut) allOk = false
-    }
-  }
-  return allOk
-}
-
-function readInstalledVersion(profile: string, name: string): string | null {
-  try {
-    const manifest = JSON.parse(
-      readFileSync(join(profileDir(profile), 'node_modules', name, 'package.json'), 'utf8'),
-    ) as { version?: string }
-    return manifest.version ?? null
-  } catch {
-    return null
-  }
-}
-
-export interface UpdateStatus {
-  kind: 'github' | 'npm' | 'linked'
-  version: string | null
-  current: string | null
-  latest: string | null
-  updateAvailable: boolean
-}
-
-const UPDATES_TTL_MS = 30 * 60 * 1000
-let updatesCache: { at: number; data: Record<string, UpdateStatus> } | null = null
-
-async function fetchJson(url: string): Promise<unknown> {
-  const res = await fetch(url, {
-    headers: { accept: 'application/json', 'user-agent': 'dsh-market' },
-    signal: AbortSignal.timeout(4000),
-  })
-  if (!res.ok) throw new Error(`HTTP ${res.status}`)
-  return res.json() as unknown
-}
-
-/** Per-plugin update checks; a failed check reports no update rather than failing the listing. */
-async function checkUpdates(profile: string, force = false): Promise<Record<string, UpdateStatus>> {
-  if (!force && updatesCache && Date.now() - updatesCache.at < UPDATES_TTL_MS) return updatesCache.data
-  const installed = readInstalled(profile)
-  const lockCommits = readLockCommits(profile)
-  const result: Record<string, UpdateStatus> = {}
-  await Promise.all(Object.entries(installed).map(async ([name, spec]) => {
-    const version = readInstalledVersion(profile, name)
-    if (spec.startsWith('link:') || spec.startsWith('file:')) {
-      result[name] = { kind: 'linked', version, current: null, latest: null, updateAvailable: false }
-      return
-    }
-    const gh = /^(?:github:)?([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+?)(?:#.*)?$/.exec(spec)
-    try {
-      if (spec.startsWith('github:') && gh !== null) {
-        const current = lockCommits.get(gh[1].toLowerCase()) ?? null
-        const head = (await fetchJson(`https://api.github.com/repos/${gh[1]}/commits/HEAD`)) as { sha?: string }
-        const latest = typeof head.sha === 'string' ? head.sha : null
-        result[name] = {
-          kind: 'github', version, current, latest,
-          updateAvailable: current !== null && latest !== null && current !== latest,
-        }
-      } else {
-        const meta = (await fetchJson(`https://registry.npmjs.org/${encodeURIComponent(name)}/latest`)) as { version?: string }
-        const latest = typeof meta.version === 'string' ? meta.version : null
-        result[name] = {
-          kind: 'npm', version, current: version, latest,
-          updateAvailable: version !== null && latest !== null && version !== latest,
-        }
-      }
-    } catch {
-      result[name] = { kind: spec.startsWith('github:') ? 'github' : 'npm', version, current: null, latest: null, updateAvailable: false }
-    }
-  }))
-  updatesCache = { at: Date.now(), data: result }
-  return result
-}
 
 /**
  * Register the market's HTTP routes.
@@ -480,14 +64,48 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
   // Boot-time wipe: stale hot-mount inputs from a previous session must never
   // survive into a composition where the bundle layer already covers them.
   cleanHotDir(profileDir(config.profile))
+  // The user's persisted theme choice; activateTheme mutates and writes it.
+  const disabledThemes = readDisabledThemes(profileDir(config.profile))
+  const themes = createThemeManager(host, config.profile, disabledThemes)
+
   // Client-only packages (dsh.client without dsh.bundle) are invisible to the
   // bundle layer in every boot; the market shim-mounts them so their client
   // bundles are actually served.
-  void mountClientOnlyDeps(host, profileDir(config.profile)).then((mounted) => {
+  void mountClientOnlyDeps(host, profileDir(config.profile)).then(async (mounted) => {
     if (mounted.length > 0) logEvent('info', 'boot', `client-only shims mounted: ${mounted.join(', ')}`)
+    // Replay the user's theme choice: bundle-layer themes they switched away
+    // from get live-disabled again (bundle trees are in-memory, so the
+    // disable never persists on its own).
+    for (const name of disabledThemes) {
+      if (await themes.setEntryDisabled(name, true)) logEvent('info', 'boot', `theme kept off: ${name}`)
+    }
+  })
+
+  // Self-healing guard: dsh's own patch overlay can re-update entries during
+  // activation and wipe the runtime disabled flag — whenever a fiber comes up
+  // for a theme the user switched off, put it back down.
+  host.on?.('internal/plugin', (fiber) => {
+    const name = fiber.entry?.options?.name
+    if (name !== undefined && disabledThemes.has(name)) void themes.setEntryDisabled(name, true)
   })
   let installing = false
-  let restarting = false
+
+  /**
+   * Drop live hot mounts whose package was removed outside the market
+   * (e.g. `dsh plugin remove` in a terminal): the stale mount would keep
+   * serving a client bundle that 404s after refresh, wedging the page
+   * until a restart (#29 by @SunYanbox).
+   */
+  async function dropStaleHotMounts(): Promise<void> {
+    for (const name of listHotMounts()) {
+      if (existsSync(join(profileDir(config.profile), 'node_modules', name, 'package.json'))) continue
+      await hotUnmount(name)
+      logEvent('warn', 'hot-sweep', `${name}: package removed outside the market — live mount dropped`)
+    }
+  }
+
+  /** Every plugin command goes through the pnpm-drift recovery wrapper (#20). */
+  const runPlugin = (profile: string, args: string[]) => withHoistRecovery(runDshPlugin, profile, args)
 
   const disposers = [
     host.webServer.register({
@@ -511,16 +129,17 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
     host.webServer.register({
       kind: 'exact',
       path: '/dsh-market/installed',
-      handler: (request, response) => {
+      handler: async (request, response) => {
         if (request.method !== 'GET') {
           response.writeHead(405, { allow: 'GET' })
           response.end()
           return
         }
+        await dropStaleHotMounts()
         sendJson(response, 200, {
           profile: config.profile,
           installed: readInstalled(config.profile),
-          skins: listShimMounts(),
+          live: listHotMounts(),
         })
       },
     }),
@@ -542,13 +161,14 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
           const body = (await readJsonBody(request)) as { name?: unknown }
           const name = typeof body.name === 'string' ? body.name : ''
           const installed = readInstalled(config.profile)
-          if (installed[name] === undefined || !isSkinPkg(profileDir(config.profile), name)) {
-            sendJson(response, 400, { error: 'not an installed skin' })
+          const themeNames = await themes.installedThemeNames()
+          if (installed[name] === undefined || !themeNames.has(name)) {
+            sendJson(response, 400, { error: 'not an installed theme' })
             return
           }
-          const live = await useSkin(host, profileDir(config.profile), name)
-          logEvent(live ? 'info' : 'error', 'use-skin', `${name}: ${live ? 'active' : 'failed'}`)
-          sendJson(response, live ? 200 : 502, { ok: live, skins: listShimMounts() })
+          const activated = await themes.activateTheme(name)
+          logEvent(activated ? 'info' : 'error', 'use-skin', `${name}: ${activated ? 'active' : 'failed'}`)
+          sendJson(response, activated ? 200 : 502, { ok: activated, live: listHotMounts() })
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error)
           logEvent('error', 'use-skin', `route error: ${message}`)
@@ -566,6 +186,7 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
           response.end()
           return
         }
+        await dropStaleHotMounts()
         sendJson(response, 200, {
           active: progress.active,
           target: progress.target,
@@ -573,7 +194,6 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
           lastLine: progress.lastLine,
           pnpm: await probePnpm(),
           boot: BOOT_ID,
-          restart: restartAllowed(config),
           installed: readInstalled(config.profile),
         })
       },
@@ -603,45 +223,6 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
           node: process.version,
           profile: config.profile,
         }))
-      },
-    }),
-
-    host.webServer.register({
-      kind: 'exact',
-      path: '/dsh-market/restart',
-      handler: (request, response) => {
-        if (request.method !== 'POST') {
-          response.writeHead(405, { allow: 'POST' })
-          response.end()
-          return
-        }
-        if (!restartAllowed(config)) {
-          sendJson(response, 403, { error: 'self-restart is disabled for this host' })
-          return
-        }
-        if (!trustedRestartRequest(request)) {
-          sendJson(response, 403, { error: 'restart is limited to same-origin loopback requests' })
-          return
-        }
-        if (installing) {
-          sendJson(response, 409, { error: 'cannot restart while a plugin operation is running' })
-          return
-        }
-        if (restarting) {
-          sendJson(response, 409, { error: 'restart already scheduled' })
-          return
-        }
-        restarting = true
-        try {
-          const result = scheduleRestart()
-          logEvent('info', 'restart', `scheduled pid=${String(result.pid)} helper=${String(result.helperPid)}`)
-          sendJson(response, 202, { ok: true, boot: BOOT_ID, ...result })
-        } catch (error) {
-          restarting = false
-          const message = error instanceof Error ? error.message : String(error)
-          logEvent('error', 'restart', message)
-          sendJson(response, 500, { error: message })
-        }
       },
     }),
 
@@ -681,8 +262,9 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
           return
         }
         try {
-          const body = (await readJsonBody(request)) as { name?: unknown }
+          const body = (await readJsonBody(request)) as { name?: unknown; force?: unknown }
           const name = typeof body.name === 'string' ? body.name : ''
+          const force = body.force === true
           const spec = readInstalled(config.profile)[name]
           if (spec === undefined) {
             sendJson(response, 400, { error: 'plugin is not installed' })
@@ -701,28 +283,34 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
           const beforeCommit = repoKey !== null ? readLockCommits(config.profile).get(repoKey) ?? null : null
           installing = true
           try {
-            const result = await runDshPlugin(config.profile, ['add', target])
-            let ok = result.exitCode === 0 && !result.timedOut
+            // force: the user chose to install a fresh release without the
+            // default one-day safety wait; scoped to this single command.
+            const addArgs = force ? ['add', '--config.minimumReleaseAge=0', target] : ['add', target]
+            const result = await runPlugin(config.profile, addArgs)
+            const cancelled = result.cancelled
+            let ok = result.exitCode === 0 && !result.timedOut && !cancelled
             let stale = false
             if (ok) {
-              // pnpm's minimumReleaseAge silently keeps the old version and
-              // exits 0 when the new release is "too young" (#13) — a clean
-              // exit alone does not mean the update happened.
-              const afterVersion = readInstalledVersion(config.profile, name)
-              const afterCommit = repoKey !== null ? readLockCommits(config.profile).get(repoKey) ?? null : null
-              stale = isGit
-                ? beforeCommit !== null && afterCommit === beforeCommit
-                : beforeVersion !== null && afterVersion === beforeVersion
+              stale = isStaleUpdate({
+                isGit,
+                beforeVersion,
+                afterVersion: readInstalledVersion(config.profile, name),
+                beforeCommit,
+                afterCommit: repoKey !== null ? readLockCommits(config.profile).get(repoKey) ?? null : null,
+              })
               if (stale) ok = false
             }
-            if (ok) updatesCache = null
+            if (ok) invalidateUpdates()
             const staleError = stale
-              ? `still v${beforeVersion ?? beforeCommit?.slice(0, 7) ?? '?'} after the update — pnpm 的 minimumReleaseAge 安全策略会暂时拦下发布不久的新版本（静默保留旧版且返回成功）。请稍后再试；着急可调整 profile pnpm-workspace.yaml 的 minimumReleaseAge / pnpm's minimumReleaseAge holds back very fresh releases; retry later or tune it in the profile's pnpm-workspace.yaml`
+              ? '这个新版本刚发布不久。为了安全，系统默认会等它发布满一天后再安装——刚发布的版本偶尔会被发现问题然后撤回。可以明天再试，或点「立即更新」不再等待。 / This version was just released; for safety, installs normally wait about a day after a release. Try again tomorrow, or click "Update now" to install it right away.'
               : null
-            logEvent(ok ? 'info' : 'error', 'update',
-              `${name} -> ${target} exit=${String(result.exitCode)}${result.timedOut ? ' TIMEOUT' : ''}${stale ? ' STALE(minimumReleaseAge?)' : ''}${ok ? '' : ` stderr=${result.stderr.slice(-300)}`}`)
-            sendJson(response, ok ? 200 : 502, {
+            logEvent(ok || cancelled ? 'info' : 'error', 'update',
+              `${name} -> ${target} exit=${String(result.exitCode)}${result.timedOut ? ' TIMEOUT' : ''}${cancelled ? ' CANCELLED' : ''}${stale ? ' STALE(minimumReleaseAge?)' : ''}${ok || cancelled ? '' : ` stderr=${result.stderr.slice(-300)}`}`)
+            // A user-cancelled run is a quiet outcome, not an error.
+            sendJson(response, ok || cancelled ? 200 : 502, {
               ok,
+              cancelled: cancelled || undefined,
+              stale: stale || undefined,
               error: staleError ?? undefined,
               exitCode: result.exitCode,
               timedOut: result.timedOut,
@@ -765,6 +353,65 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
 
     host.webServer.register({
       kind: 'exact',
+      path: '/dsh-market/approve-builds',
+      handler: async (request, response) => {
+        if (request.method !== 'POST') {
+          response.writeHead(405, { allow: 'POST' })
+          response.end()
+          return
+        }
+        if (!sameOrigin(request)) {
+          sendJson(response, 403, { error: 'untrusted origin' })
+          return
+        }
+        try {
+          // One-click build-script approval (#6 by @qichuang321): only
+          // packages ALREADY installed in the profile can be allowed — the
+          // list is not free input.
+          const body = (await readJsonBody(request)) as { packages?: unknown }
+          const installed = readInstalled(config.profile)
+          const packages = (Array.isArray(body.packages) ? body.packages.map(String) : [])
+            .filter(name => installed[name] !== undefined)
+          if (packages.length === 0) {
+            sendJson(response, 400, { error: 'no installed packages given' })
+            return
+          }
+          const approved = setAllowBuilds(config.profile, packages)
+          logEvent('info', 'approve-builds', `allowed build scripts: ${approved.join(', ')}`)
+          sendJson(response, 200, { ok: true, approved })
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error)
+          logEvent('error', 'approve-builds', `route error: ${message}`)
+          sendJson(response, 500, { error: message })
+        }
+      },
+    }),
+
+    host.webServer.register({
+      kind: 'exact',
+      path: '/dsh-market/cancel',
+      handler: async (request, response) => {
+        if (request.method !== 'POST') {
+          response.writeHead(405, { allow: 'POST' })
+          response.end()
+          return
+        }
+        if (!sameOrigin(request)) {
+          sendJson(response, 403, { error: 'untrusted origin' })
+          return
+        }
+        // Cancel flow contributed in #6 by @qichuang321.
+        if (!cancelActive()) {
+          sendJson(response, 400, { error: 'no operation is running' })
+          return
+        }
+        logEvent('info', 'cancel', `cancelled ${progress.target || 'operation'}`)
+        sendJson(response, 200, { ok: true, cancelled: true, target: progress.target })
+      },
+    }),
+
+    host.webServer.register({
+      kind: 'exact',
       path: '/dsh-market/uninstall',
       handler: async (request, response) => {
         if (request.method !== 'POST') {
@@ -793,17 +440,19 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
           }
           installing = true
           try {
-            const result = await runDshPlugin(config.profile, ['remove', name])
-            const ok = result.exitCode === 0 && !result.timedOut
+            const result = await runPlugin(config.profile, ['remove', name])
+            const cancelled = result.cancelled
+            const ok = result.exitCode === 0 && !result.timedOut && !cancelled
             let hot = false
             if (ok) {
-              updatesCache = null
+              invalidateUpdates()
               hot = await hotUnmount(name)
             }
-            logEvent(ok ? 'info' : 'error', 'uninstall',
-              `${name} exit=${String(result.exitCode)}${ok ? ` live-removed=${String(hot)}` : ` stderr=${result.stderr.slice(-300)}`}`)
-            sendJson(response, ok ? 200 : 502, {
+            logEvent(ok || cancelled ? 'info' : 'error', 'uninstall',
+              `${name} exit=${String(result.exitCode)}${cancelled ? ' CANCELLED' : ''}${ok ? ` live-removed=${String(hot)}` : cancelled ? '' : ` stderr=${result.stderr.slice(-300)}`}`)
+            sendJson(response, ok || cancelled ? 200 : 502, {
               ok,
+              cancelled: cancelled || undefined,
               hot,
               exitCode: result.exitCode,
               stdout: result.stdout,
@@ -849,46 +498,80 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
             sendJson(response, 400, { error: 'plugin is not in the curated registry' })
             return
           }
-          const repo = repoOf(entry.url)
-          if (repo === null) {
+          const target = installTargetFor(entry)
+          if (target === null) {
             sendJson(response, 400, { error: 'unsupported source url' })
             return
           }
-          // Registry tarballs beat full-repo GitHub downloads: smaller,
-          // prebuilt, and CDN/mirror served. The npm name comes from our
-          // curated registry, which only maps repo-verified packages.
-          const NPM_NAME_RE = /^(@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*$/
-          const target = typeof entry.npm === 'string' && NPM_NAME_RE.test(entry.npm)
-            ? entry.npm
-            : `github:${repo}`
+          // Duplicate guard (#27): the same plugin listed under another name
+          // (an alias entry pointing at the same repo) must never install
+          // twice — two loader entries with one id brick the next boot.
+          // Monorepo subpath entries (distinct plugins in one repo) pass:
+          // their entry urls differ by subpath and identity is name-based.
+          const aliasOf = findInstalledAlias(entry, readInstalled(config.profile))
+          if (aliasOf !== null) {
+            logEvent('warn', 'install-rejected', `${entry.name}: same plugin already installed as ${aliasOf}`)
+            sendJson(response, 400, { error: `已以「${aliasOf}」安装过同一个插件，无需重复安装 / this plugin is already installed as "${aliasOf}"` })
+            return
+          }
           installing = true
           try {
             const before = new Set(Object.keys(readInstalled(config.profile)))
-            const result = await runDshPlugin(config.profile, ['add', target])
-            let ok = result.exitCode === 0 && !result.timedOut
-            if (ok) updatesCache = null
+            const result = await runPlugin(config.profile, ['add', target])
+            const cancelled = result.cancelled
+            let ok = result.exitCode === 0 && !result.timedOut && !cancelled
+            if (ok) invalidateUpdates()
             if (ok) {
               // Collection repos (e.g. skin monorepos) install as a junk
               // fileset with no root package.json; retarget to the real
               // plugin subdirectories via pnpm's #path: selector.
-              ok = await retargetCollections(config.profile, before, target)
+              ok = await retargetCollections(runPlugin, config.profile, before, target)
+            }
+            // Fake-success guard (#18): a clean exit that added nothing
+            // installable must not read as success. Runs even when
+            // retargeting partially failed — a broken piece that slipped in
+            // must never survive to brick the next boot.
+            let notAPlugin = false
+            let removedBroken: string[] = []
+            if (result.exitCode === 0 && !result.timedOut && !cancelled) {
+              const validated = await validateAddedPlugins(runPlugin, config.profile, before)
+              removedBroken = validated.removedBroken
+              if (removedBroken.length > 0) {
+                logEvent('warn', 'install', `${target}: removed uninstallable pieces (no dsh manifest or missing build artifacts): ${removedBroken.join(', ')}`)
+              }
+              if (validated.keep.length === 0) {
+                ok = false
+                notAPlugin = true
+                logEvent('error', 'install', `${target}: nothing installable survived validation`)
+              } else {
+                // Partial success across a collection still counts as success.
+                ok = true
+              }
             }
             const installed = readInstalled(config.profile)
             let hot = false
             if (ok) {
               const added = Object.keys(installed).filter(name => !before.has(name))
               if (added.length > 0) {
-                const results = await Promise.all(
-                  added.map(name => hotMount(host, profileDir(config.profile), name)),
-                )
-                hot = results.every(Boolean)
+                // Theme installs auto-activate (and deactivate the previous
+                // theme) so the result is visible right after the refresh.
+                hot = true
+                for (const name of added) {
+                  const live = entry.category === 'theme'
+                    ? await themes.activateTheme(name)
+                    : await hotMount(host, profileDir(config.profile), name)
+                  if (!live) hot = false
+                }
               }
             }
-            logEvent(ok ? 'info' : 'error', 'install',
-              `${target} exit=${String(result.exitCode)}${result.timedOut ? ' TIMEOUT' : ''}${ok ? ` hot=${String(hot)}` : ` stderr=${result.stderr.slice(-300)}`}`)
-            sendJson(response, ok ? 200 : 502, {
+            logEvent(ok || cancelled ? 'info' : 'error', 'install',
+              `${target} exit=${String(result.exitCode)}${result.timedOut ? ' TIMEOUT' : ''}${cancelled ? ' CANCELLED' : ''}${ok ? ` hot=${String(hot)}` : cancelled ? '' : ` stderr=${result.stderr.slice(-300)}`}`)
+            sendJson(response, ok || cancelled ? 200 : 502, {
               ok,
+              cancelled: cancelled || undefined,
               hot,
+              ignoredBuilds: (() => { const list = parseIgnoredBuilds(result.stdout, result.stderr); return list.length > 0 ? list : undefined })(),
+              error: notAPlugin ? 'nothing installable: the plugin(s) need a build step (blocked by default, see allowBuilds) or ship no prebuilt artifacts / 没有可安装的内容：插件需要构建授权（allowBuilds，默认拦截）或未附带构建产物，详见导出日志' : undefined,
               exitCode: result.exitCode,
               timedOut: result.timedOut,
               stdout: result.stdout,

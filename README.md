@@ -13,6 +13,10 @@ The plugin market inside DeepSeek Harness. Open Settings → **Plugin Market** �
 
 ![dsh-market](assets/demo-en.png)
 
+One-click themes — install, switch live, no restart:
+
+![Themes tab](assets/themes-en.png)
+
 ## Install
 
 ```sh
@@ -23,9 +27,10 @@ Restart `dsh web`, then open **Settings → Plugin Market**.
 
 ## What you get
 
-- **Browse & search** the full community catalog (230+ plugins, growing daily) — category filters, star counts, top/new sorting, bilingual descriptions that follow your UI language
+- **Browse & search** the full community catalog (300+ plugins, growing daily) — category filters, star counts, top/new sorting, bilingual descriptions that follow your UI language
+- **Themes** — a dedicated tab for community themes and skins: install → active immediately, switch with one click (themes are mutually exclusive, your choice survives restarts), uninstall to revert
 - **One-click install** — confirm the source, watch live progress; most plugins go live after a page refresh, no restart
-- **Updates** — per-plugin update checks (npm version or pinned commit vs HEAD), one-click update; the market updates itself the same way
+- **Updates** — per-plugin update checks (npm version or pinned commit vs HEAD), one-click update, or update everything at once; the market updates itself the same way
 - **Uninstall** — two-step confirm; plugins installed this session are removed live
 - **Restart when needed** — changes that cannot hot-load show a one-click restart beside the pending-change banner; the action is restricted to same-origin loopback requests
 - **Zero jargon** — if a component is missing (pnpm), the market detects it and offers a one-click automatic setup
@@ -49,6 +54,14 @@ Installs prefer npm tarballs over full-repo GitHub downloads whenever a plugin p
 ## Data source
 
 Live from [awesome-dsh-plugin.com/plugins.json](https://awesome-dsh-plugin.com/plugins.json) — curated entries, npm mapping, and star counts refreshed daily by CI — with a bundled snapshot as offline fallback.
+
+## Related projects
+
+### DeepSeek Harness Desktop
+
+[DeepSeek Harness Desktop](https://github.com/anywhere-labs/deepseek-harness-desktop) is a modern desktop client for the DeepSeek Harness ecosystem — start and manage a local Harness service without installing Node.js or touching the command line. Plugin marketplace, mobile remote control, and IM Channels are on its roadmap.
+
+[Website](https://www.dshdesktop.cn) · [GitHub](https://github.com/anywhere-labs/deepseek-harness-desktop)
 
 ## License
 
