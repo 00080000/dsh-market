@@ -84,8 +84,33 @@ export function looksTerminal(plugin: RegistryPlugin, lang: string): boolean {
   return /\b(tui|cli|tty|terminal)\b|终端|命令行/i.test(plugin.name + ' ' + desc)
 }
 
-/** Discover sort orders. */
-export type SortKey = 'hot' | 'new' | 'old'
+/** Sortable field for the Discover list. */
+export type SortField = 'stars' | 'added'
+/** Sort direction: desc = newest/most first, asc = oldest/least first. */
+export type SortDir = 'desc' | 'asc'
+/** Combined sort key sent to visiblePlugins. */
+export type SortKey = `${SortField}-${SortDir}`
+
+/** Recency windows for the "published within" filter. */
+export type TimeRange = 'all' | 'day' | 'week' | 'month' | 'quarter' | 'year'
+
+/** Days per TimeRange (`all` has no cutoff and is handled by the caller). */
+export const TIME_RANGE_DAYS: Record<Exclude<TimeRange, 'all'>, number> = {
+  day: 1,
+  week: 7,
+  month: 30,
+  quarter: 90,
+  year: 365,
+}
+
+/** True when `added` is a date within the last `days` days (inclusive). */
+export function withinDays(added: string | undefined, days: number): boolean {
+  if (added === undefined || added === '') return false
+  const time = Date.parse(added)
+  if (Number.isNaN(time)) return false
+  const age = Date.now() - time
+  return age >= 0 && age <= days * 86_400_000
+}
 
 /** Filters and sort order driving the discover list. */
 export interface ListQuery {
@@ -95,32 +120,38 @@ export interface ListQuery {
   query: string
   /** UI language for description matching ('zh' / 'en'). */
   lang: string
-  /** 'hot' (stars desc), 'new' (added desc), 'old' (added asc); anything else keeps registry order. */
+  /** 'stars-desc' | 'stars-asc' | 'added-desc' | 'added-asc'; anything else keeps registry order. */
   sort: string
+  /** Keep only plugins published within the last N days; undefined = any time. */
+  sinceDays?: number
 }
 
 /**
- * The discover list: category filter, then search across name / owner /
- * localized description, then the selected sort. Pure — the section renders
- * exactly this.
+ * The discover list: category filter, then the published-within window, then
+ * search across name / owner / localized description, then the selected sort.
+ * Pure — the section renders exactly this.
  */
 export function visiblePlugins(plugins: RegistryPlugin[], options: ListQuery): RegistryPlugin[] {
   const query = options.query.trim().toLowerCase()
   const list = plugins.filter((p) => {
     if (options.category !== 'all' && p.category !== options.category) return false
+    if (options.sinceDays !== undefined && !withinDays(p.added, options.sinceDays)) return false
     if (query === '') return true
     const desc = (p.description && (p.description[options.lang] || p.description.en)) || ''
     return p.name.toLowerCase().includes(query)
       || p.owner.toLowerCase().includes(query)
       || desc.toLowerCase().includes(query)
   })
-  if (options.sort === 'hot') {
+  if (options.sort === 'stars-desc') {
     return [...list].sort((a, b) => (b.stars ?? -1) - (a.stars ?? -1))
   }
-  if (options.sort === 'new') {
+  if (options.sort === 'stars-asc') {
+    return [...list].sort((a, b) => (a.stars ?? -1) - (b.stars ?? -1))
+  }
+  if (options.sort === 'added-desc') {
     return [...list].sort((a, b) => String(b.added).localeCompare(String(a.added)))
   }
-  if (options.sort === 'old') {
+  if (options.sort === 'added-asc') {
     return [...list].sort((a, b) => String(a.added).localeCompare(String(b.added)))
   }
   return list
