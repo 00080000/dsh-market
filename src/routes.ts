@@ -421,12 +421,17 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
         }
         try {
           // One-click build-script approval (#6 by @qichuang321): only
-          // packages ALREADY installed in the profile can be allowed — the
-          // list is not free input.
+          // packages physically present in the profile's installed tree can
+          // be allowed — the list is not free input. Presence is checked in
+          // node_modules, NOT the dependencies map: pnpm's blocked build
+          // scripts are usually TRANSITIVE deps (cloudflared, ssh2,
+          // cpu-features…), which never appear in package.json (#56 by
+          // @walnut1218).
+          const PKG_RE = /^(@[A-Za-z0-9-~][A-Za-z0-9._~-]*\/)?[A-Za-z0-9-~][A-Za-z0-9._~-]*$/
           const body = (await readJsonBody(request)) as { packages?: unknown }
-          const installed = readInstalled(config.profile)
           const packages = (Array.isArray(body.packages) ? body.packages.map(String) : [])
-            .filter(name => installed[name] !== undefined)
+            .filter(name => PKG_RE.test(name)
+              && existsSync(join(profileDir(config.profile), 'node_modules', name, 'package.json')))
           if (packages.length === 0) {
             sendJson(response, 400, { error: 'no installed packages given' })
             return

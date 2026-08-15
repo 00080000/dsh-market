@@ -590,6 +590,23 @@ describe('build-script approval flow (#6)', () => {
     // …and the original workspace settings survive.
     expect(yaml).toContain('packages:')
   })
+
+  it('approves TRANSITIVE build deps — in node_modules but not in package.json (#56)', async () => {
+    fake.npm['dsh-loop'] = { latest: '1.0.0', versions: { '1.0.0': { manifest: { dsh: {}, main: 'lib/index.js' }, artifacts: ['lib/index.js'] } } }
+    await bed.dispatch('POST', '/dsh-market/install', { url: 'https://github.com/o/dsh-loop' })
+    // pnpm's blocked build scripts are usually transitive deps (cloudflared,
+    // ssh2, cpu-features…) — hoisted into node_modules, absent from the
+    // profile's dependencies map.
+    mkdirSync(join(profileDir('web'), 'node_modules', 'cloudflared'), { recursive: true })
+    writeFileSync(join(profileDir('web'), 'node_modules', 'cloudflared', 'package.json'), '{"name":"cloudflared"}')
+    const approve = await bed.dispatch('POST', '/dsh-market/approve-builds', { packages: ['cloudflared', '../evil', 'ghost-package'] })
+    expect(approve.status).toBe(200)
+    expect(approve.json.approved).toContain('cloudflared')
+    expect(approve.json.approved).not.toContain('../evil')
+    expect(approve.json.approved).not.toContain('ghost-package')
+    const yaml = readFileSync(join(profileDir('web'), 'pnpm-workspace.yaml'), 'utf8')
+    expect(yaml).toMatch(/allowBuilds:[\s\S]*cloudflared: true/)
+  })
 })
 
 describe('official-scope community plugins (#28)', () => {

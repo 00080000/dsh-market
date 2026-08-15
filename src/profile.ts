@@ -149,7 +149,12 @@ export function setAllowBuilds(profile: string, packages: string[]): string[] {
   if (blockMatch !== null) {
     for (const line of blockMatch[1].split('\n')) {
       const m = /^[ \t]+([^:\s]+(?:\/[^:\s]+)?)\s*:\s*(\S.*)?$/.exec(line)
-      if (m !== null) map[m[1]] = m[2] ?? 'true'
+      if (m === null) continue
+      // Keep only real booleans: pnpm's failed-install bug (#11535, seen in
+      // our #56) writes a literal "set this to true or false" placeholder,
+      // which breaks every later approval until the entry is dropped.
+      const value = (m[2] ?? 'true').trim()
+      if (/^(true|false)$/.test(value)) map[m[1]] = value
     }
   }
   for (const pkg of packages) {
