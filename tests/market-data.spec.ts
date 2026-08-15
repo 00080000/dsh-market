@@ -98,11 +98,13 @@ describe('discover list (visiblePlugins)', () => {
     expect(visiblePlugins(CATALOG, { category: 'ghost-cat', query: '', lang: 'en', sort: 'x' })).toEqual([])
   })
 
-  it('sorts hot by stars (unstarred last) and new by added date', () => {
+  it('sorts hot by stars (unstarred last), new by added desc, old by added asc', () => {
     expect(visiblePlugins(CATALOG, { category: 'all', query: '', lang: 'en', sort: 'hot' }).map(p => p.name))
       .toEqual(['dsh-notify', 'whale-skin', 'dsh-loop', 'no-stars'])
     expect(visiblePlugins(CATALOG, { category: 'all', query: '', lang: 'en', sort: 'new' }).map(p => p.name))
       .toEqual(['whale-skin', 'dsh-notify', 'dsh-loop', 'no-stars'])
+    expect(visiblePlugins(CATALOG, { category: 'all', query: '', lang: 'en', sort: 'old' }).map(p => p.name))
+      .toEqual(['no-stars', 'dsh-loop', 'dsh-notify', 'whale-skin'])
   })
 
   it('themePlugins lists only themes, most-starred first', () => {

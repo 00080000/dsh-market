@@ -84,6 +84,9 @@ export function looksTerminal(plugin: RegistryPlugin, lang: string): boolean {
   return /\b(tui|cli|tty|terminal)\b|终端|命令行/i.test(plugin.name + ' ' + desc)
 }
 
+/** Discover sort orders. */
+export type SortKey = 'hot' | 'new' | 'old'
+
 /** Filters and sort order driving the discover list. */
 export interface ListQuery {
   /** Active category id, or 'all'. */
@@ -92,7 +95,7 @@ export interface ListQuery {
   query: string
   /** UI language for description matching ('zh' / 'en'). */
   lang: string
-  /** 'hot' (stars desc), 'new' (added desc), anything else keeps registry order. */
+  /** 'hot' (stars desc), 'new' (added desc), 'old' (added asc); anything else keeps registry order. */
   sort: string
 }
 
@@ -116,6 +119,9 @@ export function visiblePlugins(plugins: RegistryPlugin[], options: ListQuery): R
   }
   if (options.sort === 'new') {
     return [...list].sort((a, b) => String(b.added).localeCompare(String(a.added)))
+  }
+  if (options.sort === 'old') {
+    return [...list].sort((a, b) => String(a.added).localeCompare(String(b.added)))
   }
   return list
 }
