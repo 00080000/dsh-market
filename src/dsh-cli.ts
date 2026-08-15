@@ -9,13 +9,31 @@
 
 import { spawn } from 'node:child_process'
 import type { ChildProcess } from 'node:child_process'
-import { dirname, resolve } from 'node:path'
+import { homedir } from 'node:os'
+import { dirname, join, resolve } from 'node:path'
 import { logEvent } from './log.ts'
 import { pluginArgsFor } from './pnpm-compat.ts'
 import { profileDir } from './profile.ts'
 
 // 15 min default (slow networks + git installs), overridable for CI/tests.
 // (#6 by @qichuang321.)
+/**
+ * macOS apps launched from Finder/Dock inherit a minimal PATH without the
+ * shell profile — Homebrew/npm/corepack all vanish and every install dies
+ * with ENOENT/127 (#32, #38). Append the well-known bin directories so the
+ * market's children find their tools regardless of how dsh was started.
+ */
+function spawnEnv(): NodeJS.ProcessEnv {
+  // pnpm v10+ blocks forever on a silent interactive prompt without a TTY;
+  // CI mode forces it to act or fail instead of asking.
+  if (process.platform === 'win32') return { ...process.env, CI: 'true' }
+  const parts = (process.env.PATH ?? '').split(':').filter(part => part !== '')
+  for (const bin of ['/opt/homebrew/bin', '/usr/local/bin', join(homedir(), '.local', 'bin')]) {
+    if (!parts.includes(bin)) parts.push(bin)
+  }
+  return { ...process.env, CI: 'true', PATH: parts.join(':') }
+}
+
 const INSTALL_TIMEOUT_MS = Number(process.env.DSH_MARKET_INSTALL_TIMEOUT_MS) || 15 * 60 * 1000
 
 /**
@@ -121,7 +139,7 @@ let pnpmReady = false
 export function probePnpm(): Promise<boolean> {
   if (pnpmReady) return Promise.resolve(true)
   return new Promise((resolvePromise) => {
-    const child = spawn('pnpm', ['--version'], { stdio: 'ignore', shell: winCmdShim })
+    const child = spawn('pnpm', ['--version'], { stdio: 'ignore', shell: winCmdShim, env: spawnEnv() })
     child.on('error', () => resolvePromise(false))
     child.on('close', (code) => {
       pnpmReady = code === 0
@@ -133,7 +151,7 @@ export function probePnpm(): Promise<boolean> {
 function runQuiet(file: string, args: string[], timeoutMs: number): Promise<{ code: number | null; output: string }> {
   return new Promise((resolvePromise) => {
     const child = spawn(file, args, {
-      env: { ...process.env, CI: 'true' },
+      env: spawnEnv(),
       stdio: ['ignore', 'pipe', 'pipe'],
       shell: winCmdShim,
     })
@@ -152,13 +170,24 @@ function runQuiet(file: string, args: string[], timeoutMs: number): Promise<{ co
  * a global npm install as fallback.
  * @returns true when `pnpm --version` succeeds afterwards.
  */
-export async function provisionPnpm(): Promise<boolean> {
+export async function provisionPnpm(): Promise<{ ok: boolean; hint?: string }> {
   const corepack = await runQuiet('corepack', ['enable', 'pnpm'], 60 * 1000)
   logEvent(corepack.code === 0 ? 'info' : 'warn', 'setup-pnpm', `corepack enable: exit=${String(corepack.code)} ${corepack.output.slice(-200)}`)
-  if (await probePnpm()) return true
+  if (await probePnpm()) return { ok: true }
   const npm = await runQuiet('npm', ['install', '-g', 'pnpm'], 3 * 60 * 1000)
   logEvent(npm.code === 0 ? 'info' : 'error', 'setup-pnpm', `npm -g: exit=${String(npm.code)} ${npm.output.slice(-200)}`)
-  return probePnpm()
+  if (await probePnpm()) return { ok: true }
+  // Both provisioning tools missing = Node itself is not on this process's
+  // PATH (typical for Finder/Dock launches with nvm/fnm). Pointing the user
+  // back at this same button would be a dead end (#32) — say what actually
+  // helps.
+  const pathIssue = /ENOENT/.test(corepack.output) && /ENOENT/.test(npm.output)
+  return {
+    ok: false,
+    hint: pathIssue
+      ? '这台机器的 dsh 进程找不到 Node（从图形界面启动不继承终端 PATH）。请改从终端启动 dsh，或安装 Homebrew 版 pnpm：brew install pnpm / This dsh process cannot find Node (GUI launches skip your shell PATH). Start dsh from a terminal, or install pnpm via Homebrew: brew install pnpm'
+      : undefined,
+  }
 }
 
 /** Live progress of the running plugin command, for the status route. */
@@ -206,7 +235,7 @@ export function runDshPlugin(profile: string, pluginArgs: string[]): Promise<Ins
       // pnpm v10 blocks forever on a silent interactive prompt without a TTY
       // (observed on re-add over a pinned git spec); CI mode forces it to act
       // or fail instead of asking.
-      env: { ...process.env, CI: 'true' },
+      env: spawnEnv(),
       stdio: ['ignore', 'pipe', 'pipe'],
       shell: viaShell,
       // Own process group on POSIX so cancel/timeout can kill the whole

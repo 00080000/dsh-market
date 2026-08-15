@@ -182,6 +182,7 @@ const REGISTRY = {
     { name: 'dsh-share', owner: 'h', url: 'https://github.com/h/dsh-share', category: 'tool', npm: 'dsh-share', description: {}, install: '', added: '' },
     { name: '@dsh-external/dsh-share', owner: 'h', url: 'https://github.com/h/dsh-share', category: 'tool', npm: null, description: {}, install: '', added: '' },
     { name: 'dsh-security-audit', owner: 'omdsh-dev', url: 'https://github.com/omdsh-dev/dsh-security-audit', category: 'tool', npm: null, description: {}, install: '', added: '' },
+    { name: 'dsh-blue-whale', owner: 'o', url: 'https://github.com/o/blue-whale', category: 'tool', npm: null, description: {}, install: '', added: '' },
     // Monorepo siblings: distinct plugins sharing one repo.
     { name: 'mono#plug-a', owner: 'm', url: 'https://github.com/m/mono/tree/main/packages/plug-a', category: 'tool', npm: null, description: {}, install: '', added: '' },
     { name: 'mono#plug-b', owner: 'm', url: 'https://github.com/m/mono/tree/main/packages/plug-b', category: 'tool', npm: null, description: {}, install: '', added: '' },
@@ -609,5 +610,33 @@ describe('one-click restart guards (#14)', () => {
     expect((await bed.dispatch('GET', '/dsh-market/status')).json.restart).toBe(false)
     expect((await bed.dispatch('POST', '/dsh-market/restart', {})).status).toBe(403)
     expect(restartCalls.count).toBe(0)
+  })
+})
+
+describe('bundle-layer uninstall live-disable (#37)', () => {
+  it('uninstalling a bundle-layer plugin disables its live loader entry so refresh survives', async () => {
+    fake.npm['dsh-blue-whale'] = { latest: '1.0.0', versions: { '1.0.0': { manifest: { dsh: { bundle: { patch: './cordis.patch.yml' } }, main: 'lib/index.js' }, artifacts: ['lib/index.js'] } } }
+    // Bundle-layer plugins never hot-mount; simulate the live loader entry
+    // the running host still holds for it.
+    fake.repos['github:o/blue-whale'] = { name: 'dsh-blue-whale', manifest: { dsh: { bundle: { patch: './x.yml' } }, main: 'lib/index.js' }, artifacts: ['lib/index.js'] }
+    await bed.dispatch('POST', '/dsh-market/install', { url: 'https://github.com/o/blue-whale' })
+    hot.mounts = [] // bundle-layer: not a hot mount
+    const entry = {
+      options: { id: 'dsh-blue-whale', name: 'dsh-blue-whale', disabled: null as boolean | null },
+      fiber: {} as unknown,
+      update: vi.fn(async (options: { disabled: boolean | null }) => {
+        entry.options.disabled = options.disabled
+        if (options.disabled === true) entry.fiber = undefined
+      }),
+    }
+    bed.loaderEntries.push(entry)
+
+    const r = await bed.dispatch('POST', '/dsh-market/uninstall', { name: 'dsh-blue-whale' })
+    expect(r.status).toBe(200)
+    // The live entry must be down — otherwise the next refresh 404s on the
+    // deleted client bundle and the whole page wedges until a dsh restart.
+    expect(entry.options.disabled).toBe(true)
+    expect(entry.fiber).toBeUndefined()
+    expect(r.json.hot).toBe(true)
   })
 })

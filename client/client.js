@@ -292,62 +292,62 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 			document.head.appendChild(tag);
 		}
 		var Market_module_css_default = {
-			"progress": "TDaEaa_progress",
-			"sentinel": "TDaEaa_sentinel",
-			"catsRow": "TDaEaa_catsRow",
-			"spec": "TDaEaa_spec",
-			"top": "TDaEaa_top",
-			"root": "TDaEaa_root",
-			"empty": "TDaEaa_empty",
-			"dot": "TDaEaa_dot",
-			"grid": "TDaEaa_grid",
-			"cancelBtn": "TDaEaa_cancelBtn",
-			"cmdDetails": "TDaEaa_cmdDetails",
+			"grow": "TDaEaa_grow",
 			"spin": "TDaEaa_spin",
+			"spec": "TDaEaa_spec",
+			"dot": "TDaEaa_dot",
+			"on": "TDaEaa_on",
 			"catsToggle": "TDaEaa_catsToggle",
-			"sub": "TDaEaa_sub",
-			"cmdSummary": "TDaEaa_cmdSummary",
-			"modalNote": "TDaEaa_modalNote",
-			"tag": "TDaEaa_tag",
-			"dangerBtn": "TDaEaa_dangerBtn",
-			"owner": "TDaEaa_owner",
+			"irow": "TDaEaa_irow",
+			"staleAction": "TDaEaa_staleAction",
+			"top": "TDaEaa_top",
+			"restart": "TDaEaa_restart",
+			"catsWrap": "TDaEaa_catsWrap",
+			"tabs": "TDaEaa_tabs",
+			"dangerArmed": "TDaEaa_dangerArmed",
 			"titleRow": "TDaEaa_titleRow",
+			"progress": "TDaEaa_progress",
+			"dangerBtn": "TDaEaa_dangerBtn",
+			"searchInline": "TDaEaa_searchInline",
+			"title": "TDaEaa_title",
+			"warnBtn": "TDaEaa_warnBtn",
+			"cmd": "TDaEaa_cmd",
+			"okState": "TDaEaa_okState",
+			"cmdSummary": "TDaEaa_cmdSummary",
+			"grid": "TDaEaa_grid",
+			"card": "TDaEaa_card",
+			"tag": "TDaEaa_tag",
+			"swatches": "TDaEaa_swatches",
+			"cmdDetails": "TDaEaa_cmdDetails",
+			"catsCollapsed": "TDaEaa_catsCollapsed",
+			"catsRow": "TDaEaa_catsRow",
+			"sub": "TDaEaa_sub",
+			"sort": "TDaEaa_sort",
+			"sect": "TDaEaa_sect",
+			"owner": "TDaEaa_owner",
+			"desc": "TDaEaa_desc",
+			"loading": "TDaEaa_loading",
+			"empty": "TDaEaa_empty",
+			"err": "TDaEaa_err",
+			"cancelBtn": "TDaEaa_cancelBtn",
+			"sentinel": "TDaEaa_sentinel",
+			"foot": "TDaEaa_foot",
+			"cats": "TDaEaa_cats",
+			"nm": "TDaEaa_nm",
 			"warnLine": "TDaEaa_warnLine",
+			"themesGrid": "TDaEaa_themesGrid",
+			"descTight": "TDaEaa_descTight",
+			"head": "TDaEaa_head",
+			"row1": "TDaEaa_row1",
 			"star": "TDaEaa_star",
 			"src": "TDaEaa_src",
-			"head": "TDaEaa_head",
-			"searchInline": "TDaEaa_searchInline",
-			"warnBtn": "TDaEaa_warnBtn",
-			"nm": "TDaEaa_nm",
-			"sp": "TDaEaa_sp",
-			"tab": "TDaEaa_tab",
-			"okState": "TDaEaa_okState",
-			"swatches": "TDaEaa_swatches",
-			"loading": "TDaEaa_loading",
-			"tabs": "TDaEaa_tabs",
 			"body": "TDaEaa_body",
-			"sort": "TDaEaa_sort",
-			"title": "TDaEaa_title",
-			"restart": "TDaEaa_restart",
-			"on": "TDaEaa_on",
-			"dangerArmed": "TDaEaa_dangerArmed",
-			"catsWrap": "TDaEaa_catsWrap",
-			"sect": "TDaEaa_sect",
-			"card": "TDaEaa_card",
-			"desc": "TDaEaa_desc",
-			"err": "TDaEaa_err",
-			"foot": "TDaEaa_foot",
-			"av": "TDaEaa_av",
-			"cats": "TDaEaa_cats",
-			"cmd": "TDaEaa_cmd",
-			"irow": "TDaEaa_irow",
-			"grow": "TDaEaa_grow",
-			"catsCollapsed": "TDaEaa_catsCollapsed",
-			"staleAction": "TDaEaa_staleAction",
-			"themesGrid": "TDaEaa_themesGrid",
+			"sp": "TDaEaa_sp",
+			"root": "TDaEaa_root",
 			"pct": "TDaEaa_pct",
-			"row1": "TDaEaa_row1",
-			"descTight": "TDaEaa_descTight"
+			"tab": "TDaEaa_tab",
+			"av": "TDaEaa_av",
+			"modalNote": "TDaEaa_modalNote"
 		};
 		//#endregion
 		//#region src/client/MarketSection.tsx
@@ -429,6 +429,8 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 			const [cat, setCat] = (0, react.useState)("all");
 			const [confirming, setConfirming] = (0, react.useState)(null);
 			const [busyUrl, setBusyUrl] = (0, react.useState)(null);
+			/** Consecutive idle polls with a pending install that never landed (#32). */
+			const idleStrikes = (0, react.useRef)(0);
 			const [doneUrls, setDoneUrls] = (0, react.useState)([]);
 			const [installError, setInstallError] = (0, react.useState)(null);
 			const [updates, setUpdates] = (0, react.useState)({});
@@ -529,7 +531,10 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 					body: "{}"
 				}).then((res) => res.json()).then((body) => {
 					if (body.ok) setEnvReady(true);
-					else setEnvFailed(true);
+					else {
+						setEnvFailed(true);
+						if (typeof body.error === "string") setInstallError(body.error);
+					}
 				}).catch(() => setEnvFailed(true)).finally(() => setEnvFixing(false));
 			}, []);
 			(0, react.useEffect)(() => {
@@ -556,9 +561,15 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 							setInstalled(status.installed || {});
 							if (readSession("dshm-pending") !== null && busyUrl !== null) {
 								if (data !== null && data.plugins.some((p) => p.url === busyUrl && isInstalled(p, status.installed || {}))) {
+									idleStrikes.current = 0;
 									sessionStorage.removeItem("dshm-pending");
 									setDoneUrls((urls) => urls.includes(busyUrl) ? urls : urls.concat(busyUrl));
 									setBusyUrl(null);
+								} else if (++idleStrikes.current >= 2) {
+									idleStrikes.current = 0;
+									sessionStorage.removeItem("dshm-pending");
+									setBusyUrl(null);
+									setInstallError(t("installFail") + " — " + t("exportLog"));
 								}
 							}
 						}

@@ -115,3 +115,23 @@ describe('MarketSection (jsdom)', () => {
     expect(await screen.findByRole('button', { name: en.updateNow })).toBeTruthy()
   })
 })
+
+describe('stuck pending recovery (#32)', () => {
+  it('a restored pending install that never landed resets to an error instead of "installing" forever', async () => {
+    vi.useFakeTimers()
+    try {
+      // A previous page load started an install whose response was lost.
+      sessionStorage.setItem('dshm-pending', JSON.stringify({ url: 'https://github.com/alice/dsh-loop' }))
+      render(<MarketSection {...props()} />)
+      await vi.waitFor(() => { screen.getByText('dsh-loop') })
+      // Host stays idle and the plugin never appears in installed: two polls
+      // (2s apart) must conclude the install died and release the button.
+      await vi.advanceTimersByTimeAsync(2100)
+      await vi.advanceTimersByTimeAsync(2100)
+      expect(sessionStorage.getItem('dshm-pending')).toBeNull()
+      expect(screen.getByText(new RegExp(en.installFail))).toBeTruthy()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})

@@ -349,7 +349,8 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
           return
         }
         try {
-          sendJson(response, 200, { ok: await provisionPnpm() })
+          const result = await provisionPnpm()
+          sendJson(response, 200, { ok: result.ok, error: result.hint })
         } catch (error) {
           sendJson(response, 500, { error: error instanceof Error ? error.message : String(error) })
         }
@@ -492,6 +493,13 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
             if (ok) {
               invalidateUpdates()
               hot = await hotUnmount(name)
+              // Bundle-layer plugins never hot-mount, but their loader entry
+              // is still LIVE in this process — after the remove deleted the
+              // package, the next refresh would 404 on its client bundle and
+              // wedge the whole page until a dsh restart (#37 by
+              // @1123762794). Live-disable the entry so the refresh composes
+              // without it; after a real restart the entry is gone anyway.
+              if (!hot) hot = await themes.setEntryDisabled(name, true)
             }
             logEvent(ok || cancelled ? 'info' : 'error', 'uninstall',
               `${name} exit=${String(result.exitCode)}${cancelled ? ' CANCELLED' : ''}${ok ? ` live-removed=${String(hot)}` : cancelled ? '' : ` stderr=${result.stderr.slice(-300)}`}`)

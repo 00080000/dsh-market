@@ -100,6 +100,8 @@ export function MarketSection(props: MarketSectionProps) {
   const [cat, setCat] = useState('all')
   const [confirming, setConfirming] = useState<RegistryPlugin | null>(null)
   const [busyUrl, setBusyUrl] = useState<string | null>(null)
+  /** Consecutive idle polls with a pending install that never landed (#32). */
+  const idleStrikes = useRef(0)
   const [doneUrls, setDoneUrls] = useState<string[]>([])
   const [installError, setInstallError] = useState<string | null>(null)
   const [updates, setUpdates] = useState<Record<string, UpdateStatus>>({})
@@ -214,8 +216,12 @@ export function MarketSection(props: MarketSectionProps) {
     fetch('/dsh-market/setup-pnpm', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })
       .then(res => res.json())
       .then(body => {
-        if (body.ok) setEnvReady(true)
-        else setEnvFailed(true)
+        if (body.ok) {
+          setEnvReady(true)
+        } else {
+          setEnvFailed(true)
+          if (typeof body.error === 'string') setInstallError(body.error)
+        }
       })
       .catch(() => setEnvFailed(true))
       .finally(() => setEnvFixing(false))
@@ -254,9 +260,18 @@ export function MarketSection(props: MarketSectionProps) {
               const nowInstalled = data !== null && data.plugins.some(p =>
                 p.url === busyUrl && isInstalled(p, status.installed || {}))
               if (nowInstalled) {
+                idleStrikes.current = 0
                 sessionStorage.removeItem('dshm-pending')
                 setDoneUrls(urls => urls.includes(busyUrl) ? urls : urls.concat(busyUrl))
                 setBusyUrl(null)
+              } else if (++idleStrikes.current >= 2) {
+                // Host is idle and the plugin never landed: the install died
+                // (e.g. exit 127) with its response lost. Without this the
+                // button says "installing" forever — across reloads (#32).
+                idleStrikes.current = 0
+                sessionStorage.removeItem('dshm-pending')
+                setBusyUrl(null)
+                setInstallError(t('installFail') + ' — ' + t('exportLog'))
               }
             }
           }
