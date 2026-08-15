@@ -24,6 +24,7 @@ import { isStaleUpdate, parseIgnoredBuilds, retargetCollections, validateAddedPl
 import { checkUpdates, invalidateUpdates } from './updates.ts'
 import { createThemeManager, type LoaderEntry } from './themes.ts'
 import { readJsonBody, sameOrigin, sendJson } from './http.ts'
+import { restartAllowed, scheduleRestart, trustedRestartRequest } from './restart.ts'
 
 export type { LoaderEntry } from './themes.ts'
 export type { UpdateStatus } from './updates.ts'
@@ -47,6 +48,8 @@ export interface MarketHost {
 export interface MarketConfig {
   /** Profile the market installs into; matches the profile serving this UI. */
   profile: string
+  /** Detached self-restart is unsafe under systemd/launchd/pm2; operators can disable it (#14). */
+  allowRestart?: boolean
 }
 
 const PROFILE_RE = /^[A-Za-z0-9_-]+$/
@@ -89,6 +92,7 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
     if (name !== undefined && disabledThemes.has(name)) void themes.setEntryDisabled(name, true)
   })
   let installing = false
+  let restarting = false
 
   /**
    * Drop live hot mounts whose package was removed outside the market
@@ -194,6 +198,7 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
           lastLine: progress.lastLine,
           pnpm: await probePnpm(),
           boot: BOOT_ID,
+          restart: restartAllowed(config),
           installed: readInstalled(config.profile),
         })
       },
@@ -347,6 +352,46 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
           sendJson(response, 200, { ok: await provisionPnpm() })
         } catch (error) {
           sendJson(response, 500, { error: error instanceof Error ? error.message : String(error) })
+        }
+      },
+    }),
+
+    host.webServer.register({
+      kind: 'exact',
+      path: '/dsh-market/restart',
+      handler: (request, response) => {
+        if (request.method !== 'POST') {
+          response.writeHead(405, { allow: 'POST' })
+          response.end()
+          return
+        }
+        // One-click restart contributed in #14 by @ysyyhhh.
+        if (!restartAllowed(config)) {
+          sendJson(response, 403, { error: 'self-restart is disabled for this host' })
+          return
+        }
+        if (!trustedRestartRequest(request)) {
+          sendJson(response, 403, { error: 'restart is limited to same-origin loopback requests' })
+          return
+        }
+        if (installing) {
+          sendJson(response, 409, { error: 'cannot restart while a plugin operation is running' })
+          return
+        }
+        if (restarting) {
+          sendJson(response, 409, { error: 'restart already scheduled' })
+          return
+        }
+        restarting = true
+        try {
+          const result = scheduleRestart()
+          logEvent('info', 'restart', `scheduled pid=${String(result.pid)} helper=${String(result.helperPid)}`)
+          sendJson(response, 202, { ok: true, boot: BOOT_ID, ...result })
+        } catch (error) {
+          restarting = false
+          const message = error instanceof Error ? error.message : String(error)
+          logEvent('error', 'restart', message)
+          sendJson(response, 500, { error: message })
         }
       },
     }),

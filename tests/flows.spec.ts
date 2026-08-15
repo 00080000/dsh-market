@@ -154,6 +154,20 @@ vi.mock('../src/hot.ts', () => ({
   mountClientOnlyDeps: () => Promise.resolve([]),
 }))
 
+// ---------------------------------------------------------------- fake restart scheduler
+const restartCalls = vi.hoisted(() => ({ count: 0 }))
+vi.mock('../src/restart.ts', async (importOriginal) => {
+  const original = await importOriginal<typeof import('../src/restart.ts')>()
+  return {
+    ...original,
+    // The real one SIGTERMs the process — fatal inside a test worker.
+    scheduleRestart: () => {
+      restartCalls.count += 1
+      return { pid: 1, helperPid: 2, logOut: '/tmp/o', logErr: '/tmp/e' }
+    },
+  }
+})
+
 // ---------------------------------------------------------------- fake registry
 const REGISTRY = {
   updated: '', count: 3,
@@ -184,12 +198,12 @@ import { profileDir } from '../src/profile.ts'
 type Handler = (request: unknown, response: unknown) => void | Promise<void>
 
 interface Testbed {
-  dispatch(method: string, path: string, body?: unknown, options?: { crossOrigin?: boolean }): Promise<{ status: number; json: any }>
+  dispatch(method: string, path: string, body?: unknown, options?: { crossOrigin?: boolean; remoteAddress?: string; forwarded?: boolean }): Promise<{ status: number; json: any }>
   loaderEntries: { options: { name: string; disabled?: boolean | null }; fiber?: unknown; update(o: { disabled: boolean | null }): Promise<void> }[]
   dispose(): void
 }
 
-function createTestbed(): Testbed {
+function createTestbed(config: { allowRestart?: boolean } = {}): Testbed {
   const routes = new Map<string, Handler>()
   const loaderEntries: Testbed['loaderEntries'] = []
   const host = {
@@ -203,14 +217,19 @@ function createTestbed(): Testbed {
     plugin: () => ({ await: () => Promise.resolve(), dispose: () => {} }),
     on: () => () => {},
   }
-  const dispose = mountMarketRoutes(host as never, { profile: 'web' })
+  const dispose = mountMarketRoutes(host as never, { profile: 'web', ...config })
   async function dispatch(method: string, path: string, body?: unknown, options?: { crossOrigin?: boolean }) {
     const handler = routes.get(path.split('?')[0])
     if (handler === undefined) throw new Error(`no route: ${path}`)
     const chunks = body === undefined ? [] : [Buffer.from(JSON.stringify(body))]
     const request = {
       method, url: path,
-      headers: { host: 'localhost:3080', origin: options?.crossOrigin ? 'https://evil.example' : 'http://localhost:3080' },
+      headers: {
+        host: 'localhost:3080',
+        origin: options?.crossOrigin ? 'https://evil.example' : 'http://localhost:3080',
+        ...(options?.forwarded ? { 'x-forwarded-for': '10.0.0.9' } : {}),
+      },
+      socket: { remoteAddress: options?.remoteAddress ?? '127.0.0.1' },
       async *[Symbol.asyncIterator]() { yield* chunks },
     }
     let status = 0
@@ -248,6 +267,7 @@ beforeEach(() => {
   fake.buildScriptOutputOnce = ''
   fake.running = false
   fake.calls = []
+  restartCalls.count = 0
   hot.mounts = []
   hot.disabled = new Set()
   bed = createTestbed()
@@ -551,5 +571,43 @@ describe('externally removed hot mounts (#29)', () => {
     const listed = await bed.dispatch('GET', '/dsh-market/installed')
     expect(listed.json.live).toEqual([])
     expect(hot.mounts).toEqual([])
+  })
+})
+
+describe('one-click restart guards (#14)', () => {
+  it('schedules exactly once for a trusted loopback request; repeat is 409', async () => {
+    const r = await bed.dispatch('POST', '/dsh-market/restart', {})
+    expect(r.status).toBe(202)
+    expect(r.json.ok).toBe(true)
+    expect(restartCalls.count).toBe(1)
+    expect((await bed.dispatch('POST', '/dsh-market/restart', {})).status).toBe(409)
+    expect(restartCalls.count).toBe(1)
+  })
+
+  it('refuses non-loopback peers, forwarded requests, and cross-origin posts', async () => {
+    expect((await bed.dispatch('POST', '/dsh-market/restart', {}, { remoteAddress: '192.168.1.7' })).status).toBe(403)
+    expect((await bed.dispatch('POST', '/dsh-market/restart', {}, { forwarded: true })).status).toBe(403)
+    expect((await bed.dispatch('POST', '/dsh-market/restart', {}, { crossOrigin: true })).status).toBe(403)
+    expect(restartCalls.count).toBe(0)
+  })
+
+  it('refuses while a plugin operation is running', async () => {
+    fake.npm['dsh-loop'] = { latest: '1.0.0', versions: { '1.0.0': { manifest: { dsh: {}, main: 'lib/index.js' }, artifacts: ['lib/index.js'] } } }
+    let release!: () => void
+    fake.gate = new Promise<void>((resolvePromise) => { release = resolvePromise })
+    const install = bed.dispatch('POST', '/dsh-market/install', { url: 'https://github.com/o/dsh-loop' })
+    await new Promise(resolvePromise => setTimeout(resolvePromise, 20))
+    expect((await bed.dispatch('POST', '/dsh-market/restart', {})).status).toBe(409)
+    release()
+    fake.gate = null
+    await install
+  })
+
+  it('allowRestart: false disables the endpoint and the status capability flag', async () => {
+    bed.dispose()
+    bed = createTestbed({ allowRestart: false })
+    expect((await bed.dispatch('GET', '/dsh-market/status')).json.restart).toBe(false)
+    expect((await bed.dispatch('POST', '/dsh-market/restart', {})).status).toBe(403)
+    expect(restartCalls.count).toBe(0)
   })
 })

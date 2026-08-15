@@ -32,6 +32,7 @@ Restart `dsh web`, then open **Settings → Plugin Market**.
 - **One-click install** — confirm the source, watch live progress; most plugins go live after a page refresh, no restart
 - **Updates** — per-plugin update checks (npm version or pinned commit vs HEAD), one-click update, or update everything at once; the market updates itself the same way
 - **Uninstall** — two-step confirm; plugins installed this session are removed live
+- **Restart when needed** — changes that cannot hot-load show a one-click restart beside the pending-change banner; the action is restricted to same-origin loopback requests
 - **Zero jargon** — if a component is missing (pnpm), the market detects it and offers a one-click automatic setup
 - **Log export** — one click produces a sanitized plain-text log for bug reports (home paths and credential shapes are masked; nothing is ever sent anywhere)
 
@@ -45,6 +46,9 @@ Installs prefer npm tarballs over full-repo GitHub downloads whenever a plugin p
 - Build scripts stay blocked by default (pnpm ≥10); allowing one is your explicit per-package choice
 - Terminal/CLI-surface plugins are flagged before you install them into the web profile
 - The install endpoint accepts same-origin POST only; the market never phones home
+- The restart endpoint additionally requires a direct loopback client (forwarded requests are rejected) and relaunches the exact DSH entry, arguments, environment, and working directory
+- One-click restart launches a detached replacement. If DSH is managed by systemd, launchd, pm2, or another supervisor, set the plugin option `allowRestart: false` and let the supervisor own restarts instead; the pending-change notice remains visible but the button is hidden
+- For terminal-attached launches, the detached replacement keeps running after the original terminal closes
 - Listing ≠ endorsement: plugins are third-party code, install sources you trust
 
 ## Data source

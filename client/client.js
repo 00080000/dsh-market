@@ -43,6 +43,10 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 			busyWait: "已有操作正在进行，请等它结束（同一时间只执行一个安装/更新/卸载）",
 			approveBuilds: "放行构建脚本并重试",
 			buildsSkipped: "该插件需要运行构建脚本才能工作，出于安全默认被拦下。点击下方按钮为它放行并重装：",
+			restartNow: "立即重启",
+			restarting: "正在重启…",
+			restartFail: "重启失败",
+			restartTimeout: "等待 DeepSeek Harness 启动超时",
 			updateNow: "立即更新",
 			updateFail: "更新失败",
 			upToDate: "已是最新",
@@ -107,6 +111,10 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 			busyWait: "Another operation is already running — please wait for it to finish (one install/update/uninstall at a time)",
 			approveBuilds: "Allow build scripts and retry",
 			buildsSkipped: "This plugin needs its build scripts to run; they are blocked by default for safety. Click below to allow them and reinstall:",
+			restartNow: "Restart now",
+			restarting: "Restarting…",
+			restartFail: "Restart failed",
+			restartTimeout: "Timed out waiting for DeepSeek Harness to start",
 			updateNow: "Update now",
 			updateFail: "Update failed",
 			upToDate: "Up to date",
@@ -284,62 +292,62 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 			document.head.appendChild(tag);
 		}
 		var Market_module_css_default = {
-			"tab": "TDaEaa_tab",
-			"card": "TDaEaa_card",
-			"nm": "TDaEaa_nm",
-			"src": "TDaEaa_src",
-			"pct": "TDaEaa_pct",
-			"sentinel": "TDaEaa_sentinel",
-			"tag": "TDaEaa_tag",
-			"warnBtn": "TDaEaa_warnBtn",
-			"cmdSummary": "TDaEaa_cmdSummary",
-			"cmd": "TDaEaa_cmd",
-			"dangerArmed": "TDaEaa_dangerArmed",
-			"dangerBtn": "TDaEaa_dangerBtn",
-			"swatches": "TDaEaa_swatches",
-			"grid": "TDaEaa_grid",
-			"row1": "TDaEaa_row1",
-			"cmdDetails": "TDaEaa_cmdDetails",
-			"foot": "TDaEaa_foot",
-			"grow": "TDaEaa_grow",
-			"sub": "TDaEaa_sub",
-			"sect": "TDaEaa_sect",
-			"modalNote": "TDaEaa_modalNote",
-			"themesGrid": "TDaEaa_themesGrid",
-			"owner": "TDaEaa_owner",
-			"descTight": "TDaEaa_descTight",
-			"head": "TDaEaa_head",
+			"cancelBtn": "TDaEaa_cancelBtn",
+			"searchInline": "TDaEaa_searchInline",
+			"title": "TDaEaa_title",
 			"tabs": "TDaEaa_tabs",
-			"on": "TDaEaa_on",
-			"spin": "TDaEaa_spin",
+			"top": "TDaEaa_top",
+			"head": "TDaEaa_head",
+			"catsToggle": "TDaEaa_catsToggle",
+			"modalNote": "TDaEaa_modalNote",
+			"sect": "TDaEaa_sect",
+			"grid": "TDaEaa_grid",
 			"irow": "TDaEaa_irow",
 			"empty": "TDaEaa_empty",
-			"star": "TDaEaa_star",
-			"desc": "TDaEaa_desc",
 			"err": "TDaEaa_err",
-			"catsRow": "TDaEaa_catsRow",
-			"cats": "TDaEaa_cats",
-			"root": "TDaEaa_root",
-			"title": "TDaEaa_title",
-			"searchInline": "TDaEaa_searchInline",
-			"body": "TDaEaa_body",
-			"catsCollapsed": "TDaEaa_catsCollapsed",
-			"catsToggle": "TDaEaa_catsToggle",
-			"top": "TDaEaa_top",
-			"av": "TDaEaa_av",
-			"sp": "TDaEaa_sp",
-			"titleRow": "TDaEaa_titleRow",
-			"cancelBtn": "TDaEaa_cancelBtn",
-			"okState": "TDaEaa_okState",
-			"progress": "TDaEaa_progress",
+			"sub": "TDaEaa_sub",
 			"staleAction": "TDaEaa_staleAction",
-			"warnLine": "TDaEaa_warnLine",
-			"restart": "TDaEaa_restart",
-			"catsWrap": "TDaEaa_catsWrap",
+			"tab": "TDaEaa_tab",
+			"nm": "TDaEaa_nm",
+			"av": "TDaEaa_av",
+			"owner": "TDaEaa_owner",
+			"body": "TDaEaa_body",
+			"foot": "TDaEaa_foot",
+			"dangerBtn": "TDaEaa_dangerBtn",
+			"src": "TDaEaa_src",
+			"loading": "TDaEaa_loading",
+			"star": "TDaEaa_star",
+			"cats": "TDaEaa_cats",
+			"titleRow": "TDaEaa_titleRow",
+			"card": "TDaEaa_card",
 			"dot": "TDaEaa_dot",
 			"sort": "TDaEaa_sort",
+			"okState": "TDaEaa_okState",
+			"sentinel": "TDaEaa_sentinel",
+			"dangerArmed": "TDaEaa_dangerArmed",
+			"desc": "TDaEaa_desc",
+			"warnBtn": "TDaEaa_warnBtn",
+			"grow": "TDaEaa_grow",
+			"warnLine": "TDaEaa_warnLine",
+			"spin": "TDaEaa_spin",
+			"row1": "TDaEaa_row1",
+			"cmdDetails": "TDaEaa_cmdDetails",
+			"themesGrid": "TDaEaa_themesGrid",
+			"descTight": "TDaEaa_descTight",
+			"cmd": "TDaEaa_cmd",
+			"restart": "TDaEaa_restart",
+			"root": "TDaEaa_root",
+			"tag": "TDaEaa_tag",
+			"catsCollapsed": "TDaEaa_catsCollapsed",
+			"pct": "TDaEaa_pct",
+			"catsWrap": "TDaEaa_catsWrap",
+			"on": "TDaEaa_on",
+			"cmdSummary": "TDaEaa_cmdSummary",
+			"catsRow": "TDaEaa_catsRow",
+			"sp": "TDaEaa_sp",
+			"progress": "TDaEaa_progress",
 			"spec": "TDaEaa_spec",
-			"loading": "TDaEaa_loading"
+			"swatches": "TDaEaa_swatches"
 		};
 		//#endregion
 		//#region src/client/MarketSection.tsx
@@ -429,6 +437,9 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 			const [envFixing, setEnvFixing] = (0, react.useState)(false);
 			const [envFailed, setEnvFailed] = (0, react.useState)(false);
 			const [bootId, setBootId] = (0, react.useState)(null);
+			/** One-click restart (#14 by @ysyyhhh): server capability + in-flight state. */
+			const [restartEnabled, setRestartEnabled] = (0, react.useState)(false);
+			const [restarting, setRestarting] = (0, react.useState)(false);
 			const [showTop, setShowTop] = (0, react.useState)(false);
 			const bodyRef = (0, react.useRef)(null);
 			const [sort, setSort] = (0, react.useState)("hot");
@@ -453,6 +464,7 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 				fetch("/dsh-market/status", { cache: "no-store" }).then((res) => res.json()).then((status) => {
 					setEnvReady(status.pnpm !== false);
 					if (typeof status.boot === "string") setBootId(status.boot);
+					setRestartEnabled(status.restart === true);
 				}).catch(() => {});
 				refreshInstalled();
 			}, [refreshInstalled]);
@@ -602,6 +614,57 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 					setInstallError(t("installFail") + ": " + String(error));
 				}).finally(() => setBusyUrl(null));
 			}, [refreshInstalled, t]);
+			/**
+			* Restart the host and reload once the boot id changes (#14 by @ysyyhhh).
+			* The 202 races the process's SIGTERM, so network errors on the initial
+			* request are expected and treated as "restart under way".
+			*/
+			const doRestart = (0, react.useCallback)(() => {
+				if (bootId === null || restarting) return;
+				const previousBoot = bootId;
+				setRestarting(true);
+				setInstallError(null);
+				const awaitNewBoot = () => {
+					const deadline = Date.now() + 6e4;
+					const poll = () => {
+						fetch("/dsh-market/status", { cache: "no-store" }).then((res) => res.json()).then((next) => {
+							if (typeof next.boot === "string" && next.boot !== previousBoot) {
+								location.reload();
+								return;
+							}
+							retry();
+						}).catch(retry);
+					};
+					const retry = () => {
+						if (Date.now() > deadline) {
+							setRestarting(false);
+							setInstallError(t("restartTimeout"));
+							return;
+						}
+						setTimeout(poll, 1500);
+					};
+					poll();
+				};
+				fetch("/dsh-market/restart", {
+					method: "POST",
+					headers: { "content-type": "application/json" },
+					body: "{}"
+				}).then((res) => res.json().then((body) => ({
+					status: res.status,
+					body
+				}))).then(({ status, body }) => {
+					if (status !== 202 || body.ok !== true) {
+						setRestarting(false);
+						setInstallError(t("restartFail") + ": " + String(body.error || "HTTP " + String(status)));
+						return;
+					}
+					awaitNewBoot();
+				}).catch(awaitNewBoot);
+			}, [
+				bootId,
+				restarting,
+				t
+			]);
 			/** Cancel the running plugin command (#6 by @qichuang321). */
 			const doCancel = (0, react.useCallback)(() => {
 				fetch("/dsh-market/cancel", {
@@ -1092,6 +1155,13 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 									/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
 										title: t("restartHint"),
 										children: "ℹ️"
+									}),
+									restartEnabled && /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
+										variant: "primary",
+										size: "sm",
+										disabled: restarting || busyUrl !== null || updatingName !== null || removingName !== null,
+										onClick: doRestart,
+										children: restarting ? t("restarting") : t("restartNow")
 									})
 								]
 							})
