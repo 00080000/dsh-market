@@ -98,12 +98,14 @@ describe('discover list (visiblePlugins)', () => {
     expect(visiblePlugins(CATALOG, { category: 'ghost-cat', query: '', lang: 'en', sort: 'x' })).toEqual([])
   })
 
-  it('sorts hot by stars (unstarred last), new by added desc, old by added asc', () => {
-    expect(visiblePlugins(CATALOG, { category: 'all', query: '', lang: 'en', sort: 'hot' }).map(p => p.name))
+  it('sorts by stars or publish date, ascending and descending', () => {
+    expect(visiblePlugins(CATALOG, { category: 'all', query: '', lang: 'en', sort: 'stars-desc' }).map(p => p.name))
       .toEqual(['dsh-notify', 'whale-skin', 'dsh-loop', 'no-stars'])
-    expect(visiblePlugins(CATALOG, { category: 'all', query: '', lang: 'en', sort: 'new' }).map(p => p.name))
+    expect(visiblePlugins(CATALOG, { category: 'all', query: '', lang: 'en', sort: 'stars-asc' }).map(p => p.name))
+      .toEqual(['no-stars', 'dsh-loop', 'whale-skin', 'dsh-notify'])
+    expect(visiblePlugins(CATALOG, { category: 'all', query: '', lang: 'en', sort: 'added-desc' }).map(p => p.name))
       .toEqual(['whale-skin', 'dsh-notify', 'dsh-loop', 'no-stars'])
-    expect(visiblePlugins(CATALOG, { category: 'all', query: '', lang: 'en', sort: 'old' }).map(p => p.name))
+    expect(visiblePlugins(CATALOG, { category: 'all', query: '', lang: 'en', sort: 'added-asc' }).map(p => p.name))
       .toEqual(['no-stars', 'dsh-loop', 'dsh-notify', 'whale-skin'])
   })
 
@@ -117,6 +119,25 @@ describe('discover list (visiblePlugins)', () => {
     expect(orderedCategories(cats, 'memory', false)).toEqual(['memory', 'tool', 'theme'])
     expect(orderedCategories(cats, 'memory', true)).toEqual(cats)
     expect(orderedCategories(cats, 'all', false)).toEqual(cats)
+  })
+
+  it('filters by the published-within window', () => {
+    const daysAgo = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString().slice(0, 10)
+    const list = [
+      plugin({ name: 'recent', added: daysAgo(3) }),
+      plugin({ name: 'week-old', added: daysAgo(10) }),
+      plugin({ name: 'month-old', added: daysAgo(45) }),
+      plugin({ name: 'no-date' }),
+    ]
+    // 7-day window keeps only the 3-day-old plugin.
+    expect(visiblePlugins(list, { category: 'all', query: '', lang: 'en', sort: 'x', sinceDays: 7 }).map(p => p.name))
+      .toEqual(['recent'])
+    // 30-day window keeps 3 and 10 days; the 45-day-old and dateless drop out.
+    expect(visiblePlugins(list, { category: 'all', query: '', lang: 'en', sort: 'x', sinceDays: 30 }).map(p => p.name))
+      .toEqual(['recent', 'week-old'])
+    // No window keeps everything, including the dateless entry.
+    expect(visiblePlugins(list, { category: 'all', query: '', lang: 'en', sort: 'x' }).map(p => p.name))
+      .toEqual(['recent', 'week-old', 'month-old', 'no-date'])
   })
 })
 

@@ -75,7 +75,7 @@ describe('MarketSection (jsdom)', () => {
     })
   })
 
-  it('category pills filter and the New/Oldest sorts reorder', async () => {
+  it('category pills filter and the filter panel sorts by field + direction', async () => {
     render(<MarketSection {...props()} />)
     await screen.findByText('dsh-loop')
     fireEvent.click(screen.getByRole('button', { name: 'Themes' }))
@@ -84,15 +84,23 @@ describe('MarketSection (jsdom)', () => {
       expect(screen.getByText('whale-skin')).toBeTruthy()
     })
     fireEvent.click(screen.getByRole('button', { name: 'All' }))
-    fireEvent.click(screen.getByRole('button', { name: en.sortNew }))
+
+    // Default field is Stars → direction labels are Ascending/Descending.
+    fireEvent.click(screen.getByRole('button', { name: en.filter }))
+    expect(screen.getByRole('radio', { name: en.sortDesc })).toBeTruthy()
+    expect(screen.getByRole('radio', { name: en.sortAsc })).toBeTruthy()
+
+    // Field = Release date → direction labels switch to Newest/Oldest; the
+    // already-selected desc means newest first.
+    fireEvent.click(screen.getByRole('radio', { name: en.sortAdded }))
     await waitFor(() => {
       const names = screen.getAllByText(/^(dsh-loop|dsh-notify|whale-skin)$/).map(n => n.textContent)
-      expect(names[0]).toBe('whale-skin') // newest added first
+      expect(names[0]).toBe('whale-skin') // newest first
     })
-    fireEvent.click(screen.getByRole('button', { name: en.sortOld }))
+    fireEvent.click(screen.getByRole('radio', { name: en.sortOldest }))
     await waitFor(() => {
       const names = screen.getAllByText(/^(dsh-loop|dsh-notify|whale-skin)$/).map(n => n.textContent)
-      expect(names[0]).toBe('dsh-loop') // oldest added first
+      expect(names[0]).toBe('dsh-loop') // oldest first
     })
   })
 
@@ -185,6 +193,29 @@ describe('MarketSection (jsdom)', () => {
       expect(screen.getByText('dsh-q30')).toBeTruthy()
       expect(screen.queryByRole('button', { name: '2' })).toBeNull()
       expect(screen.getByRole('button', { name: '96' })).toBeTruthy()
+    })
+  })
+
+  it('the published-within filter keeps only recent plugins', async () => {
+    const daysAgo = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString().slice(0, 10)
+    const plugins = [
+      { name: 'dsh-fresh', owner: 'a', url: 'https://github.com/a/dsh-fresh', category: 'tools', npm: null, stars: 10, added: daysAgo(2), description: { en: 'Fresh' }, install: '' },
+      { name: 'dsh-stale', owner: 'b', url: 'https://github.com/b/dsh-stale', category: 'tools', npm: null, stars: 20, added: daysAgo(60), description: { en: 'Stale' }, install: '' },
+    ]
+    stubFetch({
+      '/dsh-market/registry': {
+        source: 'snapshot',
+        registry: { updated: '', count: 2, categories: { tools: { en: 'Tools', zh: '工具' } }, plugins },
+      },
+    })
+    render(<MarketSection {...props()} />)
+    await screen.findByText('dsh-fresh')
+    expect(screen.getByText('dsh-stale')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: en.filter }))
+    fireEvent.click(screen.getByRole('radio', { name: en.timeWeek }))
+    await waitFor(() => {
+      expect(screen.getByText('dsh-fresh')).toBeTruthy()
+      expect(screen.queryByText('dsh-stale')).toBeNull()
     })
   })
 })

@@ -8,10 +8,11 @@ import { Button, IconChevronDownOutline14, IconChevronUpOutline14, IconSearchOut
 import css from './Market.module.css'
 import {
   avatarColor, entryForDep, isInstalled, looksTerminal, matchInstalledName, orderedCategories,
-  pageItems, readSession, repoOf, themePlugins as themePluginsOf, themeSwatch, visiblePlugins,
+  pageItems, readSession, repoOf, themePlugins as themePluginsOf, themeSwatch, TIME_RANGE_DAYS, visiblePlugins,
 } from './market-data.ts'
 import type {
-  ActivationInfo, ActivationState, InstalledMap, MarketStatus, Registry, RegistryPlugin, SortKey, ThemeSnapshot, Translate, UpdateStatus,
+  ActivationInfo, ActivationState, InstalledMap, MarketStatus, Registry, RegistryPlugin,
+  SortDir, SortField, ThemeSnapshot, TimeRange, Translate, UpdateStatus,
 } from './market-data.ts'
 
 /** The state label + dot for one activation result (P0-2). */
@@ -81,13 +82,24 @@ let cachedInstalled: InstalledMap | null = null
 const PAGE_SIZES = [24, 48, 96]
 const DEFAULT_PAGE_SIZE = 24
 
-/** Sort orders offered by the Discover toolbar, in display order. */
-const SORT_KEYS = ['hot', 'new', 'old'] as const
-const SORT_LABELS: Record<(typeof SORT_KEYS)[number], string> = {
-  hot: 'sortHot',
-  new: 'sortNew',
-  old: 'sortOld',
-}
+/** Sort field choices in the filter panel. */
+const SORT_FIELD_OPTIONS: ReadonlyArray<{ key: SortField; label: string }> = [
+  { key: 'stars', label: 'sortStars' },
+  { key: 'added', label: 'sortAdded' },
+]
+
+/** Sort direction choices in the filter panel (labels depend on the field). */
+const SORT_DIR_OPTIONS: ReadonlyArray<SortDir> = ['desc', 'asc']
+
+/** Published-within choices in the filter panel. */
+const TIME_OPTIONS: ReadonlyArray<{ key: TimeRange; label: string }> = [
+  { key: 'all', label: 'timeAll' },
+  { key: 'day', label: 'timeDay' },
+  { key: 'week', label: 'timeWeek' },
+  { key: 'month', label: 'timeMonth' },
+  { key: 'quarter', label: 'timeQuarter' },
+  { key: 'year', label: 'timeYear' },
+]
 
 export interface MarketSectionProps {
   t: Translate
@@ -171,7 +183,16 @@ export function MarketSection(props: MarketSectionProps) {
   const [restarting, setRestarting] = useState(false)
   const [showTop, setShowTop] = useState(false)
   const bodyRef = useRef<HTMLDivElement | null>(null)
-  const [sort, setSort] = useState<SortKey>('hot')
+  const [sortField, setSortField] = useState<SortField>('stars')
+  const [sortDir, setSortDir] = useState<SortDir>('desc')
+  /** Direction labels adapt to the field: stars → asc/desc, added → oldest/newest. */
+  const sortDirLabel = (dir: SortDir): string =>
+    sortField === 'added'
+      ? dir === 'desc' ? 'sortNewest' : 'sortOldest'
+      : dir === 'desc' ? 'sortDesc' : 'sortAsc'
+  const [timeRange, setTimeRange] = useState<TimeRange>('all')
+  const [filterOpen, setFilterOpen] = useState(false)
+  const filterWrapRef = useRef<HTMLDivElement | null>(null)
   const [catsOpen, setCatsOpen] = useState(false)
   // How many category pills fit in the two collapsed rows (measured once —
   // the settings panel width is fixed); null = measuring render with all
@@ -332,10 +353,26 @@ export function MarketSection(props: MarketSectionProps) {
   }, [busyUrl, updatingName, data])
 
   const plugins = useMemo(
-    () => (data === null ? [] : visiblePlugins(data.plugins, { category: cat, query: q, lang, sort })),
-    [data, q, cat, lang, sort])
+    () => (data === null ? [] : visiblePlugins(data.plugins, {
+      category: cat, query: q, lang,
+      sort: `${sortField}-${sortDir}`,
+      sinceDays: timeRange === 'all' ? undefined : TIME_RANGE_DAYS[timeRange],
+    })),
+    [data, q, cat, lang, sortField, sortDir, timeRange])
 
-  useEffect(() => { setPage(1) }, [q, cat, sort])
+  useEffect(() => { setPage(1) }, [q, cat, sortField, sortDir, timeRange])
+
+  // Close the filter panel when the pointer leaves it.
+  useEffect(() => {
+    if (!filterOpen) return
+    const onDown = (event: MouseEvent) => {
+      if (filterWrapRef.current !== null && !filterWrapRef.current.contains(event.target as Node)) {
+        setFilterOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [filterOpen])
 
   const totalPages = Math.max(1, Math.ceil(plugins.length / pageSize))
   // Clamp in case the list shrank while the user was on a later page.
@@ -615,6 +652,7 @@ export function MarketSection(props: MarketSectionProps) {
             <div className={css.owner}>
               {p.owner}
               {typeof p.stars === 'number' && <span className={css.star}>{' · ★ ' + p.stars}</span>}
+              {p.added && <span className={css.star}>{' · ' + t('published') + ' ' + p.added}</span>}
             </div>
           </div>
           <span className={css.grow} />
@@ -684,6 +722,7 @@ export function MarketSection(props: MarketSectionProps) {
             <div className={css.owner}>
               {p.owner}
               {typeof p.stars === 'number' && <span className={css.star}>{' · ★ ' + p.stars}</span>}
+              {p.added && <span className={css.star}>{' · ' + t('published') + ' ' + p.added}</span>}
             </div>
           </div>
           <span className={css.grow} />
@@ -930,14 +969,60 @@ export function MarketSection(props: MarketSectionProps) {
                           )
                         })()}
                       </div>
-                      <div className={css.sort}>
-                        {SORT_KEYS.map(key => (
-                          <button
-                            key={key}
-                            className={sort === key ? css.on : ''}
-                            onClick={() => setSort(key)}
-                          >{t(SORT_LABELS[key])}</button>
-                        ))}
+                      <div className={css.filterWrap} ref={filterWrapRef}>
+                        <button
+                          type="button"
+                          className={filterOpen ? `${css.filterBtn} ${css.filterBtnOn}` : css.filterBtn}
+                          onClick={() => setFilterOpen(o => !o)}
+                        >{t('filter')}
+                          {filterOpen ? <IconChevronUpOutline14 size={14} /> : <IconChevronDownOutline14 size={14} />}
+                        </button>
+                        {filterOpen && (
+                          <div className={css.filterPanel}>
+                            <div className={css.filterGroup}>
+                              <div className={css.filterTitle}>{t('filterSort')}</div>
+                              {SORT_FIELD_OPTIONS.map(opt => (
+                                <label key={opt.key} className={css.filterOption}>
+                                  <input
+                                    type="radio"
+                                    name="dshm-sort-field"
+                                    checked={sortField === opt.key}
+                                    onChange={() => setSortField(opt.key)}
+                                  />
+                                  <span>{t(opt.label)}</span>
+                                </label>
+                              ))}
+                            </div>
+                            <div className={css.filterGroup}>
+                              <div className={css.filterTitle}>{t('filterDir')}</div>
+                              {SORT_DIR_OPTIONS.map(dir => (
+                                <label key={dir} className={css.filterOption}>
+                                  <input
+                                    type="radio"
+                                    name="dshm-sort-dir"
+                                    checked={sortDir === dir}
+                                    onChange={() => setSortDir(dir)}
+                                  />
+                                  <span>{t(sortDirLabel(dir))}</span>
+                                </label>
+                              ))}
+                            </div>
+                            <div className={css.filterGroup}>
+                              <div className={css.filterTitle}>{t('filterTime')}</div>
+                              {TIME_OPTIONS.map(opt => (
+                                <label key={opt.key} className={css.filterOption}>
+                                  <input
+                                    type="radio"
+                                    name="dshm-time"
+                                    checked={timeRange === opt.key}
+                                    onChange={() => setTimeRange(opt.key)}
+                                  />
+                                  <span>{t(opt.label)}</span>
+                                </label>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
                       </div>
                     </div>
