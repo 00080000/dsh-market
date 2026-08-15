@@ -23,6 +23,7 @@ jobs:
       - run: npm run check
       - run: npm test
       - run: node scripts/preflight.mjs
+      - run: node scripts/validate-registry.mjs
       - run: node scripts/smoke-spawn.mjs
 
   # Real-pnpm matrix (9/10/11 via npx) pinning the failure signatures behind
