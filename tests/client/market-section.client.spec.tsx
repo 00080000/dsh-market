@@ -203,3 +203,54 @@ describe('stuck pending recovery (#32)', () => {
     }
   })
 })
+
+describe('P1-6 structured progress', () => {
+  it('shows the pnpm phase + package + count, and a disabled cancel button while cancelling', async () => {
+    vi.useFakeTimers()
+    try {
+      // A previous page load started an install whose response was lost.
+      sessionStorage.setItem('dshm-pending', JSON.stringify({ url: 'https://github.com/alice/dsh-loop' }))
+      stubFetch({
+        '/dsh-market/status': {
+          active: true, phase: 'downloading', done: 3, currentPackage: 'is-odd@3.0.1',
+          size: 1000, downloaded: 400, cancelling: true, installed: {},
+          pnpm: true, boot: 'boot-1', restart: true,
+        },
+      })
+      render(<MarketSection {...props()} />)
+      await vi.waitFor(() => { screen.getByText('dsh-loop') })
+      await vi.advanceTimersByTimeAsync(2100)
+      await vi.waitFor(() => {
+        expect(screen.getByText(/Downloading · is-odd@3\.0\.1 · 3 packages processed/)).toBeTruthy()
+      })
+      const cancel = screen.getByRole('button', { name: en.cancelling })
+      expect((cancel as HTMLButtonElement).disabled).toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})
+
+describe('P0-2 activation states in the Installed tab', () => {
+  it('renders the four-state chip with the server reasons', async () => {
+    stubFetch({
+      '/dsh-market/installed': {
+        profile: 'web',
+        installed: { 'dsh-loop': '^1.0.0', 'whale-skin': '^1.0.0' },
+        live: ['whale-skin'],
+        activation: {
+          'dsh-loop': { state: 'restart', reasons: ['in the bundle layer but not hot-mounted — it activates on restart'], bundle: true, hot: false },
+          'whale-skin': { state: 'live', reasons: ['live via its bundle patch'], bundle: true, hot: true },
+        },
+      },
+      '/dsh-market/updates': { updates: {} },
+    })
+    render(<MarketSection {...props()} />)
+    await screen.findByText('dsh-loop')
+    fireEvent.click(screen.getByRole('button', { name: /Installed/ }))
+    await screen.findByText(en.stateRestart)
+    expect(screen.getByText(en.stateLive)).toBeTruthy()
+    // The reason is behind a disclosure; the chip itself must not claim success.
+    expect(screen.getByText(en.stateRestart).textContent).toContain(en.stateRestart)
+  })
+})

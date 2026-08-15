@@ -11,8 +11,24 @@ import {
   pageItems, readSession, repoOf, themePlugins as themePluginsOf, themeSwatch, visiblePlugins,
 } from './market-data.ts'
 import type {
-  InstalledMap, Registry, RegistryPlugin, ThemeSnapshot, Translate, UpdateStatus,
+  ActivationInfo, ActivationState, InstalledMap, MarketStatus, Registry, RegistryPlugin, ThemeSnapshot, Translate, UpdateStatus,
 } from './market-data.ts'
+
+/** The state label + dot for one activation result (P0-2). */
+function activationMeta(state: ActivationState, t: Translate): { label: string; dot: 'done' | 'warning' | 'error' } {
+  if (state === 'live') return { label: t('stateLive'), dot: 'done' }
+  if (state === 'restart') return { label: t('stateRestart'), dot: 'warning' }
+  if (state === 'inert') return { label: t('stateInert'), dot: 'warning' }
+  if (state === 'broken') return { label: t('stateBroken'), dot: 'error' }
+  return { label: '—', dot: 'warning' }
+}
+
+function phaseLabel(phase: NonNullable<MarketStatus['phase']>, t: Translate): string {
+  if (phase === 'resolving') return t('phaseResolving')
+  if (phase === 'downloading') return t('phaseDownloading')
+  if (phase === 'linking') return t('phaseLinking')
+  return t('phaseBuilding')
+}
 
 /**
  * Card avatar: the plugin owner's GitHub avatar (no API, browser-cached),
@@ -126,6 +142,15 @@ export function MarketSection(props: MarketSectionProps) {
   const [hotUrls, setHotUrls] = useState<string[]>([])
   const [hotNames, setHotNames] = useState<string[]>([])
   const [progressLine, setProgressLine] = useState<string | null>(null)
+  /** Per-package activation states from /dsh-market/installed + operations. */
+  const [activations, setActivations] = useState<Record<string, ActivationInfo>>({})
+  /** Structured progress from pnpm ndjson (P1-6). */
+  const [progressPhase, setProgressPhase] = useState<MarketStatus['phase']>(null)
+  const [progressCurrent, setProgressCurrent] = useState<string | null>(null)
+  const [progressDone, setProgressDone] = useState(0)
+  const [cancelling, setCancelling] = useState(false)
+  /** Non-live activation results from the last operation, shown as a banner. */
+  const [activationWarnings, setActivationWarnings] = useState<{ name: string; info: ActivationInfo }[]>([])
   const [removeArmed, setRemoveArmed] = useState<string | null>(null)
   const [removingName, setRemovingName] = useState<string | null>(null)
   const [removedCount, setRemovedCount] = useState(0)
@@ -152,6 +177,7 @@ export function MarketSection(props: MarketSectionProps) {
       .then(body => {
         setInstalled(body.installed || {})
         setSkins(body.live || [])
+        if (body.activation && typeof body.activation === 'object') setActivations(body.activation)
       })
       .catch(() => {})
     fetch('/dsh-market/updates' + (force === true ? '?force=1' : ''), { cache: 'no-store' })
@@ -231,6 +257,10 @@ export function MarketSection(props: MarketSectionProps) {
   useEffect(() => {
     if (busyUrl === null && updatingName === null) {
       setProgressLine(null)
+      setProgressPhase(null)
+      setProgressCurrent(null)
+      setProgressDone(0)
+      setCancelling(false)
       return
     }
     const timer = setInterval(() => {
@@ -238,15 +268,34 @@ export function MarketSection(props: MarketSectionProps) {
         .then(res => res.json())
         .then(status => {
           if (status.active) {
-            setProgressLine((status.lastLine || '…') + '  (' + status.seconds + 's)')
-            const m = /resolved (\d+), reused (\d+), downloaded (\d+), added (\d+)/.exec(status.lastLine || '')
-            if (m !== null && Number(m[1]) > 0) {
-              const done = Number(m[2]) + Number(m[3]) + Number(m[4])
-              setProgressPct(Math.max(4, Math.min(96, Math.round(done / Number(m[1]) * 100))))
+            setCancelling(status.cancelling === true)
+            if (status.phase !== null && status.phase !== undefined) {
+              // Structured pnpm progress: stage + current package + count.
+              setProgressPhase(status.phase)
+              setProgressCurrent(status.currentPackage ?? null)
+              setProgressDone(status.done ?? 0)
+              setProgressLine(null)
+              if (typeof status.size === 'number' && status.size > 0 && typeof status.downloaded === 'number') {
+                setProgressPct(Math.max(4, Math.min(96, Math.round(status.downloaded / status.size * 100))))
+              }
+            } else {
+              setProgressLine((status.lastLine || '…') + '  (' + status.seconds + 's)')
+              setProgressPhase(null)
+              setProgressCurrent(null)
+              setProgressDone(0)
+              const m = /resolved (\d+), reused (\d+), downloaded (\d+), added (\d+)/.exec(status.lastLine || '')
+              if (m !== null && Number(m[1]) > 0) {
+                const done = Number(m[2]) + Number(m[3]) + Number(m[4])
+                setProgressPct(Math.max(4, Math.min(96, Math.round(done / Number(m[1]) * 100))))
+              }
             }
           } else {
             setProgressLine(null)
             setProgressPct(null)
+            setProgressPhase(null)
+            setProgressCurrent(null)
+            setProgressDone(0)
+            setCancelling(false)
             setInstalled(status.installed || {})
             const pending = readSession('dshm-pending')
             if (pending !== null && busyUrl !== null) {
@@ -309,6 +358,7 @@ export function MarketSection(props: MarketSectionProps) {
     setBuildsSkipped(null)
     setConfirming(null)
     setInstallError(null)
+    setActivationWarnings([])
     setBusyUrl(plugin.url)
     sessionStorage.setItem('dshm-pending', JSON.stringify({ url: plugin.url }))
     fetch('/dsh-market/install', {
@@ -330,10 +380,18 @@ export function MarketSection(props: MarketSectionProps) {
         if (body.cancelled === true) {
           // User-cancelled: quiet reset, nothing to report.
           refreshInstalled()
+          if (body.partial === true) setInstallError(t('partialNote'))
           return
         }
         if (status === 200 && body.ok) {
           sessionStorage.setItem('dshm-tab', 'installed')
+          if (body.activation && typeof body.activation === 'object') {
+            setActivations(prev => ({ ...prev, ...body.activation }))
+            const warns = Object.entries(body.activation as Record<string, ActivationInfo>)
+              .filter(([, info]) => info.state !== 'live' && info.state !== 'missing')
+              .map(([name, info]) => ({ name, info }))
+            setActivationWarnings(warns)
+          }
           if (body.hot) {
             setHotUrls(urls => urls.includes(plugin.url) ? urls : urls.concat(plugin.url))
             setHotNames(names => names.includes(plugin.name) ? names : names.concat(plugin.name))
@@ -416,6 +474,7 @@ export function MarketSection(props: MarketSectionProps) {
 
   const doUpdate = useCallback((name: string, force = false) => {
     setInstallError(null)
+    setActivationWarnings([])
     setStaleName(null)
     setUpdatingName(name)
     return fetch('/dsh-market/update', {
@@ -427,10 +486,14 @@ export function MarketSection(props: MarketSectionProps) {
       .then(({ status, body }) => {
         if (body.cancelled === true) {
           refreshInstalled()
+          if (body.partial === true) setInstallError(t('partialNote'))
           return
         }
         if (status === 200 && body.ok) {
           setUpdatedNames(names => names.concat(name))
+          if (body.activation && typeof body.activation === 'object') {
+            setActivations(prev => ({ ...prev, ...body.activation }))
+          }
           refreshInstalled()
         } else {
           if (status === 409) { setInstallError(t('busyWait')); return }
@@ -468,6 +531,7 @@ export function MarketSection(props: MarketSectionProps) {
   const doUninstall = useCallback((name: string) => {
     setRemoveArmed(null)
     setInstallError(null)
+    setActivationWarnings([])
     setRemovingName(name)
     return fetch('/dsh-market/uninstall', {
       method: 'POST',
@@ -480,6 +544,11 @@ export function MarketSection(props: MarketSectionProps) {
           if (!body.hot) setRemovedCount(n => n + 1)
           refreshInstalled()
         } else {
+          if (body.cancelled === true) {
+            refreshInstalled()
+            if (body.partial === true) setInstallError(t('partialNote'))
+            return
+          }
           const text = (v: unknown) => typeof v === 'string' ? v : (v && typeof (v as any).text === 'string') ? (v as any).text : v == null ? '' : JSON.stringify(v)
           setInstallError((text(body.error) || text(body.stderr) || 'error').trim().slice(-600))
         }
@@ -513,6 +582,14 @@ export function MarketSection(props: MarketSectionProps) {
   const hasUpdates = Object.keys(installed).some(
     name => !updatedNames.includes(name) && updates[name] && updates[name].updateAvailable,
   )
+
+  /** Live status line: structured phase, or the human-line fallback. */
+  const phasePart = progressPhase != null
+    ? phaseLabel(progressPhase, t)
+      + (progressCurrent !== null ? ' · ' + progressCurrent : '')
+      + (progressDone > 0 ? ' · ' + t('packagesDone').replace('{0}', String(progressDone)) : '')
+    : progressLine || t('progressHint')
+  const progressText = cancelling ? t('cancelling') + ' · ' + phasePart : phasePart
 
   const themePlugins = data === null ? [] : themePluginsOf(data.plugins)
 
@@ -559,9 +636,11 @@ export function MarketSection(props: MarketSectionProps) {
         {busy && (
           <div className={css.progress}>
             <span className={css.spin} />
-            <code className={css.grow}>{progressLine || t('progressHint')}</code>
+            <code className={css.grow}>{progressText}</code>
             {progressPct !== null && <span className={css.pct}>{progressPct}%</span>}
-            <button type="button" className={css.cancelBtn} onClick={doCancel}>{t('cancelOp')}</button>
+            <button type="button" className={css.cancelBtn} disabled={cancelling} onClick={doCancel}>
+              {cancelling ? t('cancelling') : t('cancelOp')}
+            </button>
             <div className={css.bar}>
               <div
                 className={progressPct !== null ? css.barFill : `${css.barFill} ${css.barWave}`}
@@ -753,6 +832,19 @@ export function MarketSection(props: MarketSectionProps) {
             )}
           </div>
         )}
+        {activationWarnings.length > 0 && (
+          <div className={css.restart}>
+            <span>⚠️</span>
+            <span className={css.grow}>
+              {activationWarnings.map(({ name, info }) => (
+                <div key={name}>
+                  <b>{name}</b> — {activationMeta(info.state, t).label}
+                  {info.reasons.length > 0 && <span className={css.spec}>（{info.reasons.join(' / ')}）</span>}
+                </div>
+              ))}
+            </span>
+          </div>
+        )}
       </div>
       {buildsSkipped !== null && (
         <div className={css.restart}>
@@ -912,6 +1004,8 @@ export function MarketSection(props: MarketSectionProps) {
               : Object.entries(installed).map(([name, spec]) => {
                   const entry = data === null ? undefined : entryForDep(data.plugins, name, String(spec))
                   const status = updates[name]
+                  const act = activations[name]
+                  const meta = act !== undefined ? activationMeta(act.state, t) : null
                   const version = status && status.version ? 'v' + status.version : ''
                   const specText = String(spec)
                   const ghSpec = /^github:([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+?)(?:#|$)/.exec(specText)
@@ -928,12 +1022,30 @@ export function MarketSection(props: MarketSectionProps) {
                             {(entry.description && (entry.description[lang] || entry.description.en)) || ''}
                           </div>
                         )}
+                        {act !== undefined && meta !== null && (
+                          <div className={css.act}>
+                            <span
+                              className={meta.dot === 'done' ? css.actLive : meta.dot === 'error' ? css.actBroken : css.actWarn}
+                            >
+                              <StateDot state={meta.dot} size={7} />
+                              {meta.label}
+                            </span>
+                            {act.state !== 'live' && act.reasons.length > 0 && (
+                              <details className={css.actWhy}>
+                                <summary>{t('actWhy')}</summary>
+                                <div className={css.spec}>{act.reasons.join(' / ')}</div>
+                              </details>
+                            )}
+                          </div>
+                        )}
                         {updatingName === name && (
                           <div className={css.progress}>
                             <span className={css.spin} />
-                            <code className={css.grow}>{progressLine || t('progressHint')}</code>
+                            <code className={css.grow}>{progressText}</code>
                             {progressPct !== null && <span className={css.pct}>{progressPct}%</span>}
-                            <button type="button" className={css.cancelBtn} onClick={doCancel}>{t('cancelOp')}</button>
+                            <button type="button" className={css.cancelBtn} disabled={cancelling} onClick={doCancel}>
+                              {cancelling ? t('cancelling') : t('cancelOp')}
+                            </button>
                             <div className={css.bar}>
                               <div
                                 className={progressPct !== null ? css.barFill : `${css.barFill} ${css.barWave}`}
@@ -946,7 +1058,7 @@ export function MarketSection(props: MarketSectionProps) {
                       <span className={css.grow} />
                       {repoUrl !== null && <a className={css.src} href={repoUrl + '#readme'} target="_blank" rel="noreferrer">{t('readme')}</a>}
                       {updatedNames.includes(name)
-                        ? <span className={css.okState}>{t('updated')}</span>
+                        ? <span className={css.okState}>{act?.state === 'live' ? t('updatedLive') : t('updated')}</span>
                         : updatingName === name
                           ? <Button variant="primary" size="sm" className={css.warnBtn} disabled>{t('updating')}</Button>
                           : status && status.updateAvailable

@@ -167,6 +167,13 @@ let hotSequence = 0
 
 const hotHandles = new Map<string, PluginHandle>()
 
+/** Outcome of one hot-mount attempt; `reason` explains non-`ok` results. */
+export interface HotMountResult {
+  ok: boolean
+  /** Bilingual reason shown to the user instead of a bare restart banner. */
+  reason: string | null
+}
+
 /**
  * Dispose a plugin hot-mounted earlier in this session, removing it from the
  * running composition immediately.
@@ -194,13 +201,19 @@ export async function hotUnmount(packageName: string): Promise<boolean> {
  * @param ctx - market host context; the subtree unwinds with the market's fiber.
  * @param profileDir - profile the package was installed into.
  * @param packageName - installed package to activate.
- * @returns true when the plugin is live without a restart; false when the
- * caller should show the restart banner instead.
+ * @returns whether the plugin is live without a restart, plus the reason
+ * when it is not (P0-2: the UI must distinguish "restart will fix it" from
+ * "this package can never hot-mount").
  */
-export async function hotMount(ctx: HotContext, profileDir: string, packageName: string): Promise<boolean> {
+export async function hotMount(ctx: HotContext, profileDir: string, packageName: string): Promise<HotMountResult> {
   try {
     const HotTree = await loadHotTreeClass()
-    if (HotTree === null) return false
+    if (HotTree === null) {
+      return {
+        ok: false,
+        reason: '宿主不支持热挂载(include 插件不可导入),需重启 / the host cannot hot-mount (include plugin unavailable); restart required',
+      }
+    }
     let patchText: string | null
     try {
       patchText = readFileSync(
@@ -213,14 +226,24 @@ export async function hotMount(ctx: HotContext, profileDir: string, packageName:
     let rows: HotRow[] | null
     if (patchText !== null) {
       rows = parseSimplePatch(patchText)
-      if (rows === null) return false
+      if (rows === null) {
+        return {
+          ok: false,
+          reason: 'bundle patch 含配置行/表达式,热挂载仅支持纯 insert,重启后生效 / the bundle patch contains config/expression rows; hot-mount only supports plain inserts — it activates on restart',
+        }
+      }
     } else {
       // No host patch. Client-only packages (dsh.client, no dsh.bundle) never
       // get a loader entry — not even after a restart — so client-modules
       // would never serve their bundle. A shim entry under the package's name
       // is the whole activation.
       const dsh = readPkgDsh(profileDir, packageName)
-      if (dsh === null || dsh.client === undefined || dsh.bundle !== undefined) return false
+      if (dsh === null || dsh.client === undefined || dsh.bundle !== undefined) {
+        return {
+          ok: false,
+          reason: '该包无 bundle patch 且未声明 dsh.client,没有可热挂载的内容 / no bundle patch and no dsh.client surface — nothing to hot-mount',
+        }
+      }
       shimNames.add(packageName)
       rows = [{ id: `client-${packageName.replace(/[^A-Za-z0-9_.-]/g, '-')}`, name: packageName }]
     }
@@ -237,12 +260,12 @@ export async function hotMount(ctx: HotContext, profileDir: string, packageName:
     hotHandles.set(packageName, handle)
     ctx.logger?.info?.(`[dsh-market] hot-mounted ${packageName}`)
     logEvent('info', 'hot-mount', `${packageName}: live${shimNames.has(packageName) ? ' (client-only shim)' : ''}`)
-    return true
+    return { ok: true, reason: null }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     ctx.logger?.warn(`[dsh-market] hot mount of ${packageName} failed, restart required: ${message}`)
     logEvent('warn', 'hot-mount', `${packageName}: fell back to restart — ${message}`)
-    return false
+    return { ok: false, reason: `热挂载失败,重启后生效 — ${message} / hot-mount failed — restart required: ${message}` }
   }
 }
 
@@ -271,7 +294,7 @@ export async function mountClientOnlyDeps(ctx: HotContext, profileDir: string): 
     if (hotHandles.has(name) || disabled.has(name)) continue
     const dsh = readPkgDsh(profileDir, name)
     if (dsh === null || dsh.client === undefined || dsh.bundle !== undefined) continue
-    if (await hotMount(ctx, profileDir, name)) mounted.push(name)
+    if ((await hotMount(ctx, profileDir, name)).ok) mounted.push(name)
   }
   return mounted
 }

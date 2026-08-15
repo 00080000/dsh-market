@@ -25,6 +25,7 @@ import { checkUpdates, invalidateUpdates } from './updates.ts'
 import { createThemeManager, type LoaderEntry } from './themes.ts'
 import { readJsonBody, sameOrigin, sendJson } from './http.ts'
 import { restartAllowed, scheduleRestart, trustedRestartRequest } from './restart.ts'
+import { verifyActivation } from './verify.ts'
 
 export type { LoaderEntry } from './themes.ts'
 export type { UpdateStatus } from './updates.ts'
@@ -94,6 +95,29 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
   let installing = false
   let restarting = false
 
+  /** Dependency diff vs. a pre-operation snapshot (cancel aftermath). */
+  function changedSince(before: Record<string, string>): { changed: string[]; partial: boolean } {
+    const now = readInstalled(config.profile)
+    const changed = new Set<string>()
+    for (const [name, spec] of Object.entries(now)) if (before[name] !== spec) changed.add(name)
+    for (const name of Object.keys(before)) if (now[name] === undefined) changed.add(name)
+    return { changed: [...changed], partial: changed.size > 0 }
+  }
+
+  /**
+   * Everything live in the running composition: market hot mounts plus
+   * bundle-layer loader entries whose fiber is up (loaded at boot). This is
+   * the source of truth for verifyActivation's `live` state — without the
+   * loader side, every boot-loaded bundle plugin would read as "restart".
+   */
+  function liveNames(): Set<string> {
+    const live = new Set(listHotMounts())
+    for (const entry of host.loader.entries()) {
+      if (entry.fiber !== undefined && entry.options.name !== undefined) live.add(entry.options.name)
+    }
+    return live
+  }
+
   /**
    * Drop live hot mounts whose package was removed outside the market
    * (e.g. `dsh plugin remove` in a terminal): the stale mount would keep
@@ -140,9 +164,14 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
           return
         }
         await dropStaleHotMounts()
+        const installed = readInstalled(config.profile)
+        const activation: Record<string, ReturnType<typeof verifyActivation>> = {}
+        const live = liveNames()
+        for (const name of Object.keys(installed)) activation[name] = verifyActivation(config.profile, name, live)
         sendJson(response, 200, {
           profile: config.profile,
-          installed: readInstalled(config.profile),
+          installed,
+          activation,
           live: listHotMounts(),
         })
       },
@@ -196,6 +225,15 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
           target: progress.target,
           seconds: progress.active ? Math.round((Date.now() - progress.startedAt) / 1000) : 0,
           lastLine: progress.lastLine,
+          phase: progress.phase,
+          done: progress.done,
+          total: progress.total,
+          currentPackage: progress.currentPackage,
+          downloaded: progress.downloaded,
+          size: progress.size,
+          ndjson: progress.ndjson,
+          error: progress.error,
+          cancelling: progress.cancelling,
           pnpm: await probePnpm(),
           boot: BOOT_ID,
           restart: restartAllowed(config),
@@ -279,6 +317,7 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
             sendJson(response, 400, { error: 'locally linked plugins update from their checkout' })
             return
           }
+          const beforeInstalled = readInstalled(config.profile)
           // Re-running add re-resolves the source: git HEAD for github specs,
           // dist-tag latest for registry installs.
           const isGit = spec.startsWith('github:')
@@ -295,6 +334,7 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
             const cancelled = result.cancelled
             let ok = result.exitCode === 0 && !result.timedOut && !cancelled
             let stale = false
+            let activation: Record<string, ReturnType<typeof verifyActivation>> | undefined
             if (ok) {
               stale = isStaleUpdate({
                 isGit,
@@ -305,10 +345,14 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
               })
               if (stale) ok = false
             }
-            if (ok) invalidateUpdates()
+            if (ok) {
+              invalidateUpdates()
+              activation = { [name]: verifyActivation(config.profile, name, liveNames()) }
+            }
             const staleError = stale
               ? '这个新版本刚发布不久。为了安全，系统默认会等它发布满一天后再安装——刚发布的版本偶尔会被发现问题然后撤回。可以明天再试，或点「立即更新」不再等待。 / This version was just released; for safety, installs normally wait about a day after a release. Try again tomorrow, or click "Update now" to install it right away.'
               : null
+            const cancelDiff = cancelled ? changedSince(beforeInstalled) : null
             logEvent(ok || cancelled ? 'info' : 'error', 'update',
               `${name} -> ${target} exit=${String(result.exitCode)}${result.timedOut ? ' TIMEOUT' : ''}${cancelled ? ' CANCELLED' : ''}${stale ? ' STALE(minimumReleaseAge?)' : ''}${ok || cancelled ? '' : ` stderr=${result.stderr.slice(-300)}`}`)
             // A user-cancelled run is a quiet outcome, not an error.
@@ -316,6 +360,9 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
               ok,
               cancelled: cancelled || undefined,
               stale: stale || undefined,
+              partial: cancelDiff?.partial,
+              changed: cancelDiff?.changed,
+              activation,
               error: staleError ?? undefined,
               exitCode: result.exitCode,
               timedOut: result.timedOut,
@@ -484,11 +531,14 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
             sendJson(response, 400, { error: 'plugin is not installed' })
             return
           }
+          const beforeInstalled = readInstalled(config.profile)
+          const activation = { [name]: verifyActivation(config.profile, name, liveNames()) }
           installing = true
           try {
             const result = await runPlugin(config.profile, ['remove', name])
             const cancelled = result.cancelled
             const ok = result.exitCode === 0 && !result.timedOut && !cancelled
+            const cancelDiff = cancelled ? changedSince(beforeInstalled) : null
             let hot = false
             if (ok) {
               invalidateUpdates()
@@ -507,6 +557,10 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
               ok,
               cancelled: cancelled || undefined,
               hot,
+              partial: cancelDiff?.partial,
+              changed: cancelDiff?.changed,
+              // The state of the package that was just removed (captured pre-op).
+              activation,
               exitCode: result.exitCode,
               stdout: result.stdout,
               stderr: result.stderr,
@@ -569,10 +623,12 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
           }
           installing = true
           try {
-            const before = new Set(Object.keys(readInstalled(config.profile)))
+            const beforeSpecs = readInstalled(config.profile)
+            const before = new Set(Object.keys(beforeSpecs))
             const result = await runPlugin(config.profile, ['add', target])
             const cancelled = result.cancelled
             let ok = result.exitCode === 0 && !result.timedOut && !cancelled
+            const cancelDiff = cancelled ? changedSince(beforeSpecs) : null
             if (ok) invalidateUpdates()
             if (ok) {
               // Collection repos (e.g. skin monorepos) install as a junk
@@ -603,6 +659,7 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
             }
             const installed = readInstalled(config.profile)
             let hot = false
+            let activation: Record<string, ReturnType<typeof verifyActivation>> | undefined
             if (ok) {
               const added = Object.keys(installed).filter(name => !before.has(name))
               if (added.length > 0) {
@@ -612,9 +669,12 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
                 for (const name of added) {
                   const live = entry.category === 'theme'
                     ? await themes.activateTheme(name)
-                    : await hotMount(host, profileDir(config.profile), name)
+                    : (await hotMount(host, profileDir(config.profile), name)).ok
                   if (!live) hot = false
                 }
+                activation = {}
+                const live = liveNames()
+                for (const name of added) activation[name] = verifyActivation(config.profile, name, live)
               }
             }
             logEvent(ok || cancelled ? 'info' : 'error', 'install',
@@ -623,7 +683,15 @@ export function mountMarketRoutes(host: MarketHost, config: MarketConfig): () =>
               ok,
               cancelled: cancelled || undefined,
               hot,
-              ignoredBuilds: (() => { const list = parseIgnoredBuilds(result.stdout, result.stderr); return list.length > 0 ? list : undefined })(),
+              partial: cancelDiff?.partial,
+              changed: cancelDiff?.changed,
+              activation,
+              ignoredBuilds: (() => {
+                // Prefer the structured event (pnpm 11 ndjson) over the human line.
+                if (Array.isArray(result.ignoredBuilds) && result.ignoredBuilds.length > 0) return result.ignoredBuilds
+                const list = parseIgnoredBuilds(result.stdout, result.stderr)
+                return list.length > 0 ? list : undefined
+              })(),
               error: notAPlugin ? 'nothing installable: the plugin(s) need a build step (blocked by default, see allowBuilds) or ship no prebuilt artifacts / 没有可安装的内容：插件需要构建授权（allowBuilds，默认拦截）或未附带构建产物，详见导出日志' : undefined,
               exitCode: result.exitCode,
               timedOut: result.timedOut,

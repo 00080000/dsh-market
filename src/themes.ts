@@ -113,7 +113,7 @@ export function createThemeManager(host: ThemeHost, profile: string, disabledThe
     writeDisabledThemes(dir, disabledThemes)
     if (listHotMounts().includes(name)) return true
     if (await setEntryDisabled(name, false)) return true
-    return hotMount(host, dir, name)
+    return (await hotMount(host, dir, name)).ok
   }
 
   return { installedThemeNames, setEntryDisabled, activateTheme }

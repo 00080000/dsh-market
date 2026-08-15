@@ -81,7 +81,20 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 			progressHint: "首次安装需要下载与解析依赖，大插件可能要 1-3 分钟",
 			toastReady: "已装好并已生效",
 			toastTheme: "已启用。到 设置 → 插件市场 → 主题 可随时切换",
-			gotIt: "知道了"
+			gotIt: "知道了",
+			stateLive: "已生效（热加载）",
+			stateRestart: "已安装，重启后生效",
+			stateInert: "已安装但未成为 profile 层",
+			stateBroken: "安装完成但校验失败",
+			phaseResolving: "解析依赖",
+			phaseDownloading: "下载中",
+			phaseLinking: "链接依赖",
+			phaseBuilding: "运行构建脚本",
+			cancelling: "正在取消…",
+			packagesDone: "已处理 {0} 个包",
+			updatedLive: "✓ 已更新，已生效",
+			partialNote: "已取消，部分变更已写入",
+			actWhy: "为什么未生效？"
 		};
 		const en = {
 			nav: "Plugin Market",
@@ -155,7 +168,20 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 			progressHint: "First installs download and resolve dependencies — large plugins can take 1-3 minutes",
 			toastReady: "installed and live",
 			toastTheme: "is now active. Switch any time in Settings → Plugin Market → Themes",
-			gotIt: "Got it"
+			gotIt: "Got it",
+			stateLive: "Live (hot-loaded)",
+			stateRestart: "Installed — restart to apply",
+			stateInert: "Installed but not a profile-layer plugin",
+			stateBroken: "Installed but failed validation",
+			phaseResolving: "Resolving dependencies",
+			phaseDownloading: "Downloading",
+			phaseLinking: "Linking",
+			phaseBuilding: "Running build scripts",
+			cancelling: "Cancelling…",
+			packagesDone: "{0} packages processed",
+			updatedLive: "✓ Updated — live",
+			partialNote: "Cancelled — some changes were applied",
+			actWhy: "Why not live?"
 		};
 		//#endregion
 		//#region src/client/market-data.ts
@@ -316,8 +342,8 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 			});
 		}
 		//#endregion
-		//#region \0dsh-css:/Users/fkysly/work/dshmarket/src/client/Market.module.css.mjs
-		const css = ".TDaEaa_root{min-width:0;height:100%;color:var(--dsw-alias-label-primary,#1f2328);flex-direction:column;display:flex;position:relative}.TDaEaa_head{flex-direction:column;gap:12px;padding:4px 4px 12px;display:flex}.TDaEaa_title{margin:0;font-size:16px;font-weight:500;line-height:24px}.TDaEaa_sub{color:var(--dsw-alias-label-tertiary,#8b93a1);margin:0;font-size:14px;line-height:22px}.TDaEaa_searchInline{flex-shrink:0;width:200px;margin-bottom:6px}.TDaEaa_tabs{border-bottom:1px solid var(--dsw-alias-border-l2,#e5e7eb);align-items:flex-end;gap:2px;display:flex}.TDaEaa_tab{font:inherit;color:var(--dsw-alias-label-secondary,#6b7280);cursor:pointer;white-space:nowrap;background:0 0;border:none;border-bottom:2px solid #0000;padding:7px 12px;font-size:13px}.TDaEaa_tab.TDaEaa_on{color:var(--dsw-alias-brand-primary,#4f6ef7);border-bottom-color:var(--dsw-alias-brand-primary,#4f6ef7);font-weight:600}.TDaEaa_restart{background:var(--dsw-alias-bg-layer-2,#fdf3e3);border:1px solid var(--dsw-alias-border-l2,#f3e3c3);border-radius:8px;align-items:center;gap:8px;margin:0;padding:8px 12px;font-size:12px;display:flex}.TDaEaa_body{flex:1;padding:12px 4px 24px;overflow-x:hidden;overflow-y:auto}.TDaEaa_cats{z-index:5;background:var(--dsw-alias-bg-layer-2,#f7f8fa);margin:-12px -4px 2px;padding:12px 4px 4px;position:sticky;top:-13px}.TDaEaa_catsRow{align-items:flex-start;gap:8px;display:flex;position:relative}.TDaEaa_sort{background:var(--dsw-alias-bg-layer-1,#fff);border:1px solid var(--dsw-alias-border-l1,#e5e7eb);border-radius:8px;flex-shrink:0;gap:2px;padding:2px;display:flex}.TDaEaa_sort button{font:inherit;color:var(--dsw-alias-label-secondary,#6b7280);cursor:pointer;background:0 0;border:none;border-radius:6px;padding:3px 10px;font-size:12px}.TDaEaa_sort button.TDaEaa_on{background:var(--dsw-alias-bg-layer-1,#fff);color:var(--dsw-alias-label-primary,#1f2328);font-weight:600;box-shadow:0 1px 3px #00000014}.TDaEaa_star{color:var(--dsw-alias-label-secondary,#9ca3af);font-size:11px}.TDaEaa_top{z-index:20;border:1px solid var(--dsw-alias-border-l1,#e5e7eb);background:var(--dsw-alias-bg-layer-1,#fff);width:38px;height:38px;color:var(--dsw-alias-label-secondary,#6b7280);cursor:pointer;border-radius:99px;font-size:16px;position:absolute;bottom:18px;right:18px;box-shadow:0 4px 14px #0000001f}.TDaEaa_top:hover{color:var(--dsw-alias-brand-primary,#4f6ef7)}.TDaEaa_tag{border:1px solid var(--dsw-alias-border-l3,#d9dde3);color:var(--dsw-alias-label-secondary,#6b7280);border-radius:4px;flex-shrink:0;padding:1px 6px;font-size:11px;line-height:16px}.TDaEaa_okState{color:var(--dsw-alias-state-success-primary,#16a34a);white-space:nowrap;font-size:12px;font-weight:600}.TDaEaa_dangerBtn.TDaEaa_dangerBtn{border-color:var(--dsw-alias-state-error-primary,#dc2626);color:var(--dsw-alias-state-error-primary,#dc2626)}.TDaEaa_dangerArmed.TDaEaa_dangerArmed{background:var(--dsw-alias-state-error-primary,#dc2626);color:#fff}.TDaEaa_warnBtn.TDaEaa_warnBtn{background:var(--dsw-alias-state-warn-primary,#ea580c);color:#fff}.TDaEaa_catsWrap{flex-wrap:wrap;flex:1;align-items:center;gap:6px;min-width:0;display:flex}.TDaEaa_catsCollapsed{max-height:62px;overflow:hidden}.TDaEaa_catsToggle.TDaEaa_catsToggle{height:26px;min-height:26px;color:var(--dsw-alias-label-secondary,#6b7280);padding:0 6px}.TDaEaa_cmdDetails{margin:0}.TDaEaa_cmdSummary{cursor:pointer;width:fit-content;color:var(--dsw-alias-label-secondary,#6b7280);border-radius:6px;align-items:center;gap:6px;margin-left:-4px;padding:2px 4px;font-size:12px;font-weight:500;line-height:18px;list-style:none;display:flex}.TDaEaa_cmdSummary::-webkit-details-marker{display:none}.TDaEaa_cmdSummary:before{content:\"\";border-bottom:1.5px solid;border-right:1.5px solid;width:5px;height:5px;transition:transform .12s;transform:rotate(-45deg)translate(-1px,-1px)}.TDaEaa_cmdDetails[open]>.TDaEaa_cmdSummary:before{transform:rotate(45deg)translate(-1px,-1px)}.TDaEaa_cmdSummary:hover{color:var(--dsw-alias-label-primary,#1f2328)}.TDaEaa_cmd{background:var(--dsw-alias-bg-layer-2,#f3f4f6);word-break:break-all;border-radius:6px;margin:8px 0 0;padding:8px 10px;font-family:ui-monospace,Menlo,monospace;font-size:11px;line-height:18px}.TDaEaa_warnLine{color:var(--dsw-alias-state-warn-primary,#b45309);margin:0;font-size:12px;font-weight:600;line-height:18px}.TDaEaa_modalNote{color:var(--dsw-alias-label-tertiary,#8b93a1);margin:12px 0 0;font-size:12px;line-height:18px}.TDaEaa_grid{grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;display:grid}.TDaEaa_sect{color:var(--dsw-alias-label-secondary,#6b7280);margin:14px 2px 8px;font-size:12px;font-weight:600}.TDaEaa_sect:first-child{margin-top:2px}.TDaEaa_swatches{border:1px solid var(--dsw-alias-border-l2,#e5e7eb);border-radius:8px;gap:0;height:34px;display:flex;overflow:hidden}.TDaEaa_themesGrid{margin-bottom:12px}.TDaEaa_swatches i{flex:1}.TDaEaa_card{background:var(--dsw-alias-bg-layer-1,#fff);border:1px solid var(--dsw-alias-border-l2,#e5e7eb);border-radius:12px;flex-direction:column;gap:12px;padding:12px 14px;display:flex}.TDaEaa_row1{align-items:center;gap:10px;min-width:0;display:flex}.TDaEaa_av{color:#fff;object-fit:cover;background:var(--dsw-alias-bg-layer-2,#f3f4f6);border-radius:8px;flex-shrink:0;place-items:center;width:32px;height:32px;font-size:14px;font-weight:700;display:grid}.TDaEaa_nm{text-overflow:ellipsis;white-space:nowrap;font-size:14px;font-weight:500;line-height:22px;overflow:hidden}.TDaEaa_owner{color:var(--dsw-alias-label-secondary,#9ca3af);font-size:11px}.TDaEaa_desc{color:var(--dsw-alias-label-tertiary,#8b93a1);min-height:36px;margin:0;font-size:12px;line-height:18px}.TDaEaa_foot{align-items:center;gap:8px;margin-top:auto;display:flex}.TDaEaa_grow{flex:1}.TDaEaa_titleRow{align-items:center;gap:10px;display:flex}.TDaEaa_descTight{min-height:0}.TDaEaa_src{color:var(--dsw-alias-label-secondary,#9ca3af);font-size:11px;text-decoration:none}.TDaEaa_src:hover{color:var(--dsw-alias-brand-primary,#4f6ef7)}.TDaEaa_dot{vertical-align:2px;margin-left:5px}.TDaEaa_loading{color:var(--dsw-alias-label-secondary,#9ca3af);flex-direction:column;align-items:center;gap:12px;padding:48px;font-size:13px;display:flex}.TDaEaa_spin{border:3px solid var(--dsw-alias-border-l1,#e5e7eb);border-top-color:var(--dsw-alias-brand-primary,#4f6ef7);border-radius:99px;width:22px;height:22px;animation:.8s linear infinite TDaEaa_sp}@keyframes TDaEaa_sp{to{transform:rotate(360deg)}}.TDaEaa_progress{background:var(--dsw-alias-bg-layer-2,#f3f4f6);border:1px solid var(--dsw-alias-border-l2,#e5e7eb);color:var(--dsw-alias-label-secondary,#6b7280);border-radius:8px;flex-wrap:wrap;align-items:center;gap:9px;margin:0;padding:8px 12px;font-size:12px;display:flex}.TDaEaa_bar{background:var(--dsw-alias-border-l1,#e5e7eb);border-radius:99px;width:100%;height:4px;overflow:hidden}.TDaEaa_barFill{background:var(--dsw-alias-brand-primary,#4f6ef7);border-radius:99px;height:100%;transition:width .6s}.TDaEaa_barWave{width:30%;animation:1.2s ease-in-out infinite TDaEaa_dshmSlide}@keyframes TDaEaa_dshmSlide{0%{margin-left:-30%}to{margin-left:100%}}.TDaEaa_irow .TDaEaa_progress{margin-top:8px}.TDaEaa_progress .TDaEaa_spin{border-width:2px;flex-shrink:0;width:14px;height:14px}.TDaEaa_progress code{text-overflow:ellipsis;white-space:nowrap;font-family:ui-monospace,Menlo,monospace;font-size:11px;overflow:hidden}.TDaEaa_empty{color:var(--dsw-alias-label-secondary,#9ca3af);text-align:center;padding:32px;font-size:13px}.TDaEaa_err{color:var(--dsw-alias-state-error-primary,#dc2626);white-space:pre-wrap;word-break:break-all;margin:8px 0;font-size:12px}.TDaEaa_irow{background:var(--dsw-alias-bg-layer-1,#fff);border:1px solid var(--dsw-alias-border-l2,#e5e7eb);border-radius:12px;align-items:center;gap:10px;margin-bottom:8px;padding:12px 14px;display:flex}.TDaEaa_irow>.TDaEaa_src,.TDaEaa_irow>.TDaEaa_owner,.TDaEaa_dangerBtn.TDaEaa_dangerBtn,.TDaEaa_warnBtn.TDaEaa_warnBtn,.TDaEaa_dangerArmed.TDaEaa_dangerArmed{white-space:nowrap;flex-shrink:0}.TDaEaa_spec{color:var(--dsw-alias-label-secondary,#9ca3af);font-family:ui-monospace,Menlo,monospace;font-size:11px}.TDaEaa_staleAction{margin-top:8px}.TDaEaa_pct{color:var(--dsw-alias-label-secondary,#6b7280);flex-shrink:0;font-size:11px;font-weight:600}.TDaEaa_cancelBtn{border:1px solid var(--dsw-alias-border-l2,#e5e7eb);background:var(--dsw-alias-bg-layer-1,#fff);color:var(--dsw-alias-label-secondary,#6b7280);font:inherit;cursor:pointer;white-space:nowrap;border-radius:6px;flex-shrink:0;padding:2px 10px;font-size:11px;line-height:16px}.TDaEaa_cancelBtn:hover{color:var(--dsw-alias-state-error-primary,#dc2626);border-color:var(--dsw-alias-state-error-primary,#dc2626)}.TDaEaa_pager{flex-wrap:wrap;justify-content:space-between;align-items:center;gap:12px;margin:16px 0 4px;display:flex}.TDaEaa_pagerPages{flex-wrap:wrap;flex:1;justify-content:center;align-items:center;gap:6px;min-width:0;display:flex}.TDaEaa_pagerSize{flex-shrink:0;align-items:center;gap:4px;display:flex}.TDaEaa_sizeLabel{color:var(--dsw-alias-label-secondary,#6b7280);font-size:12px}.TDaEaa_sizeBtn{border:1px solid var(--dsw-alias-border-l2,#e5e7eb);background:var(--dsw-alias-bg-layer-1,#fff);color:var(--dsw-alias-label-secondary,#6b7280);font:inherit;cursor:pointer;border-radius:6px;padding:3px 8px;font-size:12px;line-height:18px}.TDaEaa_sizeBtn:hover{color:var(--dsw-alias-brand-primary,#4f6ef7);border-color:var(--dsw-alias-brand-primary,#4f6ef7)}.TDaEaa_sizeOn{background:var(--dsw-alias-brand-primary,#4f6ef7);border-color:var(--dsw-alias-brand-primary,#4f6ef7);color:#fff;font-weight:600}.TDaEaa_pageBtn{border:1px solid var(--dsw-alias-border-l2,#e5e7eb);background:var(--dsw-alias-bg-layer-1,#fff);color:var(--dsw-alias-label-secondary,#6b7280);font:inherit;cursor:pointer;border-radius:6px;min-width:28px;padding:4px 10px;font-size:12px;line-height:18px}.TDaEaa_pageBtn:hover:not(:disabled){color:var(--dsw-alias-brand-primary,#4f6ef7);border-color:var(--dsw-alias-brand-primary,#4f6ef7)}.TDaEaa_pageBtn:disabled{opacity:.45;cursor:default}.TDaEaa_pageOn{background:var(--dsw-alias-brand-primary,#4f6ef7);border-color:var(--dsw-alias-brand-primary,#4f6ef7);color:#fff;font-weight:600}.TDaEaa_pageEllipsis{color:var(--dsw-alias-label-secondary,#9ca3af);padding:0 2px;font-size:12px}.TDaEaa_pageInfo{color:var(--dsw-alias-label-secondary,#6b7280);white-space:nowrap;font-size:12px}";
+		//#region \0dsh-css:D:\Github\dsh-market\src\client\Market.module.css.mjs
+		const css = ".dvLfbW_root{min-width:0;height:100%;color:var(--dsw-alias-label-primary,#1f2328);flex-direction:column;display:flex;position:relative}.dvLfbW_head{flex-direction:column;gap:12px;padding:4px 4px 12px;display:flex}.dvLfbW_title{margin:0;font-size:16px;font-weight:500;line-height:24px}.dvLfbW_sub{color:var(--dsw-alias-label-tertiary,#8b93a1);margin:0;font-size:14px;line-height:22px}.dvLfbW_searchInline{flex-shrink:0;width:200px;margin-bottom:6px}.dvLfbW_tabs{border-bottom:1px solid var(--dsw-alias-border-l2,#e5e7eb);align-items:flex-end;gap:2px;display:flex}.dvLfbW_tab{font:inherit;color:var(--dsw-alias-label-secondary,#6b7280);cursor:pointer;white-space:nowrap;background:0 0;border:none;border-bottom:2px solid #0000;padding:7px 12px;font-size:13px}.dvLfbW_tab.dvLfbW_on{color:var(--dsw-alias-brand-primary,#4f6ef7);border-bottom-color:var(--dsw-alias-brand-primary,#4f6ef7);font-weight:600}.dvLfbW_restart{background:var(--dsw-alias-bg-layer-2,#fdf3e3);border:1px solid var(--dsw-alias-border-l2,#f3e3c3);border-radius:8px;align-items:center;gap:8px;margin:0;padding:8px 12px;font-size:12px;display:flex}.dvLfbW_body{flex:1;padding:12px 4px 24px;overflow-x:hidden;overflow-y:auto}.dvLfbW_cats{z-index:5;background:var(--dsw-alias-bg-layer-2,#f7f8fa);margin:-12px -4px 2px;padding:12px 4px 4px;position:sticky;top:-13px}.dvLfbW_catsRow{align-items:flex-start;gap:8px;display:flex;position:relative}.dvLfbW_sort{background:var(--dsw-alias-bg-layer-1,#fff);border:1px solid var(--dsw-alias-border-l1,#e5e7eb);border-radius:8px;flex-shrink:0;gap:2px;padding:2px;display:flex}.dvLfbW_sort button{font:inherit;color:var(--dsw-alias-label-secondary,#6b7280);cursor:pointer;background:0 0;border:none;border-radius:6px;padding:3px 10px;font-size:12px}.dvLfbW_sort button.dvLfbW_on{background:var(--dsw-alias-bg-layer-1,#fff);color:var(--dsw-alias-label-primary,#1f2328);font-weight:600;box-shadow:0 1px 3px #00000014}.dvLfbW_star{color:var(--dsw-alias-label-secondary,#9ca3af);font-size:11px}.dvLfbW_top{z-index:20;border:1px solid var(--dsw-alias-border-l1,#e5e7eb);background:var(--dsw-alias-bg-layer-1,#fff);width:38px;height:38px;color:var(--dsw-alias-label-secondary,#6b7280);cursor:pointer;border-radius:99px;font-size:16px;position:absolute;bottom:18px;right:18px;box-shadow:0 4px 14px #0000001f}.dvLfbW_top:hover{color:var(--dsw-alias-brand-primary,#4f6ef7)}.dvLfbW_tag{border:1px solid var(--dsw-alias-border-l3,#d9dde3);color:var(--dsw-alias-label-secondary,#6b7280);border-radius:4px;flex-shrink:0;padding:1px 6px;font-size:11px;line-height:16px}.dvLfbW_okState{color:var(--dsw-alias-state-success-primary,#16a34a);white-space:nowrap;font-size:12px;font-weight:600}.dvLfbW_dangerBtn.dvLfbW_dangerBtn{border-color:var(--dsw-alias-state-error-primary,#dc2626);color:var(--dsw-alias-state-error-primary,#dc2626)}.dvLfbW_dangerArmed.dvLfbW_dangerArmed{background:var(--dsw-alias-state-error-primary,#dc2626);color:#fff}.dvLfbW_warnBtn.dvLfbW_warnBtn{background:var(--dsw-alias-state-warn-primary,#ea580c);color:#fff}.dvLfbW_catsWrap{flex-wrap:wrap;flex:1;align-items:center;gap:6px;min-width:0;display:flex}.dvLfbW_catsCollapsed{max-height:62px;overflow:hidden}.dvLfbW_catsToggle.dvLfbW_catsToggle{height:26px;min-height:26px;color:var(--dsw-alias-label-secondary,#6b7280);padding:0 6px}.dvLfbW_cmdDetails{margin:0}.dvLfbW_cmdSummary{cursor:pointer;width:fit-content;color:var(--dsw-alias-label-secondary,#6b7280);border-radius:6px;align-items:center;gap:6px;margin-left:-4px;padding:2px 4px;font-size:12px;font-weight:500;line-height:18px;list-style:none;display:flex}.dvLfbW_cmdSummary::-webkit-details-marker{display:none}.dvLfbW_cmdSummary:before{content:\"\";border-bottom:1.5px solid;border-right:1.5px solid;width:5px;height:5px;transition:transform .12s;transform:rotate(-45deg)translate(-1px,-1px)}.dvLfbW_cmdDetails[open]>.dvLfbW_cmdSummary:before{transform:rotate(45deg)translate(-1px,-1px)}.dvLfbW_cmdSummary:hover{color:var(--dsw-alias-label-primary,#1f2328)}.dvLfbW_cmd{background:var(--dsw-alias-bg-layer-2,#f3f4f6);word-break:break-all;border-radius:6px;margin:8px 0 0;padding:8px 10px;font-family:ui-monospace,Menlo,monospace;font-size:11px;line-height:18px}.dvLfbW_warnLine{color:var(--dsw-alias-state-warn-primary,#b45309);margin:0;font-size:12px;font-weight:600;line-height:18px}.dvLfbW_modalNote{color:var(--dsw-alias-label-tertiary,#8b93a1);margin:12px 0 0;font-size:12px;line-height:18px}.dvLfbW_grid{grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;display:grid}.dvLfbW_sect{color:var(--dsw-alias-label-secondary,#6b7280);margin:14px 2px 8px;font-size:12px;font-weight:600}.dvLfbW_sect:first-child{margin-top:2px}.dvLfbW_swatches{border:1px solid var(--dsw-alias-border-l2,#e5e7eb);border-radius:8px;gap:0;height:34px;display:flex;overflow:hidden}.dvLfbW_themesGrid{margin-bottom:12px}.dvLfbW_swatches i{flex:1}.dvLfbW_card{background:var(--dsw-alias-bg-layer-1,#fff);border:1px solid var(--dsw-alias-border-l2,#e5e7eb);border-radius:12px;flex-direction:column;gap:12px;padding:12px 14px;display:flex}.dvLfbW_row1{align-items:center;gap:10px;min-width:0;display:flex}.dvLfbW_av{color:#fff;object-fit:cover;background:var(--dsw-alias-bg-layer-2,#f3f4f6);border-radius:8px;flex-shrink:0;place-items:center;width:32px;height:32px;font-size:14px;font-weight:700;display:grid}.dvLfbW_nm{text-overflow:ellipsis;white-space:nowrap;font-size:14px;font-weight:500;line-height:22px;overflow:hidden}.dvLfbW_owner{color:var(--dsw-alias-label-secondary,#9ca3af);font-size:11px}.dvLfbW_desc{color:var(--dsw-alias-label-tertiary,#8b93a1);min-height:36px;margin:0;font-size:12px;line-height:18px}.dvLfbW_foot{align-items:center;gap:8px;margin-top:auto;display:flex}.dvLfbW_grow{flex:1}.dvLfbW_titleRow{align-items:center;gap:10px;display:flex}.dvLfbW_descTight{min-height:0}.dvLfbW_src{color:var(--dsw-alias-label-secondary,#9ca3af);font-size:11px;text-decoration:none}.dvLfbW_src:hover{color:var(--dsw-alias-brand-primary,#4f6ef7)}.dvLfbW_dot{vertical-align:2px;margin-left:5px}.dvLfbW_act{flex-wrap:wrap;align-items:center;gap:6px;margin-top:6px;font-size:11px;display:flex}.dvLfbW_actLive{color:var(--dsw-alias-state-success-primary,#16a34a);align-items:center;gap:4px;font-weight:600;display:inline-flex}.dvLfbW_actWarn{color:var(--dsw-alias-state-warn-primary,#b45309);align-items:center;gap:4px;font-weight:600;display:inline-flex}.dvLfbW_actBroken{color:var(--dsw-alias-state-error-primary,#dc2626);align-items:center;gap:4px;font-weight:600;display:inline-flex}.dvLfbW_actWhy{margin:0}.dvLfbW_actWhy summary{cursor:pointer;color:var(--dsw-alias-label-secondary,#6b7280);font-size:11px}.dvLfbW_loading{color:var(--dsw-alias-label-secondary,#9ca3af);flex-direction:column;align-items:center;gap:12px;padding:48px;font-size:13px;display:flex}.dvLfbW_spin{border:3px solid var(--dsw-alias-border-l1,#e5e7eb);border-top-color:var(--dsw-alias-brand-primary,#4f6ef7);border-radius:99px;width:22px;height:22px;animation:.8s linear infinite dvLfbW_sp}@keyframes dvLfbW_sp{to{transform:rotate(360deg)}}.dvLfbW_progress{background:var(--dsw-alias-bg-layer-2,#f3f4f6);border:1px solid var(--dsw-alias-border-l2,#e5e7eb);color:var(--dsw-alias-label-secondary,#6b7280);border-radius:8px;flex-wrap:wrap;align-items:center;gap:9px;margin:0;padding:8px 12px;font-size:12px;display:flex}.dvLfbW_bar{background:var(--dsw-alias-border-l1,#e5e7eb);border-radius:99px;width:100%;height:4px;overflow:hidden}.dvLfbW_barFill{background:var(--dsw-alias-brand-primary,#4f6ef7);border-radius:99px;height:100%;transition:width .6s}.dvLfbW_barWave{width:30%;animation:1.2s ease-in-out infinite dvLfbW_dshmSlide}@keyframes dvLfbW_dshmSlide{0%{margin-left:-30%}to{margin-left:100%}}.dvLfbW_irow .dvLfbW_progress{margin-top:8px}.dvLfbW_progress .dvLfbW_spin{border-width:2px;flex-shrink:0;width:14px;height:14px}.dvLfbW_progress code{text-overflow:ellipsis;white-space:nowrap;font-family:ui-monospace,Menlo,monospace;font-size:11px;overflow:hidden}.dvLfbW_empty{color:var(--dsw-alias-label-secondary,#9ca3af);text-align:center;padding:32px;font-size:13px}.dvLfbW_err{color:var(--dsw-alias-state-error-primary,#dc2626);white-space:pre-wrap;word-break:break-all;margin:8px 0;font-size:12px}.dvLfbW_irow{background:var(--dsw-alias-bg-layer-1,#fff);border:1px solid var(--dsw-alias-border-l2,#e5e7eb);border-radius:12px;align-items:center;gap:10px;margin-bottom:8px;padding:12px 14px;display:flex}.dvLfbW_irow>.dvLfbW_src,.dvLfbW_irow>.dvLfbW_owner,.dvLfbW_dangerBtn.dvLfbW_dangerBtn,.dvLfbW_warnBtn.dvLfbW_warnBtn,.dvLfbW_dangerArmed.dvLfbW_dangerArmed{white-space:nowrap;flex-shrink:0}.dvLfbW_spec{color:var(--dsw-alias-label-secondary,#9ca3af);font-family:ui-monospace,Menlo,monospace;font-size:11px}.dvLfbW_staleAction{margin-top:8px}.dvLfbW_pct{color:var(--dsw-alias-label-secondary,#6b7280);flex-shrink:0;font-size:11px;font-weight:600}.dvLfbW_cancelBtn{border:1px solid var(--dsw-alias-border-l2,#e5e7eb);background:var(--dsw-alias-bg-layer-1,#fff);color:var(--dsw-alias-label-secondary,#6b7280);font:inherit;cursor:pointer;white-space:nowrap;border-radius:6px;flex-shrink:0;padding:2px 10px;font-size:11px;line-height:16px}.dvLfbW_cancelBtn:hover{color:var(--dsw-alias-state-error-primary,#dc2626);border-color:var(--dsw-alias-state-error-primary,#dc2626)}.dvLfbW_pager{flex-wrap:wrap;justify-content:space-between;align-items:center;gap:12px;margin:16px 0 4px;display:flex}.dvLfbW_pagerPages{flex-wrap:wrap;flex:1;justify-content:center;align-items:center;gap:6px;min-width:0;display:flex}.dvLfbW_pagerSize{flex-shrink:0;align-items:center;gap:4px;display:flex}.dvLfbW_sizeLabel{color:var(--dsw-alias-label-secondary,#6b7280);font-size:12px}.dvLfbW_sizeBtn{border:1px solid var(--dsw-alias-border-l2,#e5e7eb);background:var(--dsw-alias-bg-layer-1,#fff);color:var(--dsw-alias-label-secondary,#6b7280);font:inherit;cursor:pointer;border-radius:6px;padding:3px 8px;font-size:12px;line-height:18px}.dvLfbW_sizeBtn:hover{color:var(--dsw-alias-brand-primary,#4f6ef7);border-color:var(--dsw-alias-brand-primary,#4f6ef7)}.dvLfbW_sizeOn{background:var(--dsw-alias-brand-primary,#4f6ef7);border-color:var(--dsw-alias-brand-primary,#4f6ef7);color:#fff;font-weight:600}.dvLfbW_pageBtn{border:1px solid var(--dsw-alias-border-l2,#e5e7eb);background:var(--dsw-alias-bg-layer-1,#fff);color:var(--dsw-alias-label-secondary,#6b7280);font:inherit;cursor:pointer;border-radius:6px;min-width:28px;padding:4px 10px;font-size:12px;line-height:18px}.dvLfbW_pageBtn:hover:not(:disabled){color:var(--dsw-alias-brand-primary,#4f6ef7);border-color:var(--dsw-alias-brand-primary,#4f6ef7)}.dvLfbW_pageBtn:disabled{opacity:.45;cursor:default}.dvLfbW_pageOn{background:var(--dsw-alias-brand-primary,#4f6ef7);border-color:var(--dsw-alias-brand-primary,#4f6ef7);color:#fff;font-weight:600}.dvLfbW_pageEllipsis{color:var(--dsw-alias-label-secondary,#9ca3af);padding:0 2px;font-size:12px}.dvLfbW_pageInfo{color:var(--dsw-alias-label-secondary,#6b7280);white-space:nowrap;font-size:12px}";
 		const tagId = "dshmarket/Market.module.css";
 		if (typeof document !== "undefined" && document.querySelector("style[data-plugin-css=" + JSON.stringify(tagId) + "]") === null) {
 			const tag = document.createElement("style");
@@ -327,75 +353,80 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 			document.head.appendChild(tag);
 		}
 		var Market_module_css_default = {
-			"sub": "TDaEaa_sub",
-			"pagerPages": "TDaEaa_pagerPages",
-			"spec": "TDaEaa_spec",
-			"on": "TDaEaa_on",
-			"okState": "TDaEaa_okState",
-			"cmd": "TDaEaa_cmd",
-			"sizeLabel": "TDaEaa_sizeLabel",
-			"star": "TDaEaa_star",
-			"top": "TDaEaa_top",
-			"titleRow": "TDaEaa_titleRow",
-			"catsWrap": "TDaEaa_catsWrap",
-			"tab": "TDaEaa_tab",
-			"sizeBtn": "TDaEaa_sizeBtn",
-			"sizeOn": "TDaEaa_sizeOn",
-			"searchInline": "TDaEaa_searchInline",
-			"sect": "TDaEaa_sect",
-			"av": "TDaEaa_av",
-			"sort": "TDaEaa_sort",
-			"pager": "TDaEaa_pager",
-			"pageEllipsis": "TDaEaa_pageEllipsis",
-			"desc": "TDaEaa_desc",
-			"pageInfo": "TDaEaa_pageInfo",
-			"cmdSummary": "TDaEaa_cmdSummary",
-			"pageOn": "TDaEaa_pageOn",
-			"owner": "TDaEaa_owner",
-			"pagerSize": "TDaEaa_pagerSize",
-			"dangerArmed": "TDaEaa_dangerArmed",
-			"title": "TDaEaa_title",
-			"catsCollapsed": "TDaEaa_catsCollapsed",
-			"restart": "TDaEaa_restart",
-			"src": "TDaEaa_src",
-			"body": "TDaEaa_body",
-			"themesGrid": "TDaEaa_themesGrid",
-			"catsRow": "TDaEaa_catsRow",
-			"progress": "TDaEaa_progress",
-			"grid": "TDaEaa_grid",
-			"tabs": "TDaEaa_tabs",
-			"pct": "TDaEaa_pct",
-			"empty": "TDaEaa_empty",
-			"foot": "TDaEaa_foot",
-			"descTight": "TDaEaa_descTight",
-			"head": "TDaEaa_head",
-			"card": "TDaEaa_card",
-			"cats": "TDaEaa_cats",
-			"warnBtn": "TDaEaa_warnBtn",
-			"loading": "TDaEaa_loading",
-			"modalNote": "TDaEaa_modalNote",
-			"sp": "TDaEaa_sp",
-			"catsToggle": "TDaEaa_catsToggle",
-			"cmdDetails": "TDaEaa_cmdDetails",
-			"barFill": "TDaEaa_barFill",
-			"bar": "TDaEaa_bar",
-			"dshmSlide": "TDaEaa_dshmSlide",
-			"err": "TDaEaa_err",
-			"root": "TDaEaa_root",
-			"dangerBtn": "TDaEaa_dangerBtn",
-			"grow": "TDaEaa_grow",
-			"pageBtn": "TDaEaa_pageBtn",
-			"spin": "TDaEaa_spin",
-			"dot": "TDaEaa_dot",
-			"tag": "TDaEaa_tag",
-			"nm": "TDaEaa_nm",
-			"row1": "TDaEaa_row1",
-			"swatches": "TDaEaa_swatches",
-			"cancelBtn": "TDaEaa_cancelBtn",
-			"warnLine": "TDaEaa_warnLine",
-			"staleAction": "TDaEaa_staleAction",
-			"irow": "TDaEaa_irow",
-			"barWave": "TDaEaa_barWave"
+			"dshmSlide": "dvLfbW_dshmSlide",
+			"okState": "dvLfbW_okState",
+			"tab": "dvLfbW_tab",
+			"err": "dvLfbW_err",
+			"row1": "dvLfbW_row1",
+			"staleAction": "dvLfbW_staleAction",
+			"cmd": "dvLfbW_cmd",
+			"desc": "dvLfbW_desc",
+			"grid": "dvLfbW_grid",
+			"foot": "dvLfbW_foot",
+			"pageInfo": "dvLfbW_pageInfo",
+			"on": "dvLfbW_on",
+			"cmdDetails": "dvLfbW_cmdDetails",
+			"titleRow": "dvLfbW_titleRow",
+			"owner": "dvLfbW_owner",
+			"descTight": "dvLfbW_descTight",
+			"sect": "dvLfbW_sect",
+			"actLive": "dvLfbW_actLive",
+			"loading": "dvLfbW_loading",
+			"cats": "dvLfbW_cats",
+			"pagerPages": "dvLfbW_pagerPages",
+			"sizeBtn": "dvLfbW_sizeBtn",
+			"catsRow": "dvLfbW_catsRow",
+			"progress": "dvLfbW_progress",
+			"bar": "dvLfbW_bar",
+			"tag": "dvLfbW_tag",
+			"card": "dvLfbW_card",
+			"spin": "dvLfbW_spin",
+			"spec": "dvLfbW_spec",
+			"title": "dvLfbW_title",
+			"barFill": "dvLfbW_barFill",
+			"restart": "dvLfbW_restart",
+			"src": "dvLfbW_src",
+			"warnLine": "dvLfbW_warnLine",
+			"pageEllipsis": "dvLfbW_pageEllipsis",
+			"dot": "dvLfbW_dot",
+			"top": "dvLfbW_top",
+			"barWave": "dvLfbW_barWave",
+			"act": "dvLfbW_act",
+			"head": "dvLfbW_head",
+			"av": "dvLfbW_av",
+			"root": "dvLfbW_root",
+			"sort": "dvLfbW_sort",
+			"nm": "dvLfbW_nm",
+			"actWhy": "dvLfbW_actWhy",
+			"catsToggle": "dvLfbW_catsToggle",
+			"empty": "dvLfbW_empty",
+			"body": "dvLfbW_body",
+			"swatches": "dvLfbW_swatches",
+			"cancelBtn": "dvLfbW_cancelBtn",
+			"modalNote": "dvLfbW_modalNote",
+			"pct": "dvLfbW_pct",
+			"dangerArmed": "dvLfbW_dangerArmed",
+			"grow": "dvLfbW_grow",
+			"pageBtn": "dvLfbW_pageBtn",
+			"warnBtn": "dvLfbW_warnBtn",
+			"pagerSize": "dvLfbW_pagerSize",
+			"sub": "dvLfbW_sub",
+			"sp": "dvLfbW_sp",
+			"star": "dvLfbW_star",
+			"searchInline": "dvLfbW_searchInline",
+			"actWarn": "dvLfbW_actWarn",
+			"pager": "dvLfbW_pager",
+			"pageOn": "dvLfbW_pageOn",
+			"cmdSummary": "dvLfbW_cmdSummary",
+			"dangerBtn": "dvLfbW_dangerBtn",
+			"themesGrid": "dvLfbW_themesGrid",
+			"actBroken": "dvLfbW_actBroken",
+			"sizeLabel": "dvLfbW_sizeLabel",
+			"sizeOn": "dvLfbW_sizeOn",
+			"tabs": "dvLfbW_tabs",
+			"catsCollapsed": "dvLfbW_catsCollapsed",
+			"irow": "dvLfbW_irow",
+			"catsWrap": "dvLfbW_catsWrap"
 		};
 		//#endregion
 		//#region src/client/MarketSection.tsx
@@ -404,6 +435,35 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 		* /dsh-market/* host routes, with install/update/uninstall flows and the
 		* pending-restart bookkeeping in sessionStorage.
 		*/
+		/** The state label + dot for one activation result (P0-2). */
+		function activationMeta(state, t) {
+			if (state === "live") return {
+				label: t("stateLive"),
+				dot: "done"
+			};
+			if (state === "restart") return {
+				label: t("stateRestart"),
+				dot: "warning"
+			};
+			if (state === "inert") return {
+				label: t("stateInert"),
+				dot: "warning"
+			};
+			if (state === "broken") return {
+				label: t("stateBroken"),
+				dot: "error"
+			};
+			return {
+				label: "—",
+				dot: "warning"
+			};
+		}
+		function phaseLabel(phase, t) {
+			if (phase === "resolving") return t("phaseResolving");
+			if (phase === "downloading") return t("phaseDownloading");
+			if (phase === "linking") return t("phaseLinking");
+			return t("phaseBuilding");
+		}
 		/**
 		* Card avatar: the plugin owner's GitHub avatar (no API, browser-cached),
 		* falling back to the initial-letter tile when it can't load.
@@ -504,6 +564,15 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 			const [hotUrls, setHotUrls] = (0, react.useState)([]);
 			const [hotNames, setHotNames] = (0, react.useState)([]);
 			const [progressLine, setProgressLine] = (0, react.useState)(null);
+			/** Per-package activation states from /dsh-market/installed + operations. */
+			const [activations, setActivations] = (0, react.useState)({});
+			/** Structured progress from pnpm ndjson (P1-6). */
+			const [progressPhase, setProgressPhase] = (0, react.useState)(null);
+			const [progressCurrent, setProgressCurrent] = (0, react.useState)(null);
+			const [progressDone, setProgressDone] = (0, react.useState)(0);
+			const [cancelling, setCancelling] = (0, react.useState)(false);
+			/** Non-live activation results from the last operation, shown as a banner. */
+			const [activationWarnings, setActivationWarnings] = (0, react.useState)([]);
 			const [removeArmed, setRemoveArmed] = (0, react.useState)(null);
 			const [removingName, setRemovingName] = (0, react.useState)(null);
 			const [removedCount, setRemovedCount] = (0, react.useState)(0);
@@ -524,6 +593,7 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 				fetch("/dsh-market/installed", { cache: "no-store" }).then((res) => res.json()).then((body) => {
 					setInstalled(body.installed || {});
 					setSkins(body.live || []);
+					if (body.activation && typeof body.activation === "object") setActivations(body.activation);
 				}).catch(() => {});
 				fetch("/dsh-market/updates" + (force === true ? "?force=1" : ""), { cache: "no-store" }).then((res) => res.json()).then((body) => setUpdates(body.updates || {})).catch(() => {});
 			}, []);
@@ -591,20 +661,40 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 			(0, react.useEffect)(() => {
 				if (busyUrl === null && updatingName === null) {
 					setProgressLine(null);
+					setProgressPhase(null);
+					setProgressCurrent(null);
+					setProgressDone(0);
+					setCancelling(false);
 					return;
 				}
 				const timer = setInterval(() => {
 					fetch("/dsh-market/status", { cache: "no-store" }).then((res) => res.json()).then((status) => {
 						if (status.active) {
-							setProgressLine((status.lastLine || "…") + "  (" + status.seconds + "s)");
-							const m = /resolved (\d+), reused (\d+), downloaded (\d+), added (\d+)/.exec(status.lastLine || "");
-							if (m !== null && Number(m[1]) > 0) {
-								const done = Number(m[2]) + Number(m[3]) + Number(m[4]);
-								setProgressPct(Math.max(4, Math.min(96, Math.round(done / Number(m[1]) * 100))));
+							setCancelling(status.cancelling === true);
+							if (status.phase !== null && status.phase !== void 0) {
+								setProgressPhase(status.phase);
+								setProgressCurrent(status.currentPackage ?? null);
+								setProgressDone(status.done ?? 0);
+								setProgressLine(null);
+								if (typeof status.size === "number" && status.size > 0 && typeof status.downloaded === "number") setProgressPct(Math.max(4, Math.min(96, Math.round(status.downloaded / status.size * 100))));
+							} else {
+								setProgressLine((status.lastLine || "…") + "  (" + status.seconds + "s)");
+								setProgressPhase(null);
+								setProgressCurrent(null);
+								setProgressDone(0);
+								const m = /resolved (\d+), reused (\d+), downloaded (\d+), added (\d+)/.exec(status.lastLine || "");
+								if (m !== null && Number(m[1]) > 0) {
+									const done = Number(m[2]) + Number(m[3]) + Number(m[4]);
+									setProgressPct(Math.max(4, Math.min(96, Math.round(done / Number(m[1]) * 100))));
+								}
 							}
 						} else {
 							setProgressLine(null);
 							setProgressPct(null);
+							setProgressPhase(null);
+							setProgressCurrent(null);
+							setProgressDone(0);
+							setCancelling(false);
 							setInstalled(status.installed || {});
 							if (readSession("dshm-pending") !== null && busyUrl !== null) {
 								if (data !== null && data.plugins.some((p) => p.url === busyUrl && isInstalled(p, status.installed || {}))) {
@@ -673,6 +763,7 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 				setBuildsSkipped(null);
 				setConfirming(null);
 				setInstallError(null);
+				setActivationWarnings([]);
 				setBusyUrl(plugin.url);
 				sessionStorage.setItem("dshm-pending", JSON.stringify({ url: plugin.url }));
 				fetch("/dsh-market/install", {
@@ -692,10 +783,22 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 					}
 					if (body.cancelled === true) {
 						refreshInstalled();
+						if (body.partial === true) setInstallError(t("partialNote"));
 						return;
 					}
 					if (status === 200 && body.ok) {
 						sessionStorage.setItem("dshm-tab", "installed");
+						if (body.activation && typeof body.activation === "object") {
+							setActivations((prev) => ({
+								...prev,
+								...body.activation
+							}));
+							const warns = Object.entries(body.activation).filter(([, info]) => info.state !== "live" && info.state !== "missing").map(([name, info]) => ({
+								name,
+								info
+							}));
+							setActivationWarnings(warns);
+						}
 						if (body.hot) {
 							setHotUrls((urls) => urls.includes(plugin.url) ? urls : urls.concat(plugin.url));
 							setHotNames((names) => names.includes(plugin.name) ? names : names.concat(plugin.name));
@@ -780,6 +883,7 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 			}, []);
 			const doUpdate = (0, react.useCallback)((name, force = false) => {
 				setInstallError(null);
+				setActivationWarnings([]);
 				setStaleName(null);
 				setUpdatingName(name);
 				return fetch("/dsh-market/update", {
@@ -795,10 +899,15 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 				}))).then(({ status, body }) => {
 					if (body.cancelled === true) {
 						refreshInstalled();
+						if (body.partial === true) setInstallError(t("partialNote"));
 						return;
 					}
 					if (status === 200 && body.ok) {
 						setUpdatedNames((names) => names.concat(name));
+						if (body.activation && typeof body.activation === "object") setActivations((prev) => ({
+							...prev,
+							...body.activation
+						}));
 						refreshInstalled();
 					} else {
 						if (status === 409) {
@@ -833,6 +942,7 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 			const doUninstall = (0, react.useCallback)((name) => {
 				setRemoveArmed(null);
 				setInstallError(null);
+				setActivationWarnings([]);
 				setRemovingName(name);
 				return fetch("/dsh-market/uninstall", {
 					method: "POST",
@@ -846,6 +956,11 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 						if (!body.hot) setRemovedCount((n) => n + 1);
 						refreshInstalled();
 					} else {
+						if (body.cancelled === true) {
+							refreshInstalled();
+							if (body.partial === true) setInstallError(t("partialNote"));
+							return;
+						}
 						const text = (v) => typeof v === "string" ? v : v && typeof v.text === "string" ? v.text : v == null ? "" : JSON.stringify(v);
 						setInstallError((text(body.error) || text(body.stderr) || "error").trim().slice(-600));
 					}
@@ -868,6 +983,9 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 			}, [updatableNames, doUpdate]);
 			const pendingRestart = doneUrls.length + updatedNames.length + removedCount;
 			const hasUpdates = Object.keys(installed).some((name) => !updatedNames.includes(name) && updates[name] && updates[name].updateAvailable);
+			/** Live status line: structured phase, or the human-line fallback. */
+			const phasePart = progressPhase != null ? phaseLabel(progressPhase, t) + (progressCurrent !== null ? " · " + progressCurrent : "") + (progressDone > 0 ? " · " + t("packagesDone").replace("{0}", String(progressDone)) : "") : progressLine || t("progressHint");
+			const progressText = cancelling ? t("cancelling") + " · " + phasePart : phasePart;
 			const themePlugins$1 = data === null ? [] : themePlugins(data.plugins);
 			const pluginCard = (p) => {
 				const desc = p.description && (p.description[lang] || p.description.en) || "";
@@ -949,7 +1067,7 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 								/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { className: Market_module_css_default.spin }),
 								/* @__PURE__ */ (0, react_jsx_runtime.jsx)("code", {
 									className: Market_module_css_default.grow,
-									children: progressLine || t("progressHint")
+									children: progressText
 								}),
 								progressPct !== null && /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("span", {
 									className: Market_module_css_default.pct,
@@ -958,8 +1076,9 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 								/* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
 									type: "button",
 									className: Market_module_css_default.cancelBtn,
+									disabled: cancelling,
 									onClick: doCancel,
-									children: t("cancelOp")
+									children: cancelling ? t("cancelling") : t("cancelOp")
 								}),
 								/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
 									className: Market_module_css_default.bar,
@@ -1270,6 +1389,25 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 										children: restarting ? t("restarting") : t("restartNow")
 									})
 								]
+							}),
+							activationWarnings.length > 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+								className: Market_module_css_default.restart,
+								children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { children: "⚠️" }), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+									className: Market_module_css_default.grow,
+									children: activationWarnings.map(({ name, info }) => /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", { children: [
+										/* @__PURE__ */ (0, react_jsx_runtime.jsx)("b", { children: name }),
+										" — ",
+										activationMeta(info.state, t).label,
+										info.reasons.length > 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("span", {
+											className: Market_module_css_default.spec,
+											children: [
+												"（",
+												info.reasons.join(" / "),
+												"）"
+											]
+										})
+									] }, name))
+								})]
 							})
 						]
 					}),
@@ -1451,6 +1589,8 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 						}) : Object.entries(installed).map(([name, spec]) => {
 							const entry = data === null ? void 0 : entryForDep(data.plugins, name, String(spec));
 							const status = updates[name];
+							const act = activations[name];
+							const meta = act !== void 0 ? activationMeta(act.state, t) : null;
 							const version = status && status.version ? "v" + status.version : "";
 							const specText = String(spec);
 							const ghSpec = /^github:([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+?)(?:#|$)/.exec(specText);
@@ -1483,13 +1623,29 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 												className: `${Market_module_css_default.desc} ${Market_module_css_default.descTight}`,
 												children: entry.description && (entry.description[lang] || entry.description.en) || ""
 											}),
+											act !== void 0 && meta !== null && /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+												className: Market_module_css_default.act,
+												children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("span", {
+													className: meta.dot === "done" ? Market_module_css_default.actLive : meta.dot === "error" ? Market_module_css_default.actBroken : Market_module_css_default.actWarn,
+													children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.StateDot, {
+														state: meta.dot,
+														size: 7
+													}), meta.label]
+												}), act.state !== "live" && act.reasons.length > 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("details", {
+													className: Market_module_css_default.actWhy,
+													children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("summary", { children: t("actWhy") }), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+														className: Market_module_css_default.spec,
+														children: act.reasons.join(" / ")
+													})]
+												})]
+											}),
 											updatingName === name && /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
 												className: Market_module_css_default.progress,
 												children: [
 													/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { className: Market_module_css_default.spin }),
 													/* @__PURE__ */ (0, react_jsx_runtime.jsx)("code", {
 														className: Market_module_css_default.grow,
-														children: progressLine || t("progressHint")
+														children: progressText
 													}),
 													progressPct !== null && /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("span", {
 														className: Market_module_css_default.pct,
@@ -1498,8 +1654,9 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 													/* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
 														type: "button",
 														className: Market_module_css_default.cancelBtn,
+														disabled: cancelling,
 														onClick: doCancel,
-														children: t("cancelOp")
+														children: cancelling ? t("cancelling") : t("cancelOp")
 													}),
 													/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
 														className: Market_module_css_default.bar,
@@ -1522,7 +1679,7 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 									}),
 									updatedNames.includes(name) ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
 										className: Market_module_css_default.okState,
-										children: t("updated")
+										children: act?.state === "live" ? t("updatedLive") : t("updated")
 									}) : updatingName === name ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
 										variant: "primary",
 										size: "sm",

@@ -44,6 +44,25 @@ export interface MarketStatus {
   installed?: InstalledMap
   pnpm?: boolean
   boot?: string
+  /** pnpm ndjson stage, when the structured reporter produced events. */
+  phase?: 'resolving' | 'downloading' | 'linking' | 'building' | null
+  done?: number
+  total?: number | null
+  currentPackage?: string | null
+  downloaded?: number | null
+  size?: number | null
+  /** True once the user asked to cancel and the host is killing the run. */
+  cancelling?: boolean
+}
+
+/** Post-install activation state (P0-2), per installed package. */
+export type ActivationState = 'live' | 'restart' | 'inert' | 'broken' | 'missing'
+
+export interface ActivationInfo {
+  state: ActivationState
+  reasons: string[]
+  bundle: boolean
+  hot: boolean
 }
 
 /** Registered theme definition surfaced by the theme service snapshot. */

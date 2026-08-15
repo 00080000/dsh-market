@@ -138,7 +138,11 @@ vi.mock('../src/dsh-cli.ts', () => {
   }
   return {
     BOOT_ID: 'test-boot',
-    progress: { active: false, target: '', startedAt: 0, lastLine: '' },
+    progress: {
+      active: false, target: '', startedAt: 0, lastLine: '',
+      phase: null, done: 0, total: null, currentPackage: null,
+      downloaded: null, size: null, ndjson: false, error: null, cancelling: false,
+    },
     probePnpm: () => Promise.resolve(true),
     provisionPnpm: () => Promise.resolve(true),
     killChild: () => {},
@@ -150,13 +154,20 @@ vi.mock('../src/dsh-cli.ts', () => {
 })
 
 // ---------------------------------------------------------------- fake hot layer
-const hot = vi.hoisted(() => ({ mounts: [] as string[], disabled: new Set<string>() }))
+const hot = vi.hoisted(() => ({ mounts: [] as string[], disabled: new Set<string>(), failNext: false }))
 vi.mock('../src/hot.ts', () => ({
   cleanHotDir: () => {},
   readDisabledThemes: () => hot.disabled,
   writeDisabledThemes: (_dir: string, set: Set<string>) => { hot.disabled = new Set(set) },
   listHotMounts: () => [...hot.mounts],
-  hotMount: (_ctx: unknown, _dir: string, name: string) => { hot.mounts.push(name); return Promise.resolve(true) },
+  hotMount: (_ctx: unknown, _dir: string, name: string) => {
+    if (hot.failNext) {
+      hot.failNext = false
+      return Promise.resolve({ ok: false, reason: 'test: host cannot hot-mount' })
+    }
+    hot.mounts.push(name)
+    return Promise.resolve({ ok: true, reason: null })
+  },
   hotUnmount: (name: string) => {
     const index = hot.mounts.indexOf(name)
     if (index !== -1) hot.mounts.splice(index, 1)
@@ -283,6 +294,7 @@ beforeEach(() => {
   restartCalls.count = 0
   hot.mounts = []
   hot.disabled = new Set()
+  hot.failNext = false
   bed = createTestbed()
 })
 afterEach(() => {
@@ -307,8 +319,22 @@ describe('install flow', () => {
     expect(installedSpec('dsh-loop')).toBe('^1.0.0')
     // Refresh-free activation: the new plugin was hot mounted.
     expect(r.json.hot).toBe(true)
+    // P0-2: the operation response carries the per-package activation state.
+    expect(r.json.activation['dsh-loop']).toMatchObject({ state: 'live', hot: true })
     const listed = await bed.dispatch('GET', '/dsh-market/installed')
     expect(listed.json.installed['dsh-loop']).toBe('^1.0.0')
+    expect(listed.json.activation['dsh-loop'].state).toBe('live')
+  })
+
+  it('reports inert activation for a client-only plugin the host cannot hot-mount (P0-2)', async () => {
+    fake.npm['dsh-loop'] = { latest: '1.0.0', versions: { '1.0.0': { manifest: { dsh: { client: {} }, main: 'lib/index.js' }, artifacts: ['lib/index.js'] } } }
+    hot.failNext = true
+    const r = await bed.dispatch('POST', '/dsh-market/install', { url: 'https://github.com/o/dsh-loop' })
+    expect(r.status).toBe(200)
+    expect(r.json.ok).toBe(true)
+    expect(r.json.hot).toBe(false)
+    expect(r.json.activation['dsh-loop']).toMatchObject({ state: 'inert', hot: false, bundle: false })
+    expect(r.json.activation['dsh-loop'].reasons.join(' ')).toMatch(/dsh\.bundle/)
   })
 
   it('refuses sources outside the curated registry and cross-origin posts', async () => {
@@ -369,6 +395,7 @@ describe('update flow — no npm publishing required', () => {
     expect(r.status).toBe(200)
     expect(r.json.ok).toBe(true)
     expect(installedSpec('dsh-loop')).toBe('^1.2.0')
+    expect(r.json.activation['dsh-loop']).toMatchObject({ state: 'live' })
   })
 
   it('surfaces the silent fresh-release hold as an actionable error, and force applies it (#22)', async () => {
@@ -538,6 +565,9 @@ describe('cancel flow (#6)', () => {
     expect(result.status).toBe(200)
     expect(result.json.ok).toBe(false)
     expect(result.json.cancelled).toBe(true)
+    // The fake cancels before acting — nothing was written, so not partial.
+    expect(result.json.partial).toBe(false)
+    expect(result.json.changed).toEqual([])
     expect(installedSpec('dsh-loop')).toBeUndefined()
   })
 
@@ -657,6 +687,11 @@ describe('bundle-layer uninstall live-disable (#37)', () => {
       }),
     }
     bed.loaderEntries.push(entry)
+
+    // The live loader fiber (bundle layer loaded at boot) reads as live too —
+    // without it, every boot-loaded bundle plugin would claim "restart".
+    const before = await bed.dispatch('GET', '/dsh-market/installed')
+    expect(before.json.activation['dsh-blue-whale'].state).toBe('live')
 
     const r = await bed.dispatch('POST', '/dsh-market/uninstall', { name: 'dsh-blue-whale' })
     expect(r.status).toBe(200)

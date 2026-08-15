@@ -12,6 +12,7 @@ import type { ChildProcess } from 'node:child_process'
 import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { logEvent } from './log.ts'
+import { createProgressTracker, type ProgressPhase } from './ndjson.ts'
 import { pluginArgsFor } from './pnpm-compat.ts'
 import { profileDir } from './profile.ts'
 
@@ -69,6 +70,8 @@ export interface InstallResult {
   stderr: string
   /** True when the run ended because the user cancelled it. */
   cancelled: boolean
+  /** Package names pnpm reported as having ignored build scripts (ndjson). */
+  ignoredBuilds?: string[]
 }
 
 /** The shape every orchestration function takes to run plugin commands (injectable in tests). */
@@ -128,6 +131,7 @@ function killTree(child: ChildProcess): void {
 export function cancelActive(): boolean {
   if (activeChild === null) return false
   cancelRequested = true
+  progress.cancelling = true
   killTree(activeChild)
   return true
 }
@@ -196,18 +200,41 @@ export interface InstallProgress {
   target: string
   startedAt: number
   lastLine: string
+  /** Parsed from pnpm's ndjson stage events; null when none arrived. */
+  phase: ProgressPhase
+  /** Distinct packages resolved/fetched so far. */
+  done: number
+  total: number | null
+  currentPackage: string | null
+  downloaded: number | null
+  size: number | null
+  /** True when structured ndjson progress has been observed. */
+  ndjson: boolean
+  /** Last fatal error from the stream (only meaningful after a failure). */
+  error: string | null
+  /** True from the moment the user asks to cancel until the run ends. */
+  cancelling: boolean
 }
 
 /** Singleton progress state; the status route reads it, runDshPlugin writes it. */
-export const progress: InstallProgress = { active: false, target: '', startedAt: 0, lastLine: '' }
+export const progress: InstallProgress = {
+  active: false,
+  target: '',
+  startedAt: 0,
+  lastLine: '',
+  phase: null,
+  done: 0,
+  total: null,
+  currentPackage: null,
+  downloaded: null,
+  size: null,
+  ndjson: false,
+  error: null,
+  cancelling: false,
+}
 
 /** Identifies this host process; the client scopes its pending-restart flags to it. */
 export const BOOT_ID = `${String(process.pid)}-${String(Date.now())}`
-
-function trackProgress(chunk: string): void {
-  const lines = chunk.split('\n').map(l => l.trim()).filter(l => l !== '')
-  if (lines.length > 0) progress.lastLine = lines[lines.length - 1].slice(0, 200)
-}
 
 /**
  * Central allowlist for every spawn target, regardless of which route built
@@ -215,6 +242,31 @@ function trackProgress(chunk: string): void {
  * fallback runs through a shell). Suggested in #16 by @anupamme.
  */
 const TARGET_RE = /^[A-Za-z0-9@:./_#+-]+$/
+
+/** Mutating pnpm commands get the structured reporter appended. */
+const NDJSON_COMMANDS = new Set(['add', 'remove', 'install'])
+
+/**
+ * Line-buffered progress feed: pnpm's ndjson reporter emits one JSON object
+ * per line on stdout, and chunk boundaries can split a line. Human fallback
+ * lines (older pnpm without structured events) still update `lastLine`.
+ */
+function makeProgressFeeder(tracker: ReturnType<typeof createProgressTracker>): (chunk: string) => void {
+  let lineBuffer = ''
+  return (chunk: string): void => {
+    lineBuffer += chunk
+    let nl: number
+    while ((nl = lineBuffer.indexOf('\n')) !== -1) {
+      const line = lineBuffer.slice(0, nl)
+      lineBuffer = lineBuffer.slice(nl + 1)
+      const trimmed = line.trim()
+      if (trimmed === '') continue
+      tracker.feed(trimmed)
+      // Human lines never start with '{'; JSON lines are consumed by the tracker.
+      if (!trimmed.startsWith('{')) progress.lastLine = trimmed.slice(0, 200)
+    }
+  }
+}
 
 /** Run one `dsh plugin --profile <p> …` command with timeout and progress tracking. */
 export function runDshPlugin(profile: string, pluginArgs: string[]): Promise<InstallResult> {
@@ -225,10 +277,24 @@ export function runDshPlugin(profile: string, pluginArgs: string[]): Promise<Ins
     logEvent('error', 'install', `unsafe plugin target rejected: ${JSON.stringify(target)}`)
     return Promise.resolve({ exitCode: 1, timedOut: false, stdout: '', stderr: `unsafe plugin target rejected: ${JSON.stringify(target)}`, cancelled: false })
   }
+  // pnpm's structured reporter must be appended after the target is extracted
+  // (the allowlist above validates the last argument).
+  if (NDJSON_COMMANDS.has(pluginArgs[0])) pluginArgs = [...pluginArgs, '--reporter=ndjson']
   progress.active = true
   progress.target = target
   progress.startedAt = Date.now()
   progress.lastLine = ''
+  progress.phase = null
+  progress.done = 0
+  progress.total = null
+  progress.currentPackage = null
+  progress.downloaded = null
+  progress.size = null
+  progress.ndjson = false
+  progress.error = null
+  progress.cancelling = false
+  const tracker = createProgressTracker()
+  const feed = makeProgressFeeder(tracker)
   return new Promise((resolvePromise) => {
     const child = spawn(file, [...args, 'plugin', '--profile', profile, ...pluginArgs], {
       cwd,
@@ -254,24 +320,51 @@ export function runDshPlugin(profile: string, pluginArgs: string[]): Promise<Ins
     child.stdout.on('data', (chunk: Buffer) => {
       const text = chunk.toString()
       stdout = (stdout + text).slice(-256 * 1024)
-      trackProgress(text)
+      feed(text)
+      syncProgress(tracker)
     })
     child.stderr.on('data', (chunk: Buffer) => {
       const text = chunk.toString()
       stderr = (stderr + text).slice(-64 * 1024)
-      trackProgress(text)
+      feed(text)
+      syncProgress(tracker)
     })
     child.on('error', (error) => {
       clearTimeout(timer)
       progress.active = false
+      progress.cancelling = false
       if (activeChild === child) activeChild = null
       resolvePromise({ exitCode: 127, timedOut: false, stdout, stderr: `${stderr}\n${error.message}`, cancelled: false })
     })
     child.on('close', (code) => {
       clearTimeout(timer)
       progress.active = false
+      progress.cancelling = false
       if (activeChild === child) activeChild = null
-      resolvePromise({ exitCode: code, timedOut, stdout, stderr, cancelled: cancelRequested })
+      const failed = code !== 0 || timedOut
+      if (failed) progress.error = tracker.snapshot.error
+      const ignoredBuilds = tracker.snapshot.ignoredBuilds
+      resolvePromise({
+        exitCode: code,
+        timedOut,
+        stdout,
+        stderr,
+        cancelled: cancelRequested,
+        ...(ignoredBuilds.length > 0 ? { ignoredBuilds } : {}),
+      })
     })
   })
+}
+
+/** Copy the tracker's snapshot into the singleton the status route reads. */
+function syncProgress(tracker: ReturnType<typeof createProgressTracker>): void {
+  const snap = tracker.snapshot
+  progress.phase = snap.phase
+  progress.done = snap.done
+  progress.total = snap.total
+  progress.currentPackage = snap.currentPackage
+  progress.downloaded = snap.downloaded
+  progress.size = snap.size
+  progress.ndjson = snap.seen
+  if (snap.error !== null) progress.error = snap.error
 }
