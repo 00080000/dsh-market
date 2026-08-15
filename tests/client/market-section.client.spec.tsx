@@ -1,0 +1,117 @@
+// @vitest-environment jsdom
+/**
+ * Layer-2 component specs (harness convention: jsdom pragma +
+ * testing-library against the REAL component with the REAL locale dicts and
+ * the REAL ui-primitives package). The host boundary is the four fetch
+ * endpoints, stubbed with fixture payloads.
+ */
+
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { MarketSection } from '../../src/client/MarketSection.tsx'
+import { en } from '../../src/client/locales.ts'
+
+const REGISTRY = {
+  updated: '', count: 4,
+  categories: { tools: { en: 'Tools', zh: '工具' }, theme: { en: 'Themes', zh: '主题' } },
+  plugins: [
+    { name: 'dsh-loop', owner: 'alice', url: 'https://github.com/alice/dsh-loop', category: 'tools', npm: 'dsh-loop', stars: 50, added: '2026-08-01', description: { en: 'Loop task runner', zh: '循环执行' }, install: '' },
+    { name: 'dsh-notify', owner: 'bob', url: 'https://github.com/bob/dsh-notify', category: 'tools', npm: null, stars: 120, added: '2026-08-10', description: { en: 'Desktop notifications', zh: '桌面通知' }, install: '' },
+    { name: 'whale-skin', owner: 'carol', url: 'https://github.com/carol/whale-skin', category: 'theme', npm: null, stars: 80, added: '2026-08-14', description: { en: 'Whale theme', zh: '鲸鱼主题' }, install: '' },
+  ],
+}
+
+function stubFetch(overrides: Record<string, unknown> = {}): void {
+  vi.stubGlobal('fetch', (url: string) => {
+    const path = String(url).split('?')[0]
+    const payload =
+      path === '/dsh-market/registry' ? { source: 'snapshot', registry: REGISTRY }
+      : path === '/dsh-market/installed' ? { profile: 'web', installed: {}, live: [] }
+      : path === '/dsh-market/status' ? { active: false, pnpm: true, boot: 'boot-1', restart: true, installed: {} }
+      : path === '/dsh-market/updates' ? { updates: {} }
+      : null
+    const merged = overrides[path] ?? payload
+    if (merged === null) return Promise.reject(new Error(`unstubbed fetch: ${String(url)}`))
+    return Promise.resolve(new Response(JSON.stringify(merged), { status: 200 }))
+  })
+}
+
+// Snapshot objects must be referentially stable — useSyncExternalStore
+// treats a fresh object per call as an endless change feed.
+const LOCALE_SNAPSHOT = { active: 'en' }
+
+function props() {
+  return {
+    t: (key: string) => (en as Record<string, string>)[key] ?? key,
+    locale: { subscribe: () => () => {}, getSnapshot: () => LOCALE_SNAPSHOT },
+    theme: { setTheme: () => {} },
+    themeStore: { subscribe: () => () => {}, getSnapshot: () => null },
+  }
+}
+
+beforeEach(() => stubFetch())
+afterEach(() => {
+  cleanup()
+  vi.unstubAllGlobals()
+  sessionStorage.clear()
+})
+
+describe('MarketSection (jsdom)', () => {
+  it('renders the catalog with install buttons once the registry loads', async () => {
+    render(<MarketSection {...props()} />)
+    expect(await screen.findByText('dsh-loop')).toBeTruthy()
+    expect(screen.getByText('dsh-notify')).toBeTruthy()
+    // Theme entries carry an Install button too (discover tab shows all).
+    expect(screen.getAllByRole('button', { name: en.install }).length).toBeGreaterThanOrEqual(3)
+  })
+
+  it('search narrows the grid to matching plugins', async () => {
+    render(<MarketSection {...props()} />)
+    await screen.findByText('dsh-loop')
+    fireEvent.change(screen.getByPlaceholderText(en.searchPh), { target: { value: 'notify' } })
+    await waitFor(() => {
+      expect(screen.queryByText('dsh-loop')).toBeNull()
+      expect(screen.getByText('dsh-notify')).toBeTruthy()
+    })
+  })
+
+  it('category pills filter and the New sort reorders', async () => {
+    render(<MarketSection {...props()} />)
+    await screen.findByText('dsh-loop')
+    fireEvent.click(screen.getByRole('button', { name: 'Themes' }))
+    await waitFor(() => {
+      expect(screen.queryByText('dsh-loop')).toBeNull()
+      expect(screen.getByText('whale-skin')).toBeTruthy()
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'All' }))
+    fireEvent.click(screen.getByRole('button', { name: en.sortNew }))
+    await waitFor(() => {
+      const names = screen.getAllByText(/^(dsh-loop|dsh-notify|whale-skin)$/).map(n => n.textContent)
+      expect(names[0]).toBe('whale-skin') // newest added first
+    })
+  })
+
+  it('the install dialog opens with Confirm/Cancel and closes on cancel', async () => {
+    render(<MarketSection {...props()} />)
+    await screen.findByText('dsh-loop')
+    fireEvent.click(screen.getAllByRole('button', { name: en.install })[0])
+    expect(await screen.findByRole('button', { name: en.confirm })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: en.cancel }))
+    await waitFor(() => expect(screen.queryByRole('button', { name: en.confirm })).toBeNull())
+  })
+
+  it('a stale update response arms the Update-now button (#22 flow)', async () => {
+    stubFetch({
+      '/dsh-market/installed': { profile: 'web', installed: { 'dsh-loop': '^1.0.0' }, live: [] },
+      '/dsh-market/updates': { updates: { 'dsh-loop': { kind: 'npm', version: '1.0.0', current: '1.0.0', latest: '1.2.0', updateAvailable: true } } },
+      '/dsh-market/update': { ok: false, stale: true, error: 'too fresh — wait or update now' },
+    })
+    render(<MarketSection {...props()} />)
+    await screen.findByText('dsh-loop')
+    fireEvent.click(screen.getByRole('button', { name: /Installed/ }))
+    const updateButton = await screen.findByRole('button', { name: en.update })
+    fireEvent.click(updateButton)
+    // The 502-stale path surfaces the plain-words error plus the one-time bypass.
+    expect(await screen.findByRole('button', { name: en.updateNow })).toBeTruthy()
+  })
+})

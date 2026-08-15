@@ -29,7 +29,8 @@
     "test:compat": "vitest run --config vitest.compat.config.ts",
     "prepack": "npm run build && node scripts/preflight.mjs",
     "prepare": "npm run build",
-    "snapshot": "curl -sf https://awesome-dsh-plugin.com/plugins.json -o data/registry-snapshot.json"
+    "snapshot": "curl -sf https://awesome-dsh-plugin.com/plugins.json -o data/registry-snapshot.json",
+    "test:web": "vitest run --config vitest.web.config.ts"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.1"
@@ -67,10 +68,15 @@
   ],
   "devDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/dsh-client-ui-primitives": "^0.0.1-rc.1",
+    "@testing-library/react": "^16.3.2",
     "@types/node": "^26.2.0",
     "@types/react": "~18.3.1",
+    "jsdom": "^29.1.1",
     "lightningcss": "^1.33.0",
+    "playwright": "^1.62.1",
     "react": "^18.3.1",
+    "react-dom": "~18.3.1",
     "tsdown": "^0.22.14",
     "typescript": "^7.0.2",
     "vitest": "^4.1.10"

@@ -5,9 +5,16 @@ import { defineConfig } from 'vitest/config'
 // (`npm run test:compat`).
 export default defineConfig({
   test: {
-    include: ['tests/**/*.spec.ts'],
+    include: ['tests/**/*.spec.ts', 'tests/**/*.spec.tsx'],
     exclude: ['tests/**/*.compat.spec.ts', '**/node_modules/**'],
     pool: 'forks',
     testTimeout: 20_000,
+    server: {
+      deps: {
+        // ui-primitives (and its katex dependency) ship raw .css imports;
+        // inlining routes them through vite's transform for the jsdom lane.
+        inline: [/@deepseek-ai\/dsh-client-/, /katex/],
+      },
+    },
   },
 })
