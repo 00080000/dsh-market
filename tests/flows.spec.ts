@@ -32,6 +32,11 @@ const fake = vi.hoisted(() => ({
   staleUpdates: false,
   /** Fail the next N mutating commands with the hoist-pattern drift error. */
   hoistDiffTimes: 0,
+  /** Simulate a too-young release in the lockfile (#39): every mutation
+   * fails pnpm's supply-chain verification unless the one-shot
+   * --config.minimumReleaseAge=0 override is passed (real pnpm 11 behavior
+   * pinned in tests/pnpm-behavior.compat.spec.ts). */
+  youngLockfile: false,
   /** When set, every command awaits this before acting (concurrency tests). */
   gate: null as Promise<void> | null,
   /** Set by the mocked cancelActive: the in-flight command resolves cancelled. */
@@ -85,6 +90,12 @@ vi.mock('../src/dsh-cli.ts', () => {
     const positional = args.filter(a => !a.startsWith('-'))
     const cmd = positional[0]
     const ok = { exitCode: 0, timedOut: false, stdout: '', stderr: '', cancelled: false }
+    if (fake.youngLockfile && !args.includes('--config.minimumReleaseAge=0')) {
+      return {
+        exitCode: 1, timedOut: false, stdout: '', cancelled: false,
+        stderr: '[ERR_PNPM_MINIMUM_RELEASE_AGE_VIOLATION] 1 lockfile entries failed verification:\n  dsh-loop@1.0.0 was published at 2026-08-15T00:00:00.000Z, within the minimumReleaseAge cutoff',
+      }
+    }
     if (cmd === 'install') return ok
     if (fake.hoistDiffTimes > 0) {
       fake.hoistDiffTimes--
@@ -263,6 +274,7 @@ beforeEach(() => {
   fake.repos = {}
   fake.staleUpdates = false
   fake.hoistDiffTimes = 0
+  fake.youngLockfile = false
   fake.gate = null
   fake.cancelNext = false
   fake.buildScriptOutputOnce = ''
@@ -417,6 +429,21 @@ describe('uninstall flow', () => {
 
     expect((await bed.dispatch('POST', '/dsh-market/uninstall', { name: 'dshmarket' })).status).toBe(400)
     expect((await bed.dispatch('POST', '/dsh-market/uninstall', { name: 'ghost' })).status).toBe(400)
+  })
+
+  it('uninstall succeeds even when the lockfile holds a too-young release (#39)', async () => {
+    fake.npm['dsh-loop'] = { latest: '1.0.0', versions: { '1.0.0': { manifest: { dsh: {}, main: 'lib/index.js' }, artifacts: ['lib/index.js'] } } }
+    await bed.dispatch('POST', '/dsh-market/install', { url: 'https://github.com/o/dsh-loop' })
+    // pnpm 11 verifies the WHOLE lockfile before any mutation; a package
+    // published inside the safety window fails that check and bricks every
+    // later add/remove until the one-shot override is passed.
+    fake.youngLockfile = true
+    const r = await bed.dispatch('POST', '/dsh-market/uninstall', { name: 'dsh-loop' })
+    expect(r.status).toBe(200)
+    expect(r.json.ok).toBe(true)
+    expect(installedSpec('dsh-loop')).toBeUndefined()
+    const removes = fake.calls.filter(c => c[0] === 'remove')
+    expect(removes[removes.length - 1]).toContain('--config.minimumReleaseAge=0')
   })
 })
 

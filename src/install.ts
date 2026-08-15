@@ -12,23 +12,44 @@ import { classifyPnpmFailure } from './pnpm-compat.ts'
 import { entryArtifactExists, hasDshManifest, pluginSubdirs, profileDir, readInstalled } from './profile.ts'
 import { logEvent } from './log.ts'
 
+/** One-shot bypass for pnpm's fresh-release hold; scoped to a single command. */
+export const RELEASE_AGE_OVERRIDE = '--config.minimumReleaseAge=0'
+
 /**
- * Run one plugin command with automatic recovery from the pnpm-major drift
- * failure (#20 bug 2): when the modules directory was built by a different
- * pnpm major, pnpm's documented remedy is one `install` to recreate it —
- * do that silently and retry the original command once. Any recognized
- * failure that survives gets its bilingual explanation appended to stderr
- * so the UI shows an actionable message instead of a wall of text (#20 bug 3).
+ * Run one plugin command with automatic recovery from two known pnpm traps:
+ *
+ * - pnpm-major drift (#20 bug 2): a modules directory built by a different
+ *   pnpm major fails mutation; pnpm's documented remedy is one `install` to
+ *   recreate it — do that silently and retry the original command once.
+ * - release-age lockfile lock (#39): once a too-young release is in the
+ *   lockfile, pnpm 11 rejects EVERY later add/remove during verification —
+ *   retry once with the one-shot minimumReleaseAge bypass (safe: the young
+ *   package is already installed; the bypass only lets pnpm touch the
+ *   lockfile again).
+ *
+ * Any recognized failure that survives gets its bilingual explanation
+ * appended to stderr so the UI shows an actionable message instead of a
+ * wall of text (#20 bug 3). Cancelled runs are never recovered.
  */
 export async function withHoistRecovery(run: PluginRunner, profile: string, pluginArgs: string[]): Promise<InstallResult> {
   let result = await run(profile, pluginArgs)
   const ok = (r: InstallResult): boolean => r.exitCode === 0 && !r.timedOut && !r.cancelled
-  if (!ok(result) && classifyPnpmFailure(`${result.stderr}\n${result.stdout}`)?.code === 'hoist-pattern-diff') {
-    logEvent('warn', 'install', `modules dir was built by a different pnpm major — rebuilding (pnpm install) and retrying once`)
-    // --no-frozen-lockfile: the market runs pnpm with CI=true (TTY hangs),
-    // where a lockfile written by the old major would otherwise be refused.
-    const rebuild = await run(profile, ['install', '--no-frozen-lockfile'])
-    if (ok(rebuild)) result = await run(profile, pluginArgs)
+  if (!ok(result) && !result.cancelled) {
+    const failure = classifyPnpmFailure(`${result.stderr}\n${result.stdout}`)
+    if (failure?.code === 'hoist-pattern-diff') {
+      logEvent('warn', 'install', `modules dir was built by a different pnpm major — rebuilding (pnpm install) and retrying once`)
+      // --no-frozen-lockfile: the market runs pnpm with CI=true (TTY hangs),
+      // where a lockfile written by the old major would otherwise be refused.
+      const rebuild = await run(profile, ['install', '--no-frozen-lockfile'])
+      if (ok(rebuild)) result = await run(profile, pluginArgs)
+    } else if (
+      failure?.code === 'release-age-violation'
+      && (pluginArgs[0] === 'add' || pluginArgs[0] === 'remove')
+      && !pluginArgs.includes(RELEASE_AGE_OVERRIDE)
+    ) {
+      logEvent('warn', 'install', `a too-young release blocks pnpm's lockfile verification (#39) — retrying once with ${RELEASE_AGE_OVERRIDE}`)
+      result = await run(profile, [pluginArgs[0], RELEASE_AGE_OVERRIDE, ...pluginArgs.slice(1)])
+    }
   }
   if (!ok(result) && !result.cancelled) {
     const failure = classifyPnpmFailure(`${result.stderr}\n${result.stdout}`)

@@ -49,6 +49,34 @@ export function restartLaunch(): { file: string; args: string[]; cwd: string; vi
   }
 }
 
+/**
+ * Platform-correct spawn invocation for the replacement host (#40 by
+ * @1123762794): on Windows a `detached` spawn maps to DETACHED_PROCESS — the
+ * new host gets NO console, and every console child it later spawns (e.g.
+ * DSH sandbox tool runners) pops a visible node window. Wrapping the launch
+ * in `powershell -WindowStyle Hidden` gives the host a HIDDEN console that
+ * children inherit instead. POSIX keeps the plain detached spawn.
+ */
+export function respawnInvocation(
+  launch: { file: string; args: string[]; viaShell: boolean },
+  platform: NodeJS.Platform = process.platform,
+): { file: string; args: string[]; viaShell: boolean; detached: boolean } {
+  if (platform !== 'win32') {
+    return { file: launch.file, args: launch.args, viaShell: launch.viaShell, detached: true }
+  }
+  // PowerShell single-quoting: only embedded single quotes need escaping
+  // (doubled). The & call operator runs .exe/.cmd/.bat alike, so the
+  // original viaShell (cmd-shim) case needs no extra shell.
+  const quote = (part: string): string => `'${part.replace(/'/g, "''")}'`
+  return {
+    file: 'powershell.exe',
+    args: ['-NoProfile', '-WindowStyle', 'Hidden', '-Command',
+      [`& ${quote(launch.file)}`, ...launch.args.map(quote)].join(' ')],
+    viaShell: false,
+    detached: false,
+  }
+}
+
 /** What scheduleRestart reports back to the caller for logging/response. */
 export interface RestartResult {
   pid: number
@@ -64,23 +92,25 @@ export interface RestartResult {
  */
 export function scheduleRestart(): RestartResult {
   const launch = restartLaunch()
+  const spawned = respawnInvocation(launch)
   const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
   const logOut = join(tmpdir(), `dsh-market-restart-${stamp}.out.log`)
   const logErr = join(tmpdir(), `dsh-market-restart-${stamp}.err.log`)
   const helperCode = [
     "const { spawn } = require('node:child_process')",
     "const fs = require('node:fs')",
-    `const file = ${JSON.stringify(launch.file)}`,
-    `const args = ${JSON.stringify(launch.args)}`,
+    `const file = ${JSON.stringify(spawned.file)}`,
+    `const args = ${JSON.stringify(spawned.args)}`,
     `const cwd = ${JSON.stringify(launch.cwd)}`,
-    `const viaShell = ${JSON.stringify(launch.viaShell)}`,
+    `const viaShell = ${JSON.stringify(spawned.viaShell)}`,
+    `const detached = ${JSON.stringify(spawned.detached)}`,
     `const logOut = ${JSON.stringify(logOut)}`,
     `const logErr = ${JSON.stringify(logErr)}`,
     'setTimeout(() => {',
     '  try {',
     '    const out = fs.openSync(logOut, "a")',
     '    const err = fs.openSync(logErr, "a")',
-    '    const child = spawn(file, args, { cwd, detached: true, stdio: ["ignore", out, err], env: process.env, shell: viaShell })',
+    '    const child = spawn(file, args, { cwd, detached, stdio: ["ignore", out, err], env: process.env, shell: viaShell })',
     '    child.unref()',
     '  } catch {}',
     '}, 1500)',

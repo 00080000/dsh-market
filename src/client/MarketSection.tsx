@@ -544,6 +544,12 @@ export function MarketSection(props: MarketSectionProps) {
             <code className={css.grow}>{progressLine || t('progressHint')}</code>
             {progressPct !== null && <span className={css.pct}>{progressPct}%</span>}
             <button type="button" className={css.cancelBtn} onClick={doCancel}>{t('cancelOp')}</button>
+            <div className={css.bar}>
+              <div
+                className={progressPct !== null ? css.barFill : `${css.barFill} ${css.barWave}`}
+                style={progressPct !== null ? { width: `${progressPct}%` } : undefined}
+              />
+            </div>
           </div>
         )}
       </div>
@@ -875,6 +881,12 @@ export function MarketSection(props: MarketSectionProps) {
                             <code className={css.grow}>{progressLine || t('progressHint')}</code>
                             {progressPct !== null && <span className={css.pct}>{progressPct}%</span>}
                             <button type="button" className={css.cancelBtn} onClick={doCancel}>{t('cancelOp')}</button>
+                            <div className={css.bar}>
+                              <div
+                                className={progressPct !== null ? css.barFill : `${css.barFill} ${css.barWave}`}
+                                style={progressPct !== null ? { width: `${progressPct}%` } : undefined}
+                              />
+                            </div>
                           </div>
                         )}
                       </div>
