@@ -7,49 +7,32 @@ import { describe, expect, it } from 'vitest'
 import { installTargetFor, parseSourceUrl, repoOf } from '../src/sources.ts'
 
 describe('parseSourceUrl', () => {
-  it('parses a plain github repo url, with or without trailing slash', () => {
+  it('accepts github repo urls, plain or with a /tree/<branch>/<subpath> suffix', () => {
     expect(parseSourceUrl('https://github.com/owner/repo')).toEqual({ repo: 'owner/repo', subpath: null })
     expect(parseSourceUrl('https://github.com/owner/repo/')).toEqual({ repo: 'owner/repo', subpath: null })
-  })
-
-  it('parses monorepo /tree/<branch>/<subpath> links (curated-list convention)', () => {
     expect(parseSourceUrl('https://github.com/o/r/tree/main/packages/theme-x'))
       .toEqual({ repo: 'o/r', subpath: 'packages/theme-x' })
+    expect(repoOf('https://github.com/o/r/tree/main/sub')).toBe('o/r')
   })
 
-  it('rejects non-github and malformed urls', () => {
+  it('rejects foreign hosts, malformed urls, traversal, and charset violations', () => {
     expect(parseSourceUrl('https://evil.com/owner/repo')).toBeNull()
     expect(parseSourceUrl('https://github.com/onlyowner')).toBeNull()
     expect(parseSourceUrl('https://github.com/o/r/tree/main/../../etc')).toBeNull()
-  })
-
-  it('rejects subpaths with characters outside the allowlist', () => {
     expect(parseSourceUrl('https://github.com/o/r/tree/main/pkg%20name')).toBeNull()
     expect(parseSourceUrl('https://github.com/o/r/tree/main/pkg;rm')).toBeNull()
-  })
-
-  it('repoOf extracts owner/repo or null', () => {
-    expect(repoOf('https://github.com/o/r/tree/main/sub')).toBe('o/r')
     expect(repoOf('nonsense')).toBeNull()
   })
 })
 
 describe('installTargetFor', () => {
-  it('prefers the curated npm name over a github download', () => {
+  it('prefers curated npm, targets subpaths via #path:, falls back to github, refuses the rest', () => {
     expect(installTargetFor({ url: 'https://github.com/o/r', npm: 'dsh-loop' })).toBe('dsh-loop')
     expect(installTargetFor({ url: 'https://github.com/o/r', npm: '@scope/pkg' })).toBe('@scope/pkg')
-  })
-
-  it('rejects npm names that are not plain package names', () => {
+    // A malformed npm name never reaches pnpm — fall back to the repo.
     expect(installTargetFor({ url: 'https://github.com/o/r', npm: 'evil;rm -rf' })).toBe('github:o/r')
-  })
-
-  it('targets the subpath via the #path: selector for monorepo links', () => {
     expect(installTargetFor({ url: 'https://github.com/o/r/tree/main/packages/x' }))
       .toBe('github:o/r#path:/packages/x')
-  })
-
-  it('falls back to the github repo and refuses unsupported urls', () => {
     expect(installTargetFor({ url: 'https://github.com/o/r' })).toBe('github:o/r')
     expect(installTargetFor({ url: 'https://gitlab.com/o/r' })).toBeNull()
   })

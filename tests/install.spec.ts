@@ -24,13 +24,13 @@ afterEach(() => {
 
 const ok: InstallResult = { exitCode: 0, timedOut: false, stdout: '', stderr: '' }
 
-function recordingRunner(result: InstallResult = ok): { calls: string[][]; run: (profile: string, args: string[]) => Promise<InstallResult> } {
+function recordingRunner(): { calls: string[][]; run: (profile: string, args: string[]) => Promise<InstallResult> } {
   const calls: string[][] = []
   return {
     calls,
-    run: (profile, args) => {
+    run: (_profile, args) => {
       calls.push(args)
-      return Promise.resolve(result)
+      return Promise.resolve(ok)
     },
   }
 }
@@ -52,24 +52,25 @@ function writePkg(dir: string, name: string, manifest: unknown, artifacts: strin
   }
 }
 
-describe('retargetCollections', () => {
-  it('leaves npm installs alone', async () => {
-    writeProfile({ 'dsh-loop': '^1.0.0' })
-    const { calls, run } = recordingRunner()
-    expect(await retargetCollections(run, 'web', new Set(), 'dsh-loop')).toBe(true)
-    expect(calls).toEqual([])
-  })
-
-  it('re-adds each contained plugin of a collection checkout via #path: (#18)', async () => {
-    const dir = writeProfile({ collection: 'github:o/r' })
+describe('retargetCollections (#18)', () => {
+  it('re-adds each contained plugin via #path:, leaving npm installs and pre-existing packages alone', async () => {
+    const dir = writeProfile({ collection: 'github:o/r', existing: 'github:o/old', 'dsh-loop': '^1.0.0' })
     // Root manifest without a dsh surface = collection; two real plugins inside.
     writePkg(dir, 'collection', { name: 'collection', private: true })
     mkdirSync(join(dir, 'node_modules', 'collection', 'theme-a'), { recursive: true })
     writeFileSync(join(dir, 'node_modules', 'collection', 'theme-a', 'package.json'), '{"dsh":{}}')
     mkdirSync(join(dir, 'node_modules', 'collection', 'packages', 'theme-b'), { recursive: true })
     writeFileSync(join(dir, 'node_modules', 'collection', 'packages', 'theme-b', 'package.json'), '{"dsh":{}}')
+    // 'existing' looks like junk too, but predates this install.
+    writePkg(dir, 'existing', { name: 'existing', private: true })
+
+    // npm target → no collection handling at all.
+    const npm = recordingRunner()
+    expect(await retargetCollections(npm.run, 'web', new Set(), 'dsh-loop')).toBe(true)
+    expect(npm.calls).toEqual([])
+
     const { calls, run } = recordingRunner()
-    expect(await retargetCollections(run, 'web', new Set(), 'github:o/r')).toBe(true)
+    expect(await retargetCollections(run, 'web', new Set(['existing', 'dsh-loop']), 'github:o/r')).toBe(true)
     expect(calls[0]).toEqual(['remove', 'collection'])
     expect(calls.slice(1).map(c => c[1]).sort()).toEqual([
       'github:o/r#path:/packages/theme-b',
@@ -80,54 +81,35 @@ describe('retargetCollections', () => {
   it('fails when a collection contains no plugins at all', async () => {
     const dir = writeProfile({ junk: 'github:o/r' })
     writePkg(dir, 'junk', { name: 'junk', private: true })
-    const { run } = recordingRunner()
-    expect(await retargetCollections(run, 'web', new Set(), 'github:o/r')).toBe(false)
-  })
-
-  it('never touches packages that were installed before', async () => {
-    const dir = writeProfile({ existing: 'github:o/old' })
-    writePkg(dir, 'existing', { name: 'existing', private: true })
-    const { calls, run } = recordingRunner()
-    expect(await retargetCollections(run, 'web', new Set(['existing']), 'github:o/r')).toBe(true)
-    expect(calls).toEqual([])
+    expect(await retargetCollections(recordingRunner().run, 'web', new Set(), 'github:o/r')).toBe(false)
   })
 })
 
-describe('validateAddedPlugins', () => {
-  it('keeps valid plugins and removes broken pieces on the spot (#18)', async () => {
-    const dir = writeProfile({ good: '^1.0.0', broken: 'github:o/broken' })
+describe('validateAddedPlugins (#18 / #21)', () => {
+  it('keeps valid plugins, removes source-only and no-dsh-surface pieces on the spot', async () => {
+    const dir = writeProfile({ good: '^1.0.0', broken: 'github:o/broken', dshmarket: '^0.0.1' })
     writePkg(dir, 'good', { dsh: {}, main: 'lib/index.js' }, ['lib/index.js'])
     // Source-only checkout: dsh manifest present but the built artifact is not.
     writePkg(dir, 'broken', { dsh: {}, main: 'lib/index.js' })
+    // The #21 placeholder: artifact present but no dsh surface at all.
+    writePkg(dir, 'dshmarket', { name: 'dshmarket', version: '0.0.1', main: 'index.js' }, ['index.js'])
     const { calls, run } = recordingRunner()
     const { keep, removedBroken } = await validateAddedPlugins(run, 'web', new Set())
     expect(keep).toEqual(['good'])
-    expect(removedBroken).toEqual(['broken'])
-    expect(calls).toEqual([['remove', 'broken']])
-  })
-
-  it('flags a placeholder package with no dsh surface (#21: the 0.0.1 squat install)', async () => {
-    const dir = writeProfile({ dshmarket: '^0.0.1' })
-    writePkg(dir, 'dshmarket', { name: 'dshmarket', version: '0.0.1', main: 'index.js' }, ['index.js'])
-    const { run } = recordingRunner()
-    const { keep, removedBroken } = await validateAddedPlugins(run, 'web', new Set())
-    expect(keep).toEqual([])
-    expect(removedBroken).toEqual(['dshmarket'])
+    expect(removedBroken.sort()).toEqual(['broken', 'dshmarket'])
+    expect(calls.map(c => c.join(' ')).sort()).toEqual(['remove broken', 'remove dshmarket'])
   })
 })
 
 describe('isStaleUpdate (#22: clean exit, nothing changed)', () => {
-  it('detects an npm update that silently kept the old version', () => {
+  it('flags silently-kept versions/commits, never a first install', () => {
+    // npm: same version after "update" = pnpm minimumReleaseAge kept the old one.
     expect(isStaleUpdate({ isGit: false, beforeVersion: '1.0.3', afterVersion: '1.0.3', beforeCommit: null, afterCommit: null })).toBe(true)
     expect(isStaleUpdate({ isGit: false, beforeVersion: '1.0.3', afterVersion: '1.2.2', beforeCommit: null, afterCommit: null })).toBe(false)
-  })
-
-  it('detects a git update pinned to the same commit', () => {
+    // git: pinned to the same commit.
     expect(isStaleUpdate({ isGit: true, beforeVersion: null, afterVersion: null, beforeCommit: 'aaa', afterCommit: 'aaa' })).toBe(true)
     expect(isStaleUpdate({ isGit: true, beforeVersion: null, afterVersion: null, beforeCommit: 'aaa', afterCommit: 'bbb' })).toBe(false)
-  })
-
-  it('never flags a first install (no before state)', () => {
+    // First install: no before state, nothing to be stale against.
     expect(isStaleUpdate({ isGit: false, beforeVersion: null, afterVersion: '1.0.0', beforeCommit: null, afterCommit: null })).toBe(false)
     expect(isStaleUpdate({ isGit: true, beforeVersion: null, afterVersion: null, beforeCommit: null, afterCommit: 'aaa' })).toBe(false)
   })

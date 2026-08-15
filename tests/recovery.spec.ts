@@ -1,7 +1,7 @@
 /**
  * #20 bug 2: a modules directory built by one pnpm major fails mutation
  * under another (ERR_PNPM_PUBLIC_HOIST_PATTERN_DIFF); pnpm's own remedy is
- * "run pnpm install to recreate the modules directory". The market must do
+ * "run pnpm install to recreate the modules directory". The market does
  * that automatically — one `install` in the profile, then retry the original
  * command once — instead of surfacing a wall of text to a novice user.
  */
@@ -15,13 +15,12 @@ const HOIST_DIFF: InstallResult = {
   stderr: 'ERR_PNPM_PUBLIC_HOIST_PATTERN_DIFF  This modules directory was created using a different public-hoist-pattern value. Run "pnpm install" to recreate the modules directory.',
 }
 const OK: InstallResult = { exitCode: 0, timedOut: false, stdout: '', stderr: '' }
-const OTHER_FAIL: InstallResult = { exitCode: 1, timedOut: false, stdout: '', stderr: 'ELIFECYCLE build failed' }
 
 function scriptedRunner(script: InstallResult[]): { calls: string[][]; run: (profile: string, args: string[]) => Promise<InstallResult> } {
   const calls: string[][] = []
   return {
     calls,
-    run: (profile, args) => {
+    run: (_profile, args) => {
       calls.push(args)
       return Promise.resolve(script[calls.length - 1] ?? OK)
     },
@@ -29,14 +28,18 @@ function scriptedRunner(script: InstallResult[]): { calls: string[][]; run: (pro
 }
 
 describe('withHoistRecovery', () => {
-  it('passes clean results straight through', async () => {
-    const { calls, run } = scriptedRunner([OK])
-    const result = await withHoistRecovery(run, 'web', ['add', 'dsh-loop'])
-    expect(result.exitCode).toBe(0)
-    expect(calls).toEqual([['add', 'dsh-loop']])
+  it('passes clean results and unrelated failures straight through — recovery is drift-only', async () => {
+    const clean = scriptedRunner([OK])
+    expect((await withHoistRecovery(clean.run, 'web', ['add', 'dsh-loop'])).exitCode).toBe(0)
+    expect(clean.calls).toEqual([['add', 'dsh-loop']])
+
+    const OTHER_FAIL: InstallResult = { exitCode: 1, timedOut: false, stdout: '', stderr: 'ELIFECYCLE build failed' }
+    const other = scriptedRunner([OTHER_FAIL])
+    expect((await withHoistRecovery(other.run, 'web', ['add', 'dsh-loop'])).exitCode).toBe(1)
+    expect(other.calls).toEqual([['add', 'dsh-loop']])
   })
 
-  it('recovers from hoist-pattern drift: rebuild modules dir, retry once, succeed', async () => {
+  it('recovers from hoist-pattern drift: rebuild the modules dir, retry once, succeed', async () => {
     const { calls, run } = scriptedRunner([HOIST_DIFF, OK, OK])
     const result = await withHoistRecovery(run, 'web', ['add', 'dsh-loop'])
     expect(result.exitCode).toBe(0)
@@ -47,34 +50,18 @@ describe('withHoistRecovery', () => {
     ])
   })
 
-  it('does not retry when the rebuild itself fails', async () => {
+  it('gives up cleanly: no retry after a failed rebuild, one attempt max, bilingual explanation appended', async () => {
+    // Rebuild itself fails → the original failure stands, no retry.
     const FAILED_REBUILD: InstallResult = { exitCode: 1, timedOut: false, stdout: '', stderr: 'install failed' }
-    const { calls, run } = scriptedRunner([HOIST_DIFF, FAILED_REBUILD])
-    const result = await withHoistRecovery(run, 'web', ['add', 'dsh-loop'])
-    expect(result.exitCode).not.toBe(0)
-    expect(calls).toEqual([
-      ['add', 'dsh-loop'],
-      ['install', '--no-frozen-lockfile'],
-    ])
-  })
+    const short = scriptedRunner([HOIST_DIFF, FAILED_REBUILD])
+    expect((await withHoistRecovery(short.run, 'web', ['add', 'dsh-loop'])).exitCode).not.toBe(0)
+    expect(short.calls).toEqual([['add', 'dsh-loop'], ['install', '--no-frozen-lockfile']])
 
-  it('gives up after one recovery attempt (no retry loops)', async () => {
+    // Retry fails again → stop (no loops) and surface the bilingual message (#20 bug 3).
     const { calls, run } = scriptedRunner([HOIST_DIFF, OK, HOIST_DIFF])
     const result = await withHoistRecovery(run, 'web', ['add', 'dsh-loop'])
     expect(result.exitCode).not.toBe(0)
     expect(calls.length).toBe(3)
-  })
-
-  it('does not attempt recovery for unrelated failures', async () => {
-    const { calls, run } = scriptedRunner([OTHER_FAIL])
-    const result = await withHoistRecovery(run, 'web', ['add', 'dsh-loop'])
-    expect(result.exitCode).toBe(1)
-    expect(calls).toEqual([['add', 'dsh-loop']])
-  })
-
-  it('appends the bilingual classification to the stderr surfaced to the UI (#20 bug 3)', async () => {
-    const { run } = scriptedRunner([HOIST_DIFF, OK, HOIST_DIFF])
-    const result = await withHoistRecovery(run, 'web', ['add', 'dsh-loop'])
     expect(result.stderr).toMatch(/重建|rebuilt/)
   })
 })
