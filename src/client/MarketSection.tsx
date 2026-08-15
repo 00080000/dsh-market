@@ -3,11 +3,11 @@
  * /dsh-market/* host routes, with install/update/uninstall flows and the
  * pending-restart bookkeeping in sessionStorage.
  */
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react'
 import { Button, IconChevronDownOutline14, IconChevronUpOutline14, IconSearchOutline16, Input, Modal, Pill, StateDot } from '@deepseek-ai/dsh-client-ui-primitives'
 import css from './Market.module.css'
 import {
-  avatarColor, entryForDep, isInstalled, LOGO_URI, looksTerminal, matchInstalledName, orderedCategories,
+  avatarColor, entryForDep, isInstalled, looksTerminal, matchInstalledName, orderedCategories,
   readSession, repoOf, themePlugins as themePluginsOf, themeSwatch, visiblePlugins,
 } from './market-data.ts'
 import type {
@@ -35,6 +35,21 @@ function OwnerAvatar({ name, owner }: { name: string; owner: string }) {
       loading="lazy"
       onError={() => setFailed(true)}
     />
+  )
+}
+
+/**
+ * Official-style market glyph: the shared block-grid brand mark converted to
+ * the official monochrome icon form (16×16, fill="currentColor") so it
+ * follows the active theme. Mirrors the settings-nav glyph used for the
+ * "market" section id.
+ */
+function MarketLogo({ size = 16, style }: { size?: number; style?: CSSProperties }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" style={style}>
+      <path fill="currentColor" d="M2.35 1.75H4.95A0.6 0.6 0 0 1 5.55 2.35V4.95A0.6 0.6 0 0 1 4.95 5.55H2.35A0.6 0.6 0 0 1 1.75 4.95V2.35A0.6 0.6 0 0 1 2.35 1.75ZM6.7 1.75H9.3A0.6 0.6 0 0 1 9.9 2.35V4.95A0.6 0.6 0 0 1 9.3 5.55H6.7A0.6 0.6 0 0 1 6.1 4.95V2.35A0.6 0.6 0 0 1 6.7 1.75ZM2.35 6.1H4.95A0.6 0.6 0 0 1 5.55 6.7V9.3A0.6 0.6 0 0 1 4.95 9.9H2.35A0.6 0.6 0 0 1 1.75 9.3V6.7A0.6 0.6 0 0 1 2.35 6.1ZM6.7 6.1H9.3A0.6 0.6 0 0 1 9.9 6.7V9.3A0.6 0.6 0 0 1 9.3 9.9H6.7A0.6 0.6 0 0 1 6.1 9.3V6.7A0.6 0.6 0 0 1 6.7 6.1ZM11.05 6.1H13.65A0.6 0.6 0 0 1 14.25 6.7V9.3A0.6 0.6 0 0 1 13.65 9.9H11.05A0.6 0.6 0 0 1 10.45 9.3V6.7A0.6 0.6 0 0 1 11.05 6.1ZM2.35 10.45H4.95A0.6 0.6 0 0 1 5.55 11.05V13.65A0.6 0.6 0 0 1 4.95 14.25H2.35A0.6 0.6 0 0 1 1.75 13.65V11.05A0.6 0.6 0 0 1 2.35 10.45ZM6.7 10.45H9.3A0.6 0.6 0 0 1 9.9 11.05V13.65A0.6 0.6 0 0 1 9.3 14.25H6.7A0.6 0.6 0 0 1 6.1 13.65V11.05A0.6 0.6 0 0 1 6.7 10.45ZM11.05 10.45H13.65A0.6 0.6 0 0 1 14.25 11.05V13.65A0.6 0.6 0 0 1 13.65 14.25H11.05A0.6 0.6 0 0 1 10.45 13.65V11.05A0.6 0.6 0 0 1 11.05 10.45Z" />
+      <path fill="currentColor" d="M11.05 1.75H13.65A0.6 0.6 0 0 1 14.25 2.35V4.95A0.6 0.6 0 0 1 13.65 5.55H11.05A0.6 0.6 0 0 1 10.45 4.95V2.35A0.6 0.6 0 0 1 11.05 1.75Z" transform="rotate(9 12.35 3.65)" />
+    </svg>
   )
 }
 
@@ -619,7 +634,7 @@ export function MarketSection(props: MarketSectionProps) {
     <div className={css.root}>
       <div className={css.head}>
         <div className={css.titleRow}>
-          <img src={LOGO_URI} width={22} height={22} alt="" style={{ borderRadius: '5px', flexShrink: 0 }} />
+          <MarketLogo size={22} style={{ flexShrink: 0 }} />
           <h2 className={css.title}>{t('nav')}</h2>
           {(() => {
             const self = installed['dshmarket'] !== undefined ? 'dshmarket' : 'dsh-market'

@@ -235,10 +235,10 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 			return matchInstalledName(plugin, installed) !== null;
 		}
 		/**
-		* The brand mark (assets/logo.svg — shared block-grid mark with
-		* awesome-dsh-plugin), inlined so the header needs no extra request.
+		* The header brand mark now lives in MarketSection.tsx as an inline SVG
+		* (official-style monochrome glyph, fill="currentColor") so it follows the
+		* active theme; the colored assets/logo.svg tile is no longer inlined here.
 		*/
-		const LOGO_URI = "data:image/svg+xml," + encodeURIComponent("<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 128 128\"><rect width=\"128\" height=\"128\" rx=\"28\" fill=\"#f6f2ea\"/><g transform=\"translate(15.7 16.7) scale(0.3) translate(-112 -78)\"><g fill=\"#2b2620\"><rect x=\"112\" y=\"112\" width=\"88\" height=\"88\" rx=\"14\"/><rect x=\"212\" y=\"112\" width=\"88\" height=\"88\" rx=\"14\"/><rect x=\"112\" y=\"212\" width=\"88\" height=\"88\" rx=\"14\"/><rect x=\"212\" y=\"212\" width=\"88\" height=\"88\" rx=\"14\"/><rect x=\"112\" y=\"312\" width=\"88\" height=\"88\" rx=\"14\"/><rect x=\"212\" y=\"312\" width=\"88\" height=\"88\" rx=\"14\"/><rect x=\"312\" y=\"212\" width=\"88\" height=\"88\" rx=\"14\"/><rect x=\"312\" y=\"312\" width=\"88\" height=\"88\" rx=\"14\"/></g><rect x=\"346\" y=\"78\" width=\"88\" height=\"88\" rx=\"14\" fill=\"#c0392b\" transform=\"rotate(9 390 122)\"/></g></svg>");
 		/** Four representative colors for a theme card's preview strip. */
 		function themeSwatch(def) {
 			const tk = def.tokens || {};
@@ -292,62 +292,62 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 			document.head.appendChild(tag);
 		}
 		var Market_module_css_default = {
-			"titleRow": "TDaEaa_titleRow",
-			"cancelBtn": "TDaEaa_cancelBtn",
-			"themesGrid": "TDaEaa_themesGrid",
-			"catsCollapsed": "TDaEaa_catsCollapsed",
-			"empty": "TDaEaa_empty",
-			"sentinel": "TDaEaa_sentinel",
-			"okState": "TDaEaa_okState",
-			"dangerArmed": "TDaEaa_dangerArmed",
 			"progress": "TDaEaa_progress",
-			"cmdSummary": "TDaEaa_cmdSummary",
-			"cmd": "TDaEaa_cmd",
+			"sentinel": "TDaEaa_sentinel",
 			"catsRow": "TDaEaa_catsRow",
-			"tab": "TDaEaa_tab",
-			"warnBtn": "TDaEaa_warnBtn",
-			"modalNote": "TDaEaa_modalNote",
-			"nm": "TDaEaa_nm",
-			"sort": "TDaEaa_sort",
-			"searchInline": "TDaEaa_searchInline",
-			"cats": "TDaEaa_cats",
+			"spec": "TDaEaa_spec",
 			"top": "TDaEaa_top",
-			"warnLine": "TDaEaa_warnLine",
-			"head": "TDaEaa_head",
-			"sub": "TDaEaa_sub",
-			"swatches": "TDaEaa_swatches",
-			"foot": "TDaEaa_foot",
-			"catsWrap": "TDaEaa_catsWrap",
-			"desc": "TDaEaa_desc",
-			"sp": "TDaEaa_sp",
+			"root": "TDaEaa_root",
+			"empty": "TDaEaa_empty",
+			"dot": "TDaEaa_dot",
 			"grid": "TDaEaa_grid",
+			"cancelBtn": "TDaEaa_cancelBtn",
+			"cmdDetails": "TDaEaa_cmdDetails",
 			"spin": "TDaEaa_spin",
+			"catsToggle": "TDaEaa_catsToggle",
+			"sub": "TDaEaa_sub",
+			"cmdSummary": "TDaEaa_cmdSummary",
+			"modalNote": "TDaEaa_modalNote",
+			"tag": "TDaEaa_tag",
 			"dangerBtn": "TDaEaa_dangerBtn",
-			"sect": "TDaEaa_sect",
-			"card": "TDaEaa_card",
-			"grow": "TDaEaa_grow",
+			"owner": "TDaEaa_owner",
+			"titleRow": "TDaEaa_titleRow",
+			"warnLine": "TDaEaa_warnLine",
+			"star": "TDaEaa_star",
+			"src": "TDaEaa_src",
+			"head": "TDaEaa_head",
+			"searchInline": "TDaEaa_searchInline",
+			"warnBtn": "TDaEaa_warnBtn",
+			"nm": "TDaEaa_nm",
+			"sp": "TDaEaa_sp",
+			"tab": "TDaEaa_tab",
+			"okState": "TDaEaa_okState",
+			"swatches": "TDaEaa_swatches",
+			"loading": "TDaEaa_loading",
 			"tabs": "TDaEaa_tabs",
 			"body": "TDaEaa_body",
-			"irow": "TDaEaa_irow",
-			"spec": "TDaEaa_spec",
-			"catsToggle": "TDaEaa_catsToggle",
-			"on": "TDaEaa_on",
-			"row1": "TDaEaa_row1",
-			"av": "TDaEaa_av",
-			"descTight": "TDaEaa_descTight",
-			"cmdDetails": "TDaEaa_cmdDetails",
-			"dot": "TDaEaa_dot",
-			"restart": "TDaEaa_restart",
-			"loading": "TDaEaa_loading",
-			"staleAction": "TDaEaa_staleAction",
-			"pct": "TDaEaa_pct",
-			"root": "TDaEaa_root",
-			"owner": "TDaEaa_owner",
-			"src": "TDaEaa_src",
-			"err": "TDaEaa_err",
+			"sort": "TDaEaa_sort",
 			"title": "TDaEaa_title",
-			"star": "TDaEaa_star",
-			"tag": "TDaEaa_tag"
+			"restart": "TDaEaa_restart",
+			"on": "TDaEaa_on",
+			"dangerArmed": "TDaEaa_dangerArmed",
+			"catsWrap": "TDaEaa_catsWrap",
+			"sect": "TDaEaa_sect",
+			"card": "TDaEaa_card",
+			"desc": "TDaEaa_desc",
+			"err": "TDaEaa_err",
+			"foot": "TDaEaa_foot",
+			"av": "TDaEaa_av",
+			"cats": "TDaEaa_cats",
+			"cmd": "TDaEaa_cmd",
+			"irow": "TDaEaa_irow",
+			"grow": "TDaEaa_grow",
+			"catsCollapsed": "TDaEaa_catsCollapsed",
+			"staleAction": "TDaEaa_staleAction",
+			"themesGrid": "TDaEaa_themesGrid",
+			"pct": "TDaEaa_pct",
+			"row1": "TDaEaa_row1",
+			"descTight": "TDaEaa_descTight"
 		};
 		//#endregion
 		//#region src/client/MarketSection.tsx
@@ -373,6 +373,31 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 				alt: "",
 				loading: "lazy",
 				onError: () => setFailed(true)
+			});
+		}
+		/**
+		* Official-style market glyph: the shared block-grid brand mark converted to
+		* the official monochrome icon form (16×16, fill="currentColor") so it
+		* follows the active theme. Mirrors the settings-nav glyph used for the
+		* "market" section id.
+		*/
+		function MarketLogo({ size = 16, style }) {
+			return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("svg", {
+				width: size,
+				height: size,
+				viewBox: "0 0 16 16",
+				fill: "none",
+				xmlns: "http://www.w3.org/2000/svg",
+				"aria-hidden": "true",
+				style,
+				children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("path", {
+					fill: "currentColor",
+					d: "M2.35 1.75H4.95A0.6 0.6 0 0 1 5.55 2.35V4.95A0.6 0.6 0 0 1 4.95 5.55H2.35A0.6 0.6 0 0 1 1.75 4.95V2.35A0.6 0.6 0 0 1 2.35 1.75ZM6.7 1.75H9.3A0.6 0.6 0 0 1 9.9 2.35V4.95A0.6 0.6 0 0 1 9.3 5.55H6.7A0.6 0.6 0 0 1 6.1 4.95V2.35A0.6 0.6 0 0 1 6.7 1.75ZM2.35 6.1H4.95A0.6 0.6 0 0 1 5.55 6.7V9.3A0.6 0.6 0 0 1 4.95 9.9H2.35A0.6 0.6 0 0 1 1.75 9.3V6.7A0.6 0.6 0 0 1 2.35 6.1ZM6.7 6.1H9.3A0.6 0.6 0 0 1 9.9 6.7V9.3A0.6 0.6 0 0 1 9.3 9.9H6.7A0.6 0.6 0 0 1 6.1 9.3V6.7A0.6 0.6 0 0 1 6.7 6.1ZM11.05 6.1H13.65A0.6 0.6 0 0 1 14.25 6.7V9.3A0.6 0.6 0 0 1 13.65 9.9H11.05A0.6 0.6 0 0 1 10.45 9.3V6.7A0.6 0.6 0 0 1 11.05 6.1ZM2.35 10.45H4.95A0.6 0.6 0 0 1 5.55 11.05V13.65A0.6 0.6 0 0 1 4.95 14.25H2.35A0.6 0.6 0 0 1 1.75 13.65V11.05A0.6 0.6 0 0 1 2.35 10.45ZM6.7 10.45H9.3A0.6 0.6 0 0 1 9.9 11.05V13.65A0.6 0.6 0 0 1 9.3 14.25H6.7A0.6 0.6 0 0 1 6.1 13.65V11.05A0.6 0.6 0 0 1 6.7 10.45ZM11.05 10.45H13.65A0.6 0.6 0 0 1 14.25 11.05V13.65A0.6 0.6 0 0 1 13.65 14.25H11.05A0.6 0.6 0 0 1 10.45 13.65V11.05A0.6 0.6 0 0 1 11.05 10.45Z"
+				}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("path", {
+					fill: "currentColor",
+					d: "M11.05 1.75H13.65A0.6 0.6 0 0 1 14.25 2.35V4.95A0.6 0.6 0 0 1 13.65 5.55H11.05A0.6 0.6 0 0 1 10.45 4.95V2.35A0.6 0.6 0 0 1 11.05 1.75Z",
+					transform: "rotate(9 12.35 3.65)"
+				})]
 			});
 		}
 		/**
@@ -1014,15 +1039,9 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 							/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
 								className: Market_module_css_default.titleRow,
 								children: [
-									/* @__PURE__ */ (0, react_jsx_runtime.jsx)("img", {
-										src: LOGO_URI,
-										width: 22,
-										height: 22,
-										alt: "",
-										style: {
-											borderRadius: "5px",
-											flexShrink: 0
-										}
+									/* @__PURE__ */ (0, react_jsx_runtime.jsx)(MarketLogo, {
+										size: 22,
+										style: { flexShrink: 0 }
 									}),
 									/* @__PURE__ */ (0, react_jsx_runtime.jsx)("h2", {
 										className: Market_module_css_default.title,
