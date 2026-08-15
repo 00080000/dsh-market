@@ -65,7 +65,8 @@
     "src",
     "client",
     "data",
-    "cordis.patch.yml"
+    "cordis.patch.yml",
+    "LICENSE"
   ],
   "devDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
