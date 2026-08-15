@@ -55,6 +55,11 @@ dsh plugin --profile web add dshmarket
 
 **这个仓库是市场应用本身，不是插件目录。** 市场里的插件列表来自精选列表 [awesome-dsh-plugin](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin)——想让你的插件上架，请去**那边**提 PR（在列表里加一条即可，站点和本市场会自动收录，通常一天内生效）。请不要往本仓库提插件条目。
 
+## 路线图与反馈
+
+- 功能规划见 [Roadmap](https://github.com/orgs/dsh-market/projects/1)，每一项都欢迎社区 PR（动手前在对应 issue 里说一声）
+- Bug 与建议请提 [issue](https://github.com/dsh-market/dsh-market/issues)，附上市场页面的「导出日志」能让排查快十倍
+
 ## 数据源
 
 实时来自 [awesome-dsh-plugin.com/plugins.json](https://awesome-dsh-plugin.com/plugins.json)——精选条目、npm 映射、star 数由 CI 每日刷新——内置快照做离线兜底。
