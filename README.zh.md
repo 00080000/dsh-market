@@ -51,6 +51,14 @@ dsh plugin --profile web add dshmarket
 
 实时来自 [awesome-dsh-plugin.com/plugins.json](https://awesome-dsh-plugin.com/plugins.json)——精选条目、npm 映射、star 数由 CI 每日刷新——内置快照做离线兜底。
 
+## 友情链接
+
+### DeepSeek Harness Desktop
+
+[DeepSeek Harness Desktop](https://github.com/anywhere-labs/deepseek-harness-desktop) 是一款为 DeepSeek Harness 生态打造的现代化桌面端，让用户无需配置 Node.js 或执行命令，即可启动和管理本地 Harness 服务。项目后续还将支持插件市场、移动端远程控制和 IM Channels。
+
+[访问官网](https://www.dshdesktop.cn) · [GitHub](https://github.com/anywhere-labs/deepseek-harness-desktop)
+
 ## 许可
 
 MIT · [dshmarket.com](https://dshmarket.com)

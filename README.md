@@ -51,6 +51,14 @@ Installs prefer npm tarballs over full-repo GitHub downloads whenever a plugin p
 
 Live from [awesome-dsh-plugin.com/plugins.json](https://awesome-dsh-plugin.com/plugins.json) — curated entries, npm mapping, and star counts refreshed daily by CI — with a bundled snapshot as offline fallback.
 
+## Related projects
+
+### DeepSeek Harness Desktop
+
+[DeepSeek Harness Desktop](https://github.com/anywhere-labs/deepseek-harness-desktop) is a modern desktop client for the DeepSeek Harness ecosystem — start and manage a local Harness service without installing Node.js or touching the command line. Plugin marketplace, mobile remote control, and IM Channels are on its roadmap.
+
+[Website](https://www.dshdesktop.cn) · [GitHub](https://github.com/anywhere-labs/deepseek-harness-desktop)
+
 ## License
 
 MIT · [dshmarket.com](https://dshmarket.com)
