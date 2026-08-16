@@ -25,28 +25,13 @@ dsh plugin --profile web add dshmarket
 
 Restart `dsh web`, then open **Settings → Plugin Market**.
 
-### DSH Desktop
-
-On DSH Desktop builds that expose the public `desktopProfiles` and
-`desktopPnpm` services, install from **Open DSH Terminal** with:
-
-```sh
-dsh plugin add dshmarket
-```
-
-The market automatically targets the immutable active Desktop profile and
-uses Desktop's packaged pnpm operation service. It does not probe or install a
-system pnpm, and Desktop keeps ownership of application restart. Ordinary DSH
-continues to use the existing profile/argv/CLI path when those services are
-absent. The detection order follows Desktop's supported
-[cross-environment plugin contract](https://github.com/anywhere-labs/deepseek-harness-desktop/blob/4f68147091e585aaa1d815f99d30a657b3842d7c/dsh-plugin-desktop/docs/plugin-services.md#cross-environment-plugin-optional-desktop-adapter-and-ordinary-dsh-fallback).
-This compatibility does not mean the market is bundled with Desktop.
-
 ## What you get
 
-- **Browse & search** the full community catalog (300+ plugins, growing daily) — category filters, star counts, top/new sorting, bilingual descriptions that follow your UI language
+- **Browse & search** the full community catalog (800+ plugins, growing daily) — category filters, star counts, top/new sorting, bilingual descriptions that follow your UI language
+- **Screenshots** — AppStore-style screenshots in the install dialog: author-curated via the registry, with automatic README extraction as fallback; images load from GitHub hosting only, and only after you open the dialog
 - **Themes** — a dedicated tab for community themes and skins: install → active immediately, switch with one click (themes are mutually exclusive, your choice survives restarts), uninstall to revert
 - **One-click install** — confirm the source, watch live progress; most plugins go live after a page refresh, no restart
+- **Backup & restore** — export your profile's plugin list and configuration as readable JSON, import it on another machine, or store it on WebDAV with daily auto-backup; restores validate before writing and roll back on failure
 - **Updates** — per-plugin update checks (npm version or pinned commit vs HEAD), one-click update, or update everything at once; the market updates itself the same way
 - **Uninstall** — two-step confirm; plugins installed this session are removed live
 - **Restart when needed** — changes that cannot hot-load show a one-click restart beside the pending-change banner; the action is restricted to same-origin loopback requests
@@ -63,6 +48,7 @@ Installs prefer npm tarballs over full-repo GitHub downloads whenever a plugin p
 - Build scripts stay blocked by default (pnpm ≥10); allowing one is your explicit per-package choice
 - Terminal/CLI-surface plugins are flagged before you install them into the web profile
 - The install endpoint accepts same-origin POST only; the market never phones home
+- Backups can contain credentials from your profile config — the UI warns before export and upload; WebDAV sync is https-only, refuses private-network targets, and never stores your password in the browser
 - The restart endpoint additionally requires a direct loopback client (forwarded requests are rejected) and relaunches the exact DSH entry, arguments, environment, and working directory
 - One-click restart launches a detached replacement. If DSH is managed by systemd, launchd, pm2, or another supervisor, set the plugin option `allowRestart: false` and let the supervisor own restarts instead; the pending-change notice remains visible but the button is hidden
 - For terminal-attached launches, the detached replacement keeps running after the original terminal closes
@@ -80,14 +66,6 @@ Installs prefer npm tarballs over full-repo GitHub downloads whenever a plugin p
 ## Data source
 
 Live from [awesome-dsh-plugin.com/plugins.json](https://awesome-dsh-plugin.com/plugins.json) — curated entries, npm mapping, and star counts refreshed daily by CI — with a bundled snapshot as offline fallback.
-
-## Related projects
-
-### DeepSeek Harness Desktop
-
-[DeepSeek Harness Desktop](https://github.com/anywhere-labs/deepseek-harness-desktop) is a modern desktop client for the DeepSeek Harness ecosystem — start and manage a local Harness service without a system Node.js installation. Compatible builds can host a user-installed dsh-market through their public profile and package-operation services; bundling remains a Desktop project decision.
-
-[Website](https://www.dshdesktop.cn) · [GitHub](https://github.com/anywhere-labs/deepseek-harness-desktop)
 
 ## License
 
