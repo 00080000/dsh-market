@@ -4,11 +4,38 @@
  * pending-restart bookkeeping in sessionStorage.
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react'
-import { Button, IconChevronDownOutline14, IconChevronUpOutline14, IconSearchOutline16, Input, Modal, Pill, StateDot } from '@deepseek-ai/dsh-client-ui-primitives'
+import {
+  Button,
+  DisclosureRow,
+  IconChevronDownOutline14,
+  IconChevronLeftOutline14,
+  IconChevronRightOutline14,
+  IconChevronUpOutline14,
+  IconCheckOutline16,
+  IconCodeOutline16,
+  IconCordisPluginOutline14,
+  IconDownloadOutline16,
+  IconFolderOpen16,
+  IconLinkOutline14,
+  IconLoadingOutline16,
+  IconQuestionOutline14,
+  IconRefreshOutline14,
+  IconSearchOutline16,
+  IconSparkle16,
+  IconWarningOutline16,
+  Input,
+  Menu,
+  Modal,
+  Pill,
+  StateDot,
+  Toast,
+  Tooltip,
+  type MenuEntry,
+} from '@deepseek-ai/dsh-client-ui-primitives'
 import css from './Market.module.css'
 import {
   avatarColor, entryForDep, isInstalled, looksTerminal, matchInstalledName, orderedCategories,
-  pageItems, pluginScreenshots, readSession, repoOf, themePlugins as themePluginsOf, themeSwatch, TIME_RANGE_DAYS, visiblePlugins,
+  pageItems, pluginScreenshots, readSession, themePlugins as themePluginsOf, themeSwatch, TIME_RANGE_DAYS, visiblePlugins,
 } from './market-data.ts'
 import type {
   ActivationInfo, ActivationState, InstalledMap, MarketStatus, Registry, RegistryPlugin,
@@ -208,6 +235,9 @@ export function MarketSection(props: MarketSectionProps) {
     return saved || 'discover'
   })
   const [q, setQ] = useState('')
+  /** Per-tab searches stay independent: discover / themes / installed. */
+  const [qThemes, setQThemes] = useState('')
+  const [qInstalled, setQInstalled] = useState('')
   const [cat, setCat] = useState('all')
   const [confirming, setConfirming] = useState<RegistryPlugin | null>(null)
   const [busyUrl, setBusyUrl] = useState<string | null>(null)
@@ -222,6 +252,8 @@ export function MarketSection(props: MarketSectionProps) {
    * Programmatic log download with explicit feedback (#84) — the plain
    * `<a download>` gave no sign anything happened, and the error banner's
    * "export the log" wording pointed at text that was not clickable at all.
+   * Success/failure surface as a primitives Toast (body portal, no layout
+   * impact) instead of inline text.
    */
   const doExportLog = useCallback(() => {
     setExportState('busy')
@@ -240,8 +272,10 @@ export function MarketSection(props: MarketSectionProps) {
         setExportState('done')
       })
       .catch(() => setExportState('fail'))
-      .finally(() => { setTimeout(() => setExportState('idle'), 6000) })
   }, [])
+  /** Stable onDone for the export Toast — a fresh closure per render would
+   * reset the Toast's auto-dismiss timer on every parent re-render. */
+  const exportToastDone = useCallback(() => setExportState('idle'), [])
   const [updates, setUpdates] = useState<Record<string, UpdateStatus>>({})
   const [updatingName, setUpdatingName] = useState<string | null>(null)
   // Plugin blocked by pnpm's fresh-release safety wait; arms the update-now button.
@@ -273,7 +307,8 @@ export function MarketSection(props: MarketSectionProps) {
   const [cancelling, setCancelling] = useState(false)
   /** Non-live activation results from the last operation, shown as a banner. */
   const [activationWarnings, setActivationWarnings] = useState<{ name: string; info: ActivationInfo }[]>([])
-  const [removeArmed, setRemoveArmed] = useState<string | null>(null)
+  /** Plugin name awaiting uninstall confirmation (Modal). */
+  const [removeConfirm, setRemoveConfirm] = useState<string | null>(null)
   const [removingName, setRemovingName] = useState<string | null>(null)
   const [removedCount, setRemovedCount] = useState(0)
   const [envReady, setEnvReady] = useState(true)
@@ -294,6 +329,8 @@ export function MarketSection(props: MarketSectionProps) {
   const [webdavPassword, setWebdavPassword] = useState(initialWebdav.password)
   const [autoBackup, setAutoBackup] = useState(initialWebdav.auto)
   const bodyRef = useRef<HTMLDivElement | null>(null)
+  /** Hidden file input behind the Import button (a Button can't host an <input>). */
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
   const [sortField, setSortField] = useState<SortField>('stars')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
   /** Direction labels adapt to the field: stars → asc/desc, added → oldest/newest. */
@@ -303,8 +340,19 @@ export function MarketSection(props: MarketSectionProps) {
       : dir === 'desc' ? 'sortDesc' : 'sortAsc'
   const [timeRange, setTimeRange] = useState<TimeRange>('all')
   const [filterOpen, setFilterOpen] = useState(false)
-  const filterWrapRef = useRef<HTMLDivElement | null>(null)
   const [catsOpen, setCatsOpen] = useState(false)
+  /** Page-size switcher dropdown (primitives Menu). */
+  const [sizeOpen, setSizeOpen] = useState(false)
+  /** WebDAV provider-preset dropdown (primitives Menu). */
+  const [presetOpen, setPresetOpen] = useState(false)
+  /** Install-command disclosure inside the confirm dialog. */
+  const [cmdOpen, setCmdOpen] = useState(false)
+  /** Per-row "why is it not live" disclosure (installed tab). */
+  const [whyOpen, setWhyOpen] = useState<string | null>(null)
+  /** Restore-confirm dialog (replaces window.confirm). */
+  const [restoreConfirmOpen, setRestoreConfirmOpen] = useState(false)
+  /** Plugins that failed to install during a restore (replaces window.alert). */
+  const [restoreErrors, setRestoreErrors] = useState<string[]>([])
   // How many category pills fit in the two collapsed rows (measured once —
   // the settings panel width is fixed); null = measuring render with all
   // pills clamped, then slice so the chevron flows inline after the last one.
@@ -479,18 +527,6 @@ export function MarketSection(props: MarketSectionProps) {
 
   useEffect(() => { setPage(1) }, [q, cat, sortField, sortDir, timeRange])
 
-  // Close the filter panel when the pointer leaves it.
-  useEffect(() => {
-    if (!filterOpen) return
-    const onDown = (event: MouseEvent) => {
-      if (filterWrapRef.current !== null && !filterWrapRef.current.contains(event.target as Node)) {
-        setFilterOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', onDown)
-    return () => document.removeEventListener('mousedown', onDown)
-  }, [filterOpen])
-
   const totalPages = Math.max(1, Math.ceil(plugins.length / pageSize))
   // Clamp in case the list shrank while the user was on a later page.
   const currentPage = Math.min(page, totalPages)
@@ -515,6 +551,30 @@ export function MarketSection(props: MarketSectionProps) {
     setPage(1)
     scrollToTop()
   }
+
+  /** Download a host endpoint as a file — primitives Button can't be an <a download>.
+   * Prefers the server's Content-Disposition filename (e.g. the timestamped
+   * backup export) and falls back to the caller's name. */
+  const downloadFile = useCallback((url: string, filename: string) => {
+    fetch(url)
+      .then(res => {
+        if (!res.ok) throw new Error('HTTP ' + res.status)
+        const disposition = res.headers.get('content-disposition')
+        if (disposition !== null) {
+          const match = /filename="?([^";]+)"?/.exec(disposition)
+          if (match !== null && match[1] !== undefined && match[1] !== '') filename = match[1]
+        }
+        return res.blob()
+      })
+      .then(blob => {
+        const a = document.createElement('a')
+        a.href = URL.createObjectURL(blob)
+        a.download = filename
+        a.click()
+        setTimeout(() => URL.revokeObjectURL(a.href), 2000)
+      })
+      .catch(error => setInstallError(String(error)))
+  }, [])
 
   const doInstall = useCallback((plugin: RegistryPlugin) => {
     setBuildsSkipped(null)
@@ -700,7 +760,7 @@ export function MarketSection(props: MarketSectionProps) {
   }, [])
 
   const doUninstall = useCallback((name: string) => {
-    setRemoveArmed(null)
+    setRemoveConfirm(null)
     setInstallError(null)
     setActivationWarnings([])
     setRemovingName(name)
@@ -751,9 +811,9 @@ export function MarketSection(props: MarketSectionProps) {
 
   const finishRestore = useCallback((body: { errors?: unknown }) => {
     const errors = Array.isArray(body.errors) ? body.errors as { name?: unknown; error?: unknown }[] : []
-    if (errors.length > 0) {
-      window.alert(`${t('restorePartial')}\n\n${errors.map(item => `${String(item.name)}: ${String(item.error)}`).join('\n')}`)
-    }
+    // Partial failures surface inline in the Backup tab (previously a
+    // window.alert); the restore itself still completes.
+    setRestoreErrors(errors.map(item => `${String(item.name)}: ${String(item.error)}`))
     setBackupRestored(true)
     setBackupMessage(t('restoreDone'))
     if (errors.length === 0) {
@@ -768,14 +828,17 @@ export function MarketSection(props: MarketSectionProps) {
     setPendingBackup(backup)
     setPendingDependencies(dependencies)
     setBackupMessage(t('restorePreviewDone'))
+    setRestoreErrors([])
     setTab('installed')
   }, [t])
 
-  const restoreBackup = useCallback(() => {
+  /** Actually run the restore; the confirm dialog gates this (previously window.confirm). */
+  const doRestore = useCallback(() => {
     if (pendingBackup === null) return Promise.resolve()
-    if (!window.confirm(t('restoreConfirm'))) return Promise.resolve()
+    setRestoreConfirmOpen(false)
     setBackupBusy(true)
     setBackupMessage(null)
+    setRestoreErrors([])
     return fetch('/dsh-market/restore', {
       method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ backup: pendingBackup }),
     }).then(async response => {
@@ -783,12 +846,13 @@ export function MarketSection(props: MarketSectionProps) {
       if (!response.ok) throw new Error(String(body.error || 'restore failed'))
       finishRestore(body)
     }).catch(error => setBackupMessage(String(error))).finally(() => setBackupBusy(false))
-  }, [finishRestore, pendingBackup, t])
+  }, [finishRestore, pendingBackup])
 
   const runWebdav = useCallback((action: 'backup' | 'restore') => {
     if (webdavUrl.trim() === '') return
     setBackupBusy(true)
     setBackupMessage(null)
+    setRestoreErrors([])
     fetch('/dsh-market/webdav', {
       method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ action, url: webdavUrl.trim(), username: webdavUser, password: webdavPassword }),
@@ -835,7 +899,40 @@ export function MarketSection(props: MarketSectionProps) {
     : progressLine || t('progressHint')
   const progressText = cancelling ? t('cancelling') + ' · ' + phasePart : phasePart
 
+  // Filter dropdown (primitives Menu): three independent option groups, ids
+  // namespaced so one onSelect routes by prefix. The menu stays open across
+  // selections — outside click / Escape close it (Menu's own behavior).
+  const filterItems = useMemo<MenuEntry[]>(() => [
+    { type: 'label', id: 'f-sort', text: t('filterSort') },
+    ...SORT_FIELD_OPTIONS.map(opt => ({ id: 'field:' + opt.key, label: t(opt.label) })),
+    { type: 'separator', id: 'f-sep1' },
+    { type: 'label', id: 'f-dir', text: t('filterDir') },
+    ...SORT_DIR_OPTIONS.map(dir => ({ id: 'dir:' + dir, label: t(sortDirLabel(dir)) })),
+    { type: 'separator', id: 'f-sep2' },
+    { type: 'label', id: 'f-time', text: t('filterTime') },
+    ...TIME_OPTIONS.map(opt => ({ id: 'time:' + opt.key, label: t(opt.label) })),
+  ], [t, sortField])
+  const filterSelectedIds = useMemo(
+    () => ['field:' + sortField, 'dir:' + sortDir, 'time:' + timeRange],
+    [sortField, sortDir, timeRange])
+  const onFilterSelect = (id: string) => {
+    if (id.startsWith('field:')) setSortField(id.slice(6) as SortField)
+    else if (id.startsWith('dir:')) setSortDir(id.slice(4) as SortDir)
+    else if (id.startsWith('time:')) setTimeRange(id.slice(5) as TimeRange)
+  }
+
   const themePlugins = data === null ? [] : themePluginsOf(data.plugins)
+  /** Themes-tab search narrows by name/owner/description. */
+  const filteredThemePlugins = useMemo(() => {
+    const needle = qThemes.trim().toLowerCase()
+    if (needle === '') return themePlugins
+    return themePlugins.filter(p => {
+      const desc = (p.description && (p.description[lang] || p.description.en)) || ''
+      return p.name.toLowerCase().includes(needle)
+        || (p.owner || '').toLowerCase().includes(needle)
+        || desc.toLowerCase().includes(needle)
+    })
+  }, [themePlugins, qThemes, lang])
 
   const pluginCard = (p: RegistryPlugin) => {
     const desc = (p.description && (p.description[lang] || p.description.en)) || ''
@@ -855,7 +952,13 @@ export function MarketSection(props: MarketSectionProps) {
             </div>
           </div>
           <span className={css.grow} />
-          <a className={css.src} href={p.url} target="_blank" rel="noreferrer" style={{ alignSelf: 'flex-start', flexShrink: 0 }}>{t('viewSource')}</a>
+          <Button
+            variant="outline"
+            size="sm"
+            className={css.srcBtn}
+            icon={<IconCodeOutline16 size={14} />}
+            onClick={() => window.open(p.url, '_blank', 'noopener')}
+          >{t('viewSource')}</Button>
         </div>
         <div className={css.desc}>{desc}</div>
         <div className={css.foot}>
@@ -880,12 +983,12 @@ export function MarketSection(props: MarketSectionProps) {
         </div>
         {busy && (
           <div className={css.progress}>
-            <span className={css.spin} />
+            <span className={css.spin}><IconLoadingOutline16 size={14} /></span>
             <code className={css.grow}>{progressText}</code>
             {progressPct !== null && <span className={css.pct}>{progressPct}%</span>}
-            <button type="button" className={css.cancelBtn} disabled={cancelling} onClick={doCancel}>
+            <Button variant="outline" size="sm" disabled={cancelling} onClick={doCancel}>
               {cancelling ? t('cancelling') : t('cancelOp')}
-            </button>
+            </Button>
             <div className={css.bar}>
               <div
                 className={progressPct !== null ? css.barFill : `${css.barFill} ${css.barWave}`}
@@ -925,28 +1028,20 @@ export function MarketSection(props: MarketSectionProps) {
             </div>
           </div>
           <span className={css.grow} />
-          <a className={css.src} href={p.url} target="_blank" rel="noreferrer" style={{ alignSelf: 'flex-start', flexShrink: 0 }}>{t('viewSource')}</a>
+          <Button
+            variant="outline"
+            size="sm"
+            className={css.srcBtn}
+            icon={<IconCodeOutline16 size={14} />}
+            onClick={() => window.open(p.url, '_blank', 'noopener')}
+          >{t('viewSource')}</Button>
         </div>
         <div className={css.desc}>{desc}</div>
         <div className={css.foot}>
           <span className={css.grow} />
           {removingName === instName
-            ? <Button variant="outline" size="sm" className={css.dangerBtn} disabled>{t('uninstalling')}</Button>
-            : removeArmed === instName
-              ? (
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    className={css.dangerArmed}
-                    onClick={() => doUninstall(instName).then(() => {
-                      if (mounted) {
-                        sessionStorage.setItem('dshm-tab', 'themes')
-                        location.reload()
-                      }
-                    })}
-                  >{t('confirmRemove')}</Button>
-                )
-              : <Button variant="outline" size="sm" className={css.dangerBtn} onClick={() => setRemoveArmed(instName)}>{t('uninstall')}</Button>}
+            ? <Button variant="outline" size="sm" disabled>{t('uninstalling')}</Button>
+            : <Button variant="outline" size="sm" onClick={() => setRemoveConfirm(instName)}>{t('uninstall')}</Button>}
           {mounted
             ? <span className={css.okState}>{t('themeActive')}</span>
             : <Button variant="primary" size="sm" onClick={() => doUseSkin(instName)}>{t('themeApply')}</Button>}
@@ -1007,7 +1102,6 @@ export function MarketSection(props: MarketSectionProps) {
                 <Button
                   variant="primary"
                   size="sm"
-                  className={css.warnBtn}
                   disabled={updatingName !== null || busyUrl !== null}
                   onClick={() => { setTab('installed'); doUpdate(self) }}
                 >{updatingName === self ? t('updating') : t('marketUpdate')}</Button>
@@ -1017,19 +1111,21 @@ export function MarketSection(props: MarketSectionProps) {
             <Button
               variant="primary"
               size="sm"
-              className={css.warnBtn}
               disabled={updatingAll || updatingName !== null || busyUrl !== null || removingName !== null}
               onClick={() => { setTab('installed'); doUpdateAll() }}
             >{updatingAll ? t('updating') : t('updateAll') + ' (' + updatableNames.length + ')'}</Button>
           )}
         </div>
         <div className={css.sub}>
-          {t('subtitle') + (data ? ' · ' + data.count : '') + ' '}
-          <Button size="sm" variant="ghost" disabled={exportState === 'busy'} onClick={doExportLog}>
-            {exportState === 'busy' ? t('exportingLog') : t('exportLog')}
-          </Button>
-          {exportState === 'done' && <span className={css.exportNote}>{'✓ ' + t('exportedLog')}</span>}
-          {exportState === 'fail' && <span className={css.exportNoteErr}>{t('exportLogFail')}</span>}
+          <span>{t('subtitle') + (data ? ' · ' + data.count : '')}</span>
+          <span className={css.grow} />
+          <Button
+            variant="outline"
+            size="sm"
+            icon={<IconDownloadOutline16 size={14} />}
+            disabled={exportState === 'busy'}
+            onClick={doExportLog}
+          >{exportState === 'busy' ? t('exportingLog') : t('exportLog')}</Button>
         </div>
         <div className={css.tabs}>
           <button className={tab === 'discover' ? `${css.tab} ${css.on}` : css.tab} onClick={() => setTab('discover')}>{t('tabDiscover')}</button>
@@ -1040,11 +1136,10 @@ export function MarketSection(props: MarketSectionProps) {
           </button>
           <button className={tab === 'backup' ? `${css.tab} ${css.on}` : css.tab} onClick={() => setTab('backup')}>{t('tabBackup')}</button>
           <span className={css.grow} />
-          {tab !== 'backup' && <Input className={css.searchInline} icon={<IconSearchOutline16 size={14} />} placeholder={t('searchPh')} value={q} onChange={e => setQ(e.target.value)} />}
         </div>
         {!envReady && (
-          <div className={css.restart}>
-            <span>🧩</span>
+          <div className={css.banner}>
+            <IconCordisPluginOutline14 size={14} className={css.bannerIcon} />
             <span className={css.grow}>{envFailed ? t('envFixFail') : t('envMissing')}</span>
             {!envFailed && (
               <Button variant="primary" size="sm" disabled={envFixing} onClick={fixEnv}>
@@ -1054,17 +1149,17 @@ export function MarketSection(props: MarketSectionProps) {
           </div>
         )}
         {tab === 'installed' && pendingBackup !== null && (
-          <div className={css.restart}>
-            <span>↺</span>
+          <div className={css.banner}>
+            <IconRefreshOutline14 size={14} className={css.bannerIcon} />
             <span className={css.grow}>{t('restoreMissing').replace('{0}', String(missingRestoreCount))}</span>
-            <Button variant="primary" size="sm" disabled={backupBusy} onClick={restoreBackup}>
+            <Button variant="primary" size="sm" disabled={backupBusy} onClick={() => setRestoreConfirmOpen(true)}>
               {backupBusy ? t('backupWorking') : t('restoreStart')}
             </Button>
           </div>
         )}
         {hotUrls.length > 0 && (
-          <div className={css.restart}>
-            <span>✨</span>
+          <div className={css.banner}>
+            <IconSparkle16 size={14} className={css.bannerIcon} />
             <span className={css.grow}><b>{hotUrls.length}</b> {t('hotBanner')}</span>
             <Button
               variant="primary"
@@ -1078,10 +1173,12 @@ export function MarketSection(props: MarketSectionProps) {
           </div>
         )}
         {pendingRestart > 0 && (
-          <div className={css.restart}>
-            <span>🔄</span>
+          <div className={css.banner}>
+            <IconRefreshOutline14 size={14} className={css.bannerIcon} />
             <span className={css.grow}><b>{pendingRestart}</b> {t('restartBanner')}</span>
-            <span title={t('restartHint')}>ℹ️</span>
+            <Tooltip label={t('restartHint')} side="bottom">
+              <span className={css.bannerHint}><IconQuestionOutline14 size={14} /></span>
+            </Tooltip>
             {restartEnabled && (
               <Button
                 variant="primary"
@@ -1093,8 +1190,8 @@ export function MarketSection(props: MarketSectionProps) {
           </div>
         )}
         {activationWarnings.length > 0 && (
-          <div className={css.restart}>
-            <span>⚠️</span>
+          <div className={css.banner}>
+            <IconWarningOutline16 size={14} className={css.bannerIcon} />
             <span className={css.grow}>
               {activationWarnings.map(({ name, info }) => (
                 <div key={name}>
@@ -1107,7 +1204,8 @@ export function MarketSection(props: MarketSectionProps) {
         )}
       </div>
       {buildsSkipped !== null && (
-        <div className={css.restart}>
+        <div className={css.banner}>
+          <IconWarningOutline16 size={14} className={css.bannerIcon} />
           <span className={css.grow}>{t('buildsSkipped')} {buildsSkipped.names.join(', ')}</span>
           <Button
             size="sm"
@@ -1139,11 +1237,15 @@ export function MarketSection(props: MarketSectionProps) {
               <Button size="sm" onClick={() => doUpdate(staleName, true)}>{t('updateNow')}</Button>
             )}
             {/* The banner text told users to export the log; now it IS the button (#84). */}
-            <Button size="sm" variant="ghost" disabled={exportState === 'busy'} onClick={doExportLog}>
+            <Button
+              size="sm"
+              variant="outline"
+              icon={<IconDownloadOutline16 size={14} />}
+              disabled={exportState === 'busy'}
+              onClick={doExportLog}
+            >
               {exportState === 'busy' ? t('exportingLog') : t('exportLog')}
             </Button>
-            {exportState === 'done' && <span className={css.exportNote}>{'✓ ' + t('exportedLog')}</span>}
-            {exportState === 'fail' && <span className={css.exportNoteErr}>{t('exportLogFail')}</span>}
           </div>
         </div>
       )}
@@ -1160,45 +1262,68 @@ export function MarketSection(props: MarketSectionProps) {
                   <p>{t('backupHint')}</p>
                   <p className={css.backupWarn}>{t('credsWarning')}</p>
                   <div className={css.backupActions}>
-                    <a className={`${css.backupButton} ${css.backupPrimary}`} href="/dsh-market/backup" download aria-disabled={backupBusy}>{t('backupDownload')}</a>
-                    <label className={css.backupButton} aria-disabled={backupBusy}>
-                      {backupBusy ? t('backupWorking') : t('backupImport')}
-                      <input
-                        type="file"
-                        accept="application/json,.json"
-                        disabled={backupBusy}
-                        onChange={event => {
-                          const file = event.currentTarget.files?.[0]
-                          event.currentTarget.value = ''
-                          if (file !== undefined) file.text().then(text => previewBackup(JSON.parse(text))).catch(error => setBackupMessage(String(error)))
-                        }}
-                      />
-                    </label>
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      icon={<IconDownloadOutline16 size={14} />}
+                      disabled={backupBusy}
+                      onClick={() => downloadFile('/dsh-market/backup', 'dsh-profile-backup.json')}
+                    >{backupBusy ? t('backupWorking') : t('backupDownload')}</Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      icon={<IconFolderOpen16 size={14} />}
+                      disabled={backupBusy}
+                      onClick={() => fileInputRef.current?.click()}
+                    >{backupBusy ? t('backupWorking') : t('backupImport')}</Button>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="application/json,.json"
+                      className={css.hiddenFile}
+                      tabIndex={-1}
+                      aria-hidden="true"
+                      disabled={backupBusy}
+                      onChange={event => {
+                        const file = event.currentTarget.files?.[0]
+                        event.currentTarget.value = ''
+                        if (file !== undefined) file.text().then(text => previewBackup(JSON.parse(text))).catch(error => setBackupMessage(String(error)))
+                      }}
+                    />
                   </div>
                 </section>
                 <section className={css.backupCard}>
                   <h3>{t('webdav')}</h3>
-                  <select
-                    className={css.backupInput}
-                    aria-label={t('webdavPreset')}
-                    defaultValue=""
-                    onChange={event => {
+                  <Menu
+                    open={presetOpen}
+                    onClose={() => setPresetOpen(false)}
+                    onSelect={id => {
                       const urls: Record<string, string> = {
                         jianguoyun: 'https://dav.jianguoyun.com/dav/dsh-profile-backup.json',
                         koofr: 'https://app.koofr.net/dav/Koofr/dsh-profile-backup.json',
                         nextcloud: 'https://nextcloud.example/remote.php/dav/files/USERNAME/dsh-profile-backup.json',
                       }
-                      if (urls[event.target.value] !== undefined) setWebdavUrl(urls[event.target.value]!)
+                      if (urls[id] !== undefined) setWebdavUrl(urls[id]!)
                     }}
-                  >
-                    <option value="">{t('webdavPreset')}</option>
-                    <option value="jianguoyun">坚果云 / Nutstore</option>
-                    <option value="koofr">Koofr</option>
-                    <option value="nextcloud">Nextcloud</option>
-                  </select>
-                  <input className={css.backupInput} type="url" value={webdavUrl} placeholder={t('webdavUrl')} onChange={e => setWebdavUrl(e.target.value)} />
-                  <input className={css.backupInput} autoComplete="username" value={webdavUser} placeholder={t('webdavUser')} onChange={e => setWebdavUser(e.target.value)} />
-                  <input className={css.backupInput} type="password" autoComplete="current-password" value={webdavPassword} placeholder={t('webdavPassword')} onChange={e => setWebdavPassword(e.target.value)} />
+                    align="start"
+                    anchor={(
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        icon={<IconChevronDownOutline14 size={14} />}
+                        onClick={() => setPresetOpen(o => !o)}
+                      >{t('webdavPreset')}</Button>
+                    )}
+                    items={[
+                      { id: 'custom', label: t('webdavPreset') },
+                      { id: 'jianguoyun', label: '坚果云 / Nutstore' },
+                      { id: 'koofr', label: 'Koofr' },
+                      { id: 'nextcloud', label: 'Nextcloud' },
+                    ]}
+                  />
+                  <Input className={css.backupInput} icon={<IconLinkOutline14 size={14} />} type="url" value={webdavUrl} placeholder={t('webdavUrl')} onChange={e => setWebdavUrl(e.target.value)} />
+                  <Input className={css.backupInput} autoComplete="username" value={webdavUser} placeholder={t('webdavUser')} onChange={e => setWebdavUser(e.target.value)} />
+                  <Input className={css.backupInput} type="password" autoComplete="current-password" value={webdavPassword} placeholder={t('webdavPassword')} onChange={e => setWebdavPassword(e.target.value)} />
                   <div className={css.backupActions}>
                     <Button variant="primary" size="sm" disabled={backupBusy || webdavUrl.trim() === ''} onClick={() => runWebdav('backup')}>{backupBusy ? t('backupWorking') : t('webdavUpload')}</Button>
                     <Button variant="outline" size="sm" disabled={backupBusy || webdavUrl.trim() === ''} onClick={() => runWebdav('restore')}>{t('webdavRestore')}</Button>
@@ -1208,15 +1333,27 @@ export function MarketSection(props: MarketSectionProps) {
                   <p className={css.backupWarn}>{t('credsWarning')}</p>
                 </section>
                 {backupMessage !== null && <div className={css.backupMessage}>{backupMessage}</div>}
+                {restoreErrors.length > 0 && (
+                  <div className={css.banner}>
+                    <IconWarningOutline16 size={14} className={css.bannerIcon} />
+                    <span className={css.grow}>
+                      <div><b>{t('restorePartial')}</b></div>
+                      {restoreErrors.map(error => <div key={error} className={css.spec}>{error}</div>)}
+                    </span>
+                  </div>
+                )}
               </div>
             )
           : tab === 'discover'
           ? loadError
             ? <div className={css.empty}>{t('loadFail')}</div>
             : data === null
-              ? <div className={css.loading}><span className={css.spin} />{t('loading')}</div>
+              ? <div className={css.loading}><span className={css.spin}><IconLoadingOutline16 size={22} /></span>{t('loading')}</div>
               : (
                   <>
+                    <div className={css.tabSearchRow}>
+                      <Input className={css.tabSearch} icon={<IconSearchOutline16 size={14} />} placeholder={t('searchPh')} value={q} onChange={e => setQ(e.target.value)} />
+                    </div>
                     <div className={css.cats}>
                       <div className={css.catsRow}>
                       <div ref={catsWrapRef} className={catsOpen || visibleCats === null ? `${css.catsWrap} ${css.catsCollapsed}` : css.catsWrap}>
@@ -1247,61 +1384,23 @@ export function MarketSection(props: MarketSectionProps) {
                           )
                         })()}
                       </div>
-                      <div className={css.filterWrap} ref={filterWrapRef}>
-                        <button
-                          type="button"
-                          className={filterOpen ? `${css.filterBtn} ${css.filterBtnOn}` : css.filterBtn}
-                          onClick={() => setFilterOpen(o => !o)}
-                        >{t('filter')}
-                          {filterOpen ? <IconChevronUpOutline14 size={14} /> : <IconChevronDownOutline14 size={14} />}
-                        </button>
-                        {filterOpen && (
-                          <div className={css.filterPanel}>
-                            <div className={css.filterGroup}>
-                              <div className={css.filterTitle}>{t('filterSort')}</div>
-                              {SORT_FIELD_OPTIONS.map(opt => (
-                                <label key={opt.key} className={css.filterOption}>
-                                  <input
-                                    type="radio"
-                                    name="dshm-sort-field"
-                                    checked={sortField === opt.key}
-                                    onChange={() => setSortField(opt.key)}
-                                  />
-                                  <span>{t(opt.label)}</span>
-                                </label>
-                              ))}
-                            </div>
-                            <div className={css.filterGroup}>
-                              <div className={css.filterTitle}>{t('filterDir')}</div>
-                              {SORT_DIR_OPTIONS.map(dir => (
-                                <label key={dir} className={css.filterOption}>
-                                  <input
-                                    type="radio"
-                                    name="dshm-sort-dir"
-                                    checked={sortDir === dir}
-                                    onChange={() => setSortDir(dir)}
-                                  />
-                                  <span>{t(sortDirLabel(dir))}</span>
-                                </label>
-                              ))}
-                            </div>
-                            <div className={css.filterGroup}>
-                              <div className={css.filterTitle}>{t('filterTime')}</div>
-                              {TIME_OPTIONS.map(opt => (
-                                <label key={opt.key} className={css.filterOption}>
-                                  <input
-                                    type="radio"
-                                    name="dshm-time"
-                                    checked={timeRange === opt.key}
-                                    onChange={() => setTimeRange(opt.key)}
-                                  />
-                                  <span>{t(opt.label)}</span>
-                                </label>
-                              ))}
-                            </div>
-                          </div>
+                      <Menu
+                        open={filterOpen}
+                        onClose={() => setFilterOpen(false)}
+                        onSelect={onFilterSelect}
+                        selectedIds={filterSelectedIds}
+                        align="end"
+                        portal
+                        anchor={(
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            icon={filterOpen ? <IconChevronUpOutline14 size={14} /> : <IconChevronDownOutline14 size={14} />}
+                            onClick={() => setFilterOpen(o => !o)}
+                          >{t('filter')}</Button>
                         )}
-                      </div>
+                        items={filterItems}
+                      />
                       </div>
                     </div>
                     {plugins.length === 0
@@ -1313,37 +1412,54 @@ export function MarketSection(props: MarketSectionProps) {
                               <div className={css.pagerPages}>
                                 {totalPages > 1 && (
                                   <>
-                                    <button type="button" className={css.pageBtn} disabled={currentPage === 1} onClick={() => goToPage(1)} aria-label={t('firstPage')}>«</button>
-                                    <button type="button" className={css.pageBtn} disabled={currentPage === 1} onClick={() => goToPage(currentPage - 1)}>{t('prevPage')}</button>
+                                    <Button variant="outline" size="sm" disabled={currentPage === 1} onClick={() => goToPage(1)} aria-label={t('firstPage')}>«</Button>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      icon={<IconChevronLeftOutline14 size={14} />}
+                                      disabled={currentPage === 1}
+                                      onClick={() => goToPage(currentPage - 1)}
+                                    >{t('prevPage')}</Button>
                                     {pageItems(currentPage, totalPages).map((item, i) => (
                                       item === '…'
                                         ? <span key={'e' + i} className={css.pageEllipsis}>…</span>
                                         : (
-                                            <button
+                                            <Button
                                               key={item}
-                                              type="button"
-                                              className={item === currentPage ? `${css.pageBtn} ${css.pageOn}` : css.pageBtn}
+                                              variant={item === currentPage ? 'primary' : 'outline'}
+                                              size="sm"
                                               onClick={() => goToPage(item)}
-                                            >{item}</button>
+                                            >{item}</Button>
                                           )
                                     ))}
-                                    <button type="button" className={css.pageBtn} disabled={currentPage === totalPages} onClick={() => goToPage(currentPage + 1)}>{t('nextPage')}</button>
-                                    <button type="button" className={css.pageBtn} disabled={currentPage === totalPages} onClick={() => goToPage(totalPages)} aria-label={t('lastPage')}>»</button>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      disabled={currentPage === totalPages}
+                                      onClick={() => goToPage(currentPage + 1)}
+                                    >{t('nextPage')}<IconChevronRightOutline14 size={14} /></Button>
+                                    <Button variant="outline" size="sm" disabled={currentPage === totalPages} onClick={() => goToPage(totalPages)} aria-label={t('lastPage')}>»</Button>
                                     <span className={css.pageInfo}>{t('pageInfo').replace('{0}', String(currentPage)).replace('{1}', String(totalPages))}</span>
                                   </>
                                 )}
                               </div>
-                              <div className={css.pagerSize}>
-                                <span className={css.sizeLabel}>{t('perPage')}</span>
-                                {PAGE_SIZES.map(size => (
-                                  <button
-                                    key={size}
-                                    type="button"
-                                    className={size === pageSize ? `${css.sizeBtn} ${css.sizeOn}` : css.sizeBtn}
-                                    onClick={() => changePageSize(size)}
-                                  >{size}</button>
-                                ))}
-                              </div>
+                              <Menu
+                                open={sizeOpen}
+                                onClose={() => setSizeOpen(false)}
+                                onSelect={id => changePageSize(Number(id))}
+                                selectedId={String(pageSize)}
+                                align="end"
+                                portal
+                                anchor={(
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    icon={<IconChevronDownOutline14 size={14} />}
+                                    onClick={() => setSizeOpen(o => !o)}
+                                  >{t('perPage') + ' ' + pageSize}</Button>
+                                )}
+                                items={PAGE_SIZES.map(size => ({ id: String(size), label: String(size) }))}
+                              />
                             </div>
                           </>
                         )}
@@ -1352,6 +1468,9 @@ export function MarketSection(props: MarketSectionProps) {
           : tab === 'themes' && themeSnap !== null
             ? (
                 <>
+                  <div className={css.tabSearchRow}>
+                    <Input className={css.tabSearch} icon={<IconSearchOutline16 size={14} />} placeholder={t('searchPh')} value={qThemes} onChange={e => setQThemes(e.target.value)} />
+                  </div>
                   {/* Light/dark/system live in the official Appearance setting; this
                     tab only shows what that setting can't: registered third-party
                     palettes (none in the wild yet) and installable theme plugins. */}
@@ -1364,15 +1483,36 @@ export function MarketSection(props: MarketSectionProps) {
                     )
                   })()}
                   {data === null
-                    ? <div className={css.loading}><span className={css.spin} />{t('loading')}</div>
+                    ? <div className={css.loading}><span className={css.spin}><IconLoadingOutline16 size={22} /></span>{t('loading')}</div>
                     : themePlugins.length === 0
                       ? <div className={css.empty}>{t('themeEmpty')}</div>
-                      : <div className={css.grid}>{themePlugins.map(themePluginCard)}</div>}
+                      : filteredThemePlugins.length === 0
+                        ? <div className={css.empty}>{t('empty')}</div>
+                        : <div className={css.grid}>{filteredThemePlugins.map(themePluginCard)}</div>}
                 </>
               )
-            : Object.keys(displayedInstalled).length === 0
-              ? <div className={css.empty}>{t('installedEmpty')}</div>
-              : Object.entries(displayedInstalled).map(([name, spec]) => {
+            : (
+                <>
+                  <div className={css.tabSearchRow}>
+                    <Input className={css.tabSearch} icon={<IconSearchOutline16 size={14} />} placeholder={t('searchPh')} value={qInstalled} onChange={e => setQInstalled(e.target.value)} />
+                  </div>
+                  {Object.keys(displayedInstalled).length === 0
+                    ? <div className={css.empty}>{t('installedEmpty')}</div>
+                    : Object.entries(displayedInstalled)
+                        .filter(([name, spec]) => {
+                          const needle = qInstalled.trim().toLowerCase()
+                          if (needle === '') return true
+                          if (name.toLowerCase().includes(needle)) return true
+                          if (String(spec).toLowerCase().includes(needle)) return true
+                          const entry = data === null ? undefined : entryForDep(data.plugins, name, String(spec))
+                          if (entry !== undefined) {
+                            const desc = (entry.description && (entry.description[lang] || entry.description.en)) || ''
+                            if (desc.toLowerCase().includes(needle)) return true
+                            if ((entry.owner || '').toLowerCase().includes(needle)) return true
+                          }
+                          return false
+                        })
+                        .map(([name, spec]) => {
                   const missing = pendingBackup !== null && !installedFiles.includes(name)
                   const entry = data === null ? undefined : entryForDep(data.plugins, name, String(spec))
                   const status = updates[name]
@@ -1403,21 +1543,27 @@ export function MarketSection(props: MarketSectionProps) {
                               {meta.label}
                             </span>
                             {act.state !== 'live' && act.reasons.length > 0 && (
-                              <details className={css.actWhy}>
-                                <summary>{t('actWhy')}</summary>
+                              <DisclosureRow
+                                icon={<IconQuestionOutline14 size={14} />}
+                                title={t('actWhy')}
+                                open={whyOpen === name}
+                                expandable
+                                onToggle={() => setWhyOpen(whyOpen === name ? null : name)}
+                                className={css.actWhy}
+                              >
                                 <div className={css.spec}>{act.reasons.join(' / ')}</div>
-                              </details>
+                              </DisclosureRow>
                             )}
                           </div>
                         )}
                         {updatingName === name && (
                           <div className={css.progress}>
-                            <span className={css.spin} />
+                            <span className={css.spin}><IconLoadingOutline16 size={14} /></span>
                             <code className={css.grow}>{progressText}</code>
                             {progressPct !== null && <span className={css.pct}>{progressPct}%</span>}
-                            <button type="button" className={css.cancelBtn} disabled={cancelling} onClick={doCancel}>
+                            <Button variant="outline" size="sm" disabled={cancelling} onClick={doCancel}>
                               {cancelling ? t('cancelling') : t('cancelOp')}
-                            </button>
+                            </Button>
                             <div className={css.bar}>
                               <div
                                 className={progressPct !== null ? css.barFill : `${css.barFill} ${css.barWave}`}
@@ -1434,13 +1580,12 @@ export function MarketSection(props: MarketSectionProps) {
                         : updatedNames.includes(name)
                         ? <span className={css.okState}>{act?.state === 'live' ? t('updatedLive') : t('updated')}</span>
                         : updatingName === name
-                          ? <Button variant="primary" size="sm" className={css.warnBtn} disabled>{t('updating')}</Button>
+                          ? <Button variant="primary" size="sm" disabled>{t('updating')}</Button>
                           : status && status.updateAvailable
                             ? (
                                 <Button
                                   variant="primary"
                                   size="sm"
-                                  className={css.warnBtn}
                                   disabled={updatingName !== null}
                                   onClick={() => doUpdate(name)}
                                 >{t('update')}</Button>
@@ -1450,64 +1595,101 @@ export function MarketSection(props: MarketSectionProps) {
                               : <span className={css.owner}>{t('upToDate')}</span>}
                       {!missing && name !== 'dsh-market' && name !== 'dshmarket' && (
                         removingName === name
-                          ? <Button variant="outline" size="sm" className={css.dangerBtn} disabled>{t('uninstalling')}</Button>
-                          : removeArmed === name
-                            ? (
-                                <Button
-                                  variant="primary"
-                                  size="sm"
-                                  className={css.dangerArmed}
-                                  onClick={() => doUninstall(name)}
-                                  onMouseLeave={() => setRemoveArmed(null)}
-                                >{t('confirmRemove')}</Button>
-                              )
-                            : (
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className={css.dangerBtn}
-                                  disabled={removingName !== null || busyUrl !== null || updatingName !== null}
-                                  onClick={() => setRemoveArmed(name)}
-                                >{t('uninstall')}</Button>
-                              )
+                          ? <Button variant="outline" size="sm" disabled>{t('uninstalling')}</Button>
+                          : (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={removingName !== null || busyUrl !== null || updatingName !== null}
+                                onClick={() => setRemoveConfirm(name)}
+                              >{t('uninstall')}</Button>
+                            )
                       )}
                     </div>
                   )
                 })}
+                </>
+              )}
       </div>
       {showTop && (
-        <button
-          className={css.top}
-          title={t('backTop')}
-          onClick={() => { const el = bodyRef.current; if (el) el.scrollTo({ top: 0, behavior: 'smooth' }) }}
-        >↑</button>
+        <Tooltip label={t('backTop')} side="top">
+          <span className={css.top}>
+            <Button
+              variant="outline"
+              className={css.topBtn}
+              aria-label={t('backTop')}
+              onClick={() => { const el = bodyRef.current; if (el) el.scrollTo({ top: 0, behavior: 'smooth' }) }}
+            ><IconChevronUpOutline14 size={16} /></Button>
+          </span>
+        </Tooltip>
       )}
       {confirming !== null && (
         <Modal
           open
-          onClose={() => setConfirming(null)}
+          onClose={() => { setConfirming(null); setCmdOpen(false) }}
           title={t('confirmTitle') + ' ' + confirming.name + '?'}
           description={(confirming.description && (confirming.description[lang] || confirming.description.en)) || ''}
           footer={(
             <>
-              <Button variant="ghost" onClick={() => setConfirming(null)}>{t('cancel')}</Button>
+              <Button variant="ghost" onClick={() => { setConfirming(null); setCmdOpen(false) }}>{t('cancel')}</Button>
               <Button variant="primary" onClick={() => doInstall(confirming)}>{t('confirm')}</Button>
             </>
           )}
         >
           <ScreenshotStrip plugin={confirming} />
-          <details className={css.cmdDetails}>
-            <summary className={css.cmdSummary}>{t('cmdDetails')}</summary>
+          <DisclosureRow
+            icon={<IconCodeOutline16 size={16} />}
+            title={t('cmdDetails')}
+            open={cmdOpen}
+            expandable
+            onToggle={() => setCmdOpen(o => !o)}
+          >
             <div className={css.cmd}>{confirming.install}</div>
-          </details>
+          </DisclosureRow>
           {looksTerminal(confirming, lang) && (
             <p className={css.warnLine}>
-              {'🖥️ ' + t('terminalWarn') + ' '}
+              <IconCodeOutline16 size={14} className={css.bannerIcon} />
+              {' ' + t('terminalWarn') + ' '}
               <a className={css.src} href={confirming.url + '#readme'} target="_blank" rel="noreferrer">{t('readme')}</a>
             </p>
           )}
-          <p className={css.modalNote}>{'⚠️ ' + t('confirmWarn')}</p>
+          <p className={css.modalNote}><IconWarningOutline16 size={14} className={css.bannerIcon} />{' ' + t('confirmWarn')}</p>
         </Modal>
+      )}
+      {removeConfirm !== null && (
+        <Modal
+          open
+          onClose={() => setRemoveConfirm(null)}
+          title={t('uninstall') + ' ' + removeConfirm + '?'}
+          description={t('uninstallConfirmDesc')}
+          footer={(
+            <>
+              <Button variant="ghost" onClick={() => setRemoveConfirm(null)}>{t('cancel')}</Button>
+              <Button variant="primary" disabled={removingName !== null} onClick={() => doUninstall(removeConfirm)}>{t('uninstall')}</Button>
+            </>
+          )}
+        />
+      )}
+      {restoreConfirmOpen && pendingBackup !== null && (
+        <Modal
+          open
+          onClose={() => setRestoreConfirmOpen(false)}
+          title={t('restoreConfirm')}
+          footer={(
+            <>
+              <Button variant="ghost" onClick={() => setRestoreConfirmOpen(false)}>{t('cancel')}</Button>
+              <Button variant="primary" disabled={backupBusy} onClick={doRestore}>{t('confirm')}</Button>
+            </>
+          )}
+        />
+      )}
+      {/* Log-export feedback via the Toast primitive — body portal, so it
+        never squeezes the subtitle row or the error banner. */}
+      {exportState === 'done' && (
+        <Toast text={t('exportedLog')} icon={<IconCheckOutline16 size={14} />} onDone={exportToastDone} />
+      )}
+      {exportState === 'fail' && (
+        <Toast text={t('exportLogFail')} icon={<IconWarningOutline16 size={14} />} onDone={exportToastDone} />
       )}
     </div>
   )
