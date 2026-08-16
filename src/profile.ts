@@ -162,25 +162,88 @@ export function entryArtifactExists(dir: string): boolean {
  * bundle bring in" any name row counts.
  */
 export function bundlePatchTargets(dir: string): string[] {
+  return readBundlePatchRows(dir).names
+}
+
+/**
+ * Loader entry ids a bundle patch inserts. Cordis refuses to boot a tree
+ * with a duplicate entry id ("duplicate loader entry id: storage", #122), so
+ * these are what two bundles can collide on.
+ */
+export function bundlePatchEntryIds(dir: string): string[] {
+  return readBundlePatchRows(dir).ids
+}
+
+/**
+ * `name:` and `id:` rows of the package's declared bundle patch. Line-wise
+ * on purpose: the strict hot-mount parser rejects config/expression rows,
+ * but for "what does this bundle bring in" any row counts.
+ */
+function readBundlePatchRows(dir: string): { names: string[]; ids: string[] } {
   let patchPath: string
   try {
     const manifest = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')) as {
       dsh?: { bundle?: { patch?: unknown } }
     }
     const declared = manifest.dsh?.bundle?.patch
-    if (typeof declared !== 'string' || declared === '') return []
+    if (typeof declared !== 'string' || declared === '') return { names: [], ids: [] }
     patchPath = join(dir, declared)
+  } catch {
+    return { names: [], ids: [] }
+  }
+  const names: string[] = []
+  const ids: string[] = []
+  try {
+    for (const line of readFileSync(patchPath, 'utf8').split('\n')) {
+      const name = /^\s*-?\s*name:\s*['"]?([^'"\s]+)/.exec(line)
+      if (name !== null && !names.includes(name[1])) names.push(name[1])
+      const id = /^\s*-?\s*id:\s*['"]?([^'"\s]+)/.exec(line)
+      if (id !== null && !ids.includes(id[1])) ids.push(id[1])
+    }
+  } catch { /* unreadable patch — nothing to report */ }
+  return { names, ids }
+}
+
+/** The profile manifest's `dsh.profile.bundles` — what the CLI reconciled. */
+export function readProfileBundles(profileDirectory: string): string[] {
+  try {
+    const manifest = JSON.parse(readFileSync(join(profileDirectory, 'package.json'), 'utf8')) as {
+      dsh?: { profile?: { bundles?: unknown } }
+    }
+    const bundles = manifest.dsh?.profile?.bundles
+    return Array.isArray(bundles) ? bundles.filter((name): name is string => typeof name === 'string') : []
   } catch {
     return []
   }
-  const names: string[] = []
-  try {
-    for (const line of readFileSync(patchPath, 'utf8').split('\n')) {
-      const m = /^\s*name:\s*['"]?([^'"\s]+)/.exec(line)
-      if (m !== null && !names.includes(m[1])) names.push(m[1])
+}
+
+/**
+ * Loader entry ids a newly added package would collide on with bundles the
+ * profile ALREADY loads (#122).
+ *
+ * Cordis hard-fails the whole tree on a duplicate id, so this is not a
+ * cosmetic conflict: installing a TUI bundle into a web profile (both
+ * declare `id: storage`) leaves DSH unable to start at all, with an error
+ * naming neither plugin. Checked against the profile's own bundle list so a
+ * package is never compared with itself.
+ * @returns colliding ids mapped to the already-installed bundle that owns them.
+ */
+export function conflictingEntryIds(
+  profileDirectory: string,
+  candidate: string,
+  installedBundles: readonly string[],
+): { id: string; owner: string }[] {
+  const mine = bundlePatchEntryIds(join(profileDirectory, 'node_modules', candidate))
+  if (mine.length === 0) return []
+  const conflicts: { id: string; owner: string }[] = []
+  for (const bundle of installedBundles) {
+    if (bundle === candidate) continue
+    const theirs = new Set(bundlePatchEntryIds(join(profileDirectory, 'node_modules', bundle)))
+    for (const id of mine) {
+      if (theirs.has(id) && !conflicts.some(hit => hit.id === id)) conflicts.push({ id, owner: bundle })
     }
-  } catch { /* unreadable patch — no targets */ }
-  return names
+  }
+  return conflicts
 }
 
 /**

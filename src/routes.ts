@@ -1177,9 +1177,11 @@ export function mountMarketRoutes(
             // must never survive to brick the next boot.
             let notAPlugin = false
             let removedBroken: string[] = []
+            let conflicts: { name: string; id: string; owner: string }[] = []
             if (result.exitCode === 0 && !result.timedOut && !cancelled) {
               const validated = await validateAddedPlugins(runPlugin, config.profile, before, activeProfileDir)
               removedBroken = validated.removedBroken
+              conflicts = validated.conflicts
               if (removedBroken.length > 0) {
                 logEvent('warn', 'install', `${target}: removed uninstallable pieces (no dsh manifest or missing build artifacts): ${removedBroken.join(', ')}`)
               }
@@ -1234,9 +1236,13 @@ export function mountMarketRoutes(
               // Blocked build scripts are expected (pnpm >= 10 blocks them by
               // default): surface the approve-builds banner instead of scaring
               // the user with pnpm's raw stack.
-              error: notAPlugin
-                ? 'nothing installable: the plugin(s) need a build step (blocked by default, see allowBuilds) or ship no prebuilt artifacts / 没有可安装的内容：插件需要构建授权（allowBuilds，默认拦截）或未附带构建产物，详见导出日志'
-                : Array.isArray(ignoredBuilds) && ignoredBuilds.length > 0
+              // A loader-id clash is the most actionable failure of all: the
+              // plugin is fine, it just cannot coexist with this profile (#122).
+              error: conflicts.length > 0
+                ? `「${conflicts[0].name}」与已安装的「${conflicts[0].owner}」使用了相同的 loader 条目 id（${[...new Set(conflicts.map(hit => hit.id))].join(', ')}），两者无法在同一个 profile 共存——装上会导致 DSH 下次启动失败，因此已自动移除。这类插件（例如终端 TUI 插件）请装到单独的 profile。 / "${conflicts[0].name}" declares the same loader entry id(s) as the installed "${conflicts[0].owner}" (${[...new Set(conflicts.map(hit => hit.id))].join(', ')}); they cannot coexist in one profile — keeping it would stop DSH from starting, so it was removed. Install this kind of plugin (e.g. a terminal TUI bundle) into its own profile.`
+                : notAPlugin
+                  ? 'nothing installable: the plugin(s) need a build step (blocked by default, see allowBuilds) or ship no prebuilt artifacts / 没有可安装的内容：插件需要构建授权（allowBuilds，默认拦截）或未附带构建产物，详见导出日志'
+                  : Array.isArray(ignoredBuilds) && ignoredBuilds.length > 0
                   ? `构建脚本被 pnpm 默认拦截（${ignoredBuilds.join(', ')}），请点击上方按钮放行后重试 / build scripts are blocked by pnpm by default (${ignoredBuilds.join(', ')}); click "Allow build scripts and retry" above`
                   : undefined,
               exitCode: result.exitCode,

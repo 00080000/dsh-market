@@ -9,7 +9,7 @@ import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import type { InstallResult, PluginRunner } from './dsh-cli.ts'
 import { classifyPnpmFailure, isTransientPnpmFailure } from './pnpm-compat.ts'
-import { hasDshManifest, hasLoadableEntry, pluginSubdirs, profileDir, readInstalled } from './profile.ts'
+import { conflictingEntryIds, hasDshManifest, hasLoadableEntry, pluginSubdirs, profileDir, readInstalled, readProfileBundles } from './profile.ts'
 import { logEvent } from './log.ts'
 import { cleanOrphanedStore } from './store.ts'
 
@@ -143,27 +143,47 @@ export async function retargetCollections(
  * piece without a dsh manifest or without its declared entry artifact
  * (source-only checkout, build blocked by pnpm allowBuilds) would brick the
  * next boot, so it is removed on the spot.
- * @returns names kept and names removed as broken.
+ *
+ * Since #122 this also covers duplicate loader entry ids: cordis refuses to
+ * load a tree containing two entries with one id, so a TUI bundle landing in
+ * a web profile (both declare `id: storage`) leaves DSH unable to START —
+ * an error naming neither plugin, from which the market's own page is
+ * unreachable. Such a package is removed like any other bricking piece.
+ * @returns names kept, names removed as broken, and the id conflicts found.
  */
 export async function validateAddedPlugins(
   run: PluginRunner, profile: string, before: Set<string>, explicitDir?: string,
-): Promise<{ keep: string[]; removedBroken: string[] }> {
+): Promise<{ keep: string[]; removedBroken: string[]; conflicts: { name: string; id: string; owner: string }[] }> {
   const dir = profileDir(profile, explicitDir)
   const addedNow = Object.keys(readInstalled(profile, dir)).filter(n => !before.has(n))
   const keep: string[] = []
   const removedBroken: string[] = []
+  const conflicts: { name: string; id: string; owner: string }[] = []
+  // Compare against what the profile already loads, minus this install's own
+  // additions — two pieces of one plugin are not "already installed".
+  const existingBundles = readProfileBundles(dir).filter(name => !addedNow.includes(name))
   for (const n of addedNow) {
     const packageDir = join(dir, 'node_modules', n)
     // hasLoadableEntry, not entryArtifactExists: carrier bundles legitimately
     // ship no entry of their own (#103) and must not be uninstalled here.
-    if (hasDshManifest(packageDir) && hasLoadableEntry(dir, n)) {
-      keep.push(n)
-    } else {
+    if (!hasDshManifest(packageDir) || !hasLoadableEntry(dir, n)) {
       removedBroken.push(n)
       await run(profile, ['remove', n])
+      continue
     }
+    const clash = conflictingEntryIds(dir, n, existingBundles)
+    if (clash.length > 0) {
+      // Keeping it would make the NEXT BOOT fail outright (#122).
+      conflicts.push(...clash.map(hit => ({ name: n, ...hit })))
+      removedBroken.push(n)
+      logEvent('error', 'install',
+        `${n}: loader entry id conflict with ${clash[0].owner} (${clash.map(hit => hit.id).join(', ')}) — removing, it would break the next boot`)
+      await run(profile, ['remove', n])
+      continue
+    }
+    keep.push(n)
   }
-  return { keep, removedBroken }
+  return { keep, removedBroken, conflicts }
 }
 
 /**

@@ -105,6 +105,46 @@ describe('validateAddedPlugins (#18 / #21)', () => {
     expect(calls.map(c => c.join(' ')).sort()).toEqual(['remove broken', 'remove dshmarket'])
   })
 
+  it('removes a package whose loader entry ids clash with an installed bundle (#122)', async () => {
+    // The real report: a TUI bundle installed into a web profile. Both
+    // declare `id: storage`, cordis refuses the whole tree, and DSH will not
+    // START — an error naming neither plugin, from a page you cannot reach.
+    const dir = writeProfile({ '@deepseek-ai/dsh-web-app': '^1.0.0', '@scope/dsh-tui': 'github:o/dsh-tui' })
+    writeFileSync(join(dir, 'package.json'), JSON.stringify({
+      dependencies: { '@deepseek-ai/dsh-web-app': '^1.0.0', '@scope/dsh-tui': 'github:o/dsh-tui' },
+      dsh: { profile: { bundles: ['@deepseek-ai/dsh-web-app', '@scope/dsh-tui'] } },
+    }))
+    const patch = (id: string, name: string) => `- insert:\n    - id: ${id}\n      name: '${name}'\n`
+    writePkg(dir, '@deepseek-ai/dsh-web-app', { dsh: { bundle: { patch: './cordis.patch.yml' } }, main: 'i.js' }, ['i.js'])
+    writeFileSync(join(dir, 'node_modules', '@deepseek-ai/dsh-web-app', 'cordis.patch.yml'), patch('storage', '@deepseek-ai/dsh-storage'))
+    writePkg(dir, '@scope/dsh-tui', { dsh: { bundle: { patch: './cordis.patch.yml' } }, main: 'i.js' }, ['i.js'])
+    writeFileSync(join(dir, 'node_modules', '@scope/dsh-tui', 'cordis.patch.yml'), patch('storage', '@deepseek-ai/dsh-storage'))
+
+    const { calls, run } = recordingRunner()
+    // web-app predates this install; the tui bundle is what just landed.
+    const { keep, removedBroken, conflicts } = await validateAddedPlugins(run, 'web', new Set(['@deepseek-ai/dsh-web-app']))
+    expect(keep).toEqual([])
+    expect(removedBroken).toEqual(['@scope/dsh-tui'])
+    expect(conflicts).toEqual([{ name: '@scope/dsh-tui', id: 'storage', owner: '@deepseek-ai/dsh-web-app' }])
+    expect(calls).toEqual([['remove', '@scope/dsh-tui']])
+  })
+
+  it('does not flag distinct ids, nor a package against itself (#122)', async () => {
+    const dir = writeProfile({ 'plug-a': '^1.0.0', 'plug-b': '^1.0.0' })
+    writeFileSync(join(dir, 'package.json'), JSON.stringify({
+      dependencies: { 'plug-a': '^1.0.0', 'plug-b': '^1.0.0' },
+      dsh: { profile: { bundles: ['plug-a', 'plug-b'] } },
+    }))
+    const patch = (id: string) => `- insert:\n    - id: ${id}\n      name: 'x'\n`
+    writePkg(dir, 'plug-a', { dsh: { bundle: { patch: './cordis.patch.yml' } }, main: 'i.js' }, ['i.js'])
+    writeFileSync(join(dir, 'node_modules', 'plug-a', 'cordis.patch.yml'), patch('alpha'))
+    writePkg(dir, 'plug-b', { dsh: { bundle: { patch: './cordis.patch.yml' } }, main: 'i.js' }, ['i.js'])
+    writeFileSync(join(dir, 'node_modules', 'plug-b', 'cordis.patch.yml'), patch('beta'))
+    const { keep, conflicts } = await validateAddedPlugins(recordingRunner().run, 'web', new Set(['plug-a']))
+    expect(keep).toEqual(['plug-b'])
+    expect(conflicts).toEqual([])
+  })
+
   it('keeps a carrier bundle that mounts other installed packages (#103)', async () => {
     // @linxin666/dsh-skins ships skin assets + a patch mounting the skin
     // center, with no entry of its own — the guard used to uninstall it right
