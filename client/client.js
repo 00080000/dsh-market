@@ -161,7 +161,33 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 			packagesDone: "已处理 {0} 个包",
 			updatedLive: "✓ 已更新，已生效",
 			partialNote: "已取消，部分变更已写入",
-			actWhy: "为什么未生效？"
+			actWhy: "为什么未生效？",
+			tabList: "列表",
+			tabGroups: "分组",
+			disabledState: "已停用",
+			enable: "启用",
+			disable: "停用",
+			toggleFail: "切换失败",
+			deprecatedBadge: "已废弃",
+			deprecatedWarn: "该插件已被目录标记为废弃，不建议新用户安装。",
+			viewReplacement: "查看替代品",
+			installReplacement: "安装替代品",
+			replacementHint: "目录建议改用",
+			groupNew: "新建分组",
+			groupNamePh: "分组名称",
+			groupRename: "重命名",
+			groupDelete: "删除分组",
+			groupConfirmDelete: "确认删除？",
+			ungrouped: "未分组",
+			groupAssign: "分配",
+			groupRemove: "移出",
+			groupEmpty: "该组暂无成员",
+			groupMixed: "部分启用",
+			noGroups: "还没有分组，先新建一个吧",
+			groupCreate: "创建",
+			groupAdd: "加入插件",
+			groupAddTheme: "加入主题",
+			groupAddEmpty: "所有已安装插件都已在该组中"
 		};
 		const en = {
 			nav: "Plugin Market",
@@ -292,10 +318,45 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 			packagesDone: "{0} packages processed",
 			updatedLive: "✓ Updated — live",
 			partialNote: "Cancelled — some changes were applied",
-			actWhy: "Why not live?"
+			actWhy: "Why not live?",
+			tabList: "List",
+			tabGroups: "Groups",
+			disabledState: "Disabled",
+			enable: "Enable",
+			disable: "Disable",
+			toggleFail: "Toggle failed",
+			deprecatedBadge: "Deprecated",
+			deprecatedWarn: "This plugin is marked as deprecated by the catalog; new users are advised against installing it.",
+			viewReplacement: "View replacement",
+			installReplacement: "Install replacement",
+			replacementHint: "Catalog suggests",
+			groupNew: "New group",
+			groupNamePh: "Group name",
+			groupRename: "Rename",
+			groupDelete: "Delete group",
+			groupConfirmDelete: "Delete group?",
+			ungrouped: "Ungrouped",
+			groupAssign: "Assign",
+			groupRemove: "Remove",
+			groupEmpty: "No members yet",
+			groupMixed: "Partially enabled",
+			noGroups: "No groups yet — create one",
+			groupCreate: "Create",
+			groupAdd: "Add plugin",
+			groupAddTheme: "Add theme",
+			groupAddEmpty: "Every installed plugin is already in this group"
 		};
 		//#endregion
 		//#region src/client/market-data.ts
+		function groupSwitchState(members, disabled) {
+			const list = members ?? [];
+			if (list.length === 0) return "empty";
+			let anyOn = false;
+			let anyOff = false;
+			for (const member of list) if (disabled.has(member)) anyOff = true;
+			else anyOn = true;
+			return anyOn && anyOff ? "mixed" : anyOff ? "off" : "on";
+		}
 		function avatarColor(name) {
 			let hash = 0;
 			for (let i = 0; i < name.length; i++) hash = hash * 31 + name.charCodeAt(i) | 0;
@@ -604,7 +665,7 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 		}
 		//#endregion
 		//#region \0dsh-css:/Users/fkysly_mini/work/dsh-market/src/client/Market.module.css.mjs
-		const css = ".SOz1_a_root{min-width:0;height:100%;color:var(--dsw-alias-label-primary,#1f2328);flex-direction:column;display:flex;position:relative}.SOz1_a_head{flex-direction:column;gap:12px;padding:4px 4px 12px;display:flex}.SOz1_a_title{margin:0;font-size:16px;font-weight:500;line-height:24px}.SOz1_a_sub{color:var(--dsw-alias-label-tertiary,#8b93a1);align-items:center;gap:8px;margin:0;font-size:14px;line-height:22px;display:flex}.SOz1_a_tabs{border-bottom:1px solid var(--dsw-alias-border-l2,#e5e7eb);align-items:flex-end;gap:2px;display:flex}.SOz1_a_tab{font:inherit;color:var(--dsw-alias-label-secondary,#6b7280);cursor:pointer;white-space:nowrap;background:0 0;border:none;border-bottom:2px solid #0000;padding:7px 12px;font-size:13px}.SOz1_a_tab.SOz1_a_on{color:var(--dsw-alias-brand-primary,#4f6ef7);border-bottom-color:var(--dsw-alias-brand-primary,#4f6ef7);font-weight:600}.SOz1_a_banner{background:var(--dsw-alias-bg-layer-2,#fdf3e3);border:1px solid var(--dsw-alias-border-l2,#f3e3c3);border-radius:8px;align-items:center;gap:8px;margin:0;padding:8px 12px;font-size:12px;display:flex}.SOz1_a_bannerIcon{color:var(--dsw-alias-label-secondary,#6b7280);flex-shrink:0}.SOz1_a_bannerHint{color:var(--dsw-alias-label-tertiary,#8b93a1);cursor:help;display:inline-flex}.SOz1_a_body{flex:1;padding:12px 4px 24px;overflow-x:hidden;overflow-y:auto}.SOz1_a_cats{z-index:5;background:var(--dsw-alias-bg-layer-2,#f7f8fa);margin:-12px -4px 2px;padding:12px 4px 4px;position:sticky;top:-13px}.SOz1_a_catsRow{align-items:flex-start;gap:8px;display:flex;position:relative}.SOz1_a_star{color:var(--dsw-alias-label-secondary,#9ca3af);font-size:11px}.SOz1_a_top{z-index:20;display:inline-flex;position:absolute;bottom:18px;right:18px}.SOz1_a_topBtn{border-radius:99px;width:38px;height:38px;padding:0}.SOz1_a_tag{border:1px solid var(--dsw-alias-border-l3,#d9dde3);color:var(--dsw-alias-label-secondary,#6b7280);border-radius:4px;flex-shrink:0;padding:1px 6px;font-size:11px;line-height:16px}.SOz1_a_okState{color:var(--dsw-alias-state-success-primary,#16a34a);white-space:nowrap;font-size:12px;font-weight:600}.SOz1_a_catsWrap{flex-wrap:wrap;flex:1;align-items:center;gap:6px;min-width:0;display:flex}.SOz1_a_catsCollapsed{max-height:62px;overflow:hidden}.SOz1_a_catsToggle.SOz1_a_catsToggle{height:26px;min-height:26px;color:var(--dsw-alias-label-secondary,#6b7280);padding:0 6px}.SOz1_a_shots{-webkit-overflow-scrolling:touch;scrollbar-width:thin;gap:8px;margin:0 0 8px;padding:2px 0 6px;display:flex;overflow-x:auto}.SOz1_a_shot{object-fit:cover;border:1px solid var(--dsw-alias-border-default,#e5e7eb);background:var(--dsw-alias-bg-layer-2,#f3f4f6);border-radius:8px;flex:none;max-width:260px;height:150px}.SOz1_a_cmd{background:var(--dsw-alias-bg-layer-2,#f3f4f6);word-break:break-all;border-radius:6px;margin:8px 0 0;padding:8px 10px;font-family:ui-monospace,Menlo,monospace;font-size:11px;line-height:18px}.SOz1_a_warnLine{color:var(--dsw-alias-state-warn-primary,#b45309);align-items:center;gap:4px;margin:0;font-size:12px;font-weight:600;line-height:18px;display:flex}.SOz1_a_modalNote{color:var(--dsw-alias-label-tertiary,#8b93a1);align-items:center;gap:4px;margin:12px 0 0;font-size:12px;line-height:18px;display:flex}.SOz1_a_grid{grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;display:grid}.SOz1_a_swatches{border:1px solid var(--dsw-alias-border-l2,#e5e7eb);border-radius:8px;gap:0;height:34px;display:flex;overflow:hidden}.SOz1_a_themesGrid{margin-bottom:12px}.SOz1_a_swatches i{flex:1}.SOz1_a_card{background:var(--dsw-alias-bg-layer-1,#fff);border:1px solid var(--dsw-alias-border-l2,#e5e7eb);border-radius:12px;flex-direction:column;gap:12px;padding:12px 14px;display:flex}.SOz1_a_row1{align-items:center;gap:10px;min-width:0;display:flex}.SOz1_a_srcBtn{flex-shrink:0;align-self:flex-start}.SOz1_a_av{color:#fff;object-fit:cover;background:var(--dsw-alias-bg-layer-2,#f3f4f6);border-radius:8px;flex-shrink:0;place-items:center;width:32px;height:32px;font-size:14px;font-weight:700;display:grid}.SOz1_a_nm{text-overflow:ellipsis;white-space:nowrap;font-size:14px;font-weight:500;line-height:22px;overflow:hidden}.SOz1_a_owner{color:var(--dsw-alias-label-secondary,#9ca3af);font-size:11px}.SOz1_a_desc{color:var(--dsw-alias-label-tertiary,#8b93a1);min-height:36px;margin:0;font-size:12px;line-height:18px}.SOz1_a_foot{align-items:center;gap:8px;margin-top:auto;display:flex}.SOz1_a_grow{flex:1}.SOz1_a_titleRow{align-items:center;gap:10px;display:flex}.SOz1_a_descTight{min-height:0}.SOz1_a_src{color:var(--dsw-alias-label-secondary,#9ca3af);font-size:11px;text-decoration:none}.SOz1_a_src:hover{color:var(--dsw-alias-brand-primary,#4f6ef7)}.SOz1_a_dot{vertical-align:2px;margin-left:5px}.SOz1_a_act{flex-wrap:wrap;align-items:center;gap:6px;margin-top:6px;font-size:11px;display:flex}.SOz1_a_actLive{color:var(--dsw-alias-state-success-primary,#16a34a);align-items:center;gap:4px;font-weight:600;display:inline-flex}.SOz1_a_actWarn{color:var(--dsw-alias-state-warn-primary,#b45309);align-items:center;gap:4px;font-weight:600;display:inline-flex}.SOz1_a_actBroken{color:var(--dsw-alias-state-error-primary,#dc2626);align-items:center;gap:4px;font-weight:600;display:inline-flex}.SOz1_a_actWhy{color:var(--dsw-alias-label-secondary,#6b7280);margin-top:2px}.SOz1_a_loading{color:var(--dsw-alias-label-secondary,#9ca3af);flex-direction:column;align-items:center;gap:12px;padding:48px;font-size:13px;display:flex}.SOz1_a_spin{color:var(--dsw-alias-brand-primary,#4f6ef7);flex-shrink:0;animation:.8s linear infinite SOz1_a_sp;display:inline-flex}@keyframes SOz1_a_sp{to{transform:rotate(360deg)}}.SOz1_a_progress{background:var(--dsw-alias-bg-layer-2,#f3f4f6);border:1px solid var(--dsw-alias-border-l2,#e5e7eb);color:var(--dsw-alias-label-secondary,#6b7280);border-radius:8px;flex-wrap:wrap;align-items:center;gap:9px;margin:0;padding:8px 12px;font-size:12px;display:flex}.SOz1_a_bar{background:var(--dsw-alias-border-l1,#e5e7eb);border-radius:99px;width:100%;height:4px;overflow:hidden}.SOz1_a_barFill{background:var(--dsw-alias-brand-primary,#4f6ef7);border-radius:99px;height:100%;transition:width .6s}.SOz1_a_barWave{width:30%;animation:1.2s ease-in-out infinite SOz1_a_dshmSlide}@keyframes SOz1_a_dshmSlide{0%{margin-left:-30%}to{margin-left:100%}}.SOz1_a_irow .SOz1_a_progress{margin-top:8px}.SOz1_a_progress code{text-overflow:ellipsis;white-space:nowrap;font-family:ui-monospace,Menlo,monospace;font-size:11px;overflow:hidden}.SOz1_a_empty{color:var(--dsw-alias-label-secondary,#9ca3af);text-align:center;padding:32px;font-size:13px}.SOz1_a_err{color:var(--dsw-alias-state-error-primary,#dc2626);white-space:pre-wrap;word-break:break-all;margin:8px 0;font-size:12px}.SOz1_a_irow{background:var(--dsw-alias-bg-layer-1,#fff);border:1px solid var(--dsw-alias-border-l2,#e5e7eb);border-radius:12px;align-items:center;gap:10px;margin-bottom:8px;padding:12px 14px;display:flex}.SOz1_a_irowMissing{filter:grayscale();opacity:.5}.SOz1_a_irow>.SOz1_a_src,.SOz1_a_irow>.SOz1_a_owner,.SOz1_a_irow button{white-space:nowrap;flex-shrink:0}.SOz1_a_tabSearchRow{padding:0 4px 10px;display:flex}.SOz1_a_tabSearch{width:260px}.SOz1_a_spec{color:var(--dsw-alias-label-secondary,#9ca3af);font-family:ui-monospace,Menlo,monospace;font-size:11px}.SOz1_a_staleAction{margin-top:8px}.SOz1_a_pct{color:var(--dsw-alias-label-secondary,#6b7280);flex-shrink:0;font-size:11px;font-weight:600}.SOz1_a_pager{flex-wrap:wrap;justify-content:space-between;align-items:center;gap:12px;margin:16px 0 4px;display:flex}.SOz1_a_pagerPages{flex-wrap:wrap;flex:1;justify-content:center;align-items:center;gap:6px;min-width:0;display:flex}.SOz1_a_pageEllipsis{color:var(--dsw-alias-label-secondary,#9ca3af);padding:0 2px;font-size:12px}.SOz1_a_pageInfo{color:var(--dsw-alias-label-secondary,#6b7280);white-space:nowrap;font-size:12px}.SOz1_a_backupGrid{grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;display:grid}.SOz1_a_backupCard{background:var(--dsw-alias-bg-layer-1,#fff);border:1px solid var(--dsw-alias-border-l2,#e5e7eb);border-radius:12px;flex-direction:column;gap:10px;padding:16px;display:flex}.SOz1_a_backupCard h3{margin:0;font-size:14px}.SOz1_a_backupCard p{color:var(--dsw-alias-label-secondary,#6b7280);margin:0;font-size:12px;line-height:18px}.SOz1_a_backupActions{flex-wrap:wrap;gap:8px;display:flex;position:relative}.SOz1_a_hiddenFile{opacity:0;pointer-events:none;width:1px;height:1px;position:absolute}.SOz1_a_backupInput{box-sizing:border-box;width:100%}.SOz1_a_backupCheck{cursor:pointer;align-items:center;gap:6px;font-size:12px;display:flex}.SOz1_a_backupWarn{margin:0;font-size:12px;line-height:18px;color:var(--dsw-alias-state-warn-primary,#b45309)!important}.SOz1_a_backupMessage{color:var(--dsw-alias-label-secondary,#6b7280);grid-column:1/-1;font-size:12px}";
+		const css = ".SOz1_a_root{min-width:0;height:100%;color:var(--dsw-alias-label-primary,#1f2328);flex-direction:column;display:flex;position:relative}.SOz1_a_head{flex-direction:column;gap:12px;padding:4px 4px 12px;display:flex}.SOz1_a_title{margin:0;font-size:16px;font-weight:500;line-height:24px}.SOz1_a_sub{color:var(--dsw-alias-label-tertiary,#8b93a1);align-items:center;gap:8px;margin:0;font-size:14px;line-height:22px;display:flex}.SOz1_a_tabs{border-bottom:1px solid var(--dsw-alias-border-l2,#e5e7eb);align-items:flex-end;gap:2px;display:flex}.SOz1_a_tab{font:inherit;color:var(--dsw-alias-label-secondary,#6b7280);cursor:pointer;white-space:nowrap;background:0 0;border:none;border-bottom:2px solid #0000;padding:7px 12px;font-size:13px}.SOz1_a_tab.SOz1_a_on{color:var(--dsw-alias-brand-primary,#4f6ef7);border-bottom-color:var(--dsw-alias-brand-primary,#4f6ef7);font-weight:600}.SOz1_a_banner{background:var(--dsw-alias-bg-layer-2,#fdf3e3);border:1px solid var(--dsw-alias-border-l2,#f3e3c3);border-radius:8px;align-items:center;gap:8px;margin:0;padding:8px 12px;font-size:12px;display:flex}.SOz1_a_bannerIcon{color:var(--dsw-alias-label-secondary,#6b7280);flex-shrink:0}.SOz1_a_bannerHint{color:var(--dsw-alias-label-tertiary,#8b93a1);cursor:help;display:inline-flex}.SOz1_a_body{flex:1;padding:12px 4px 24px;overflow-x:hidden;overflow-y:auto}.SOz1_a_cats{z-index:5;background:var(--dsw-alias-bg-layer-2,#f7f8fa);margin:-12px -4px 2px;padding:12px 4px 4px;position:sticky;top:-13px}.SOz1_a_catsRow{align-items:flex-start;gap:8px;display:flex;position:relative}.SOz1_a_star{color:var(--dsw-alias-label-secondary,#9ca3af);font-size:11px}.SOz1_a_top{z-index:20;display:inline-flex;position:absolute;bottom:18px;right:18px}.SOz1_a_topBtn{border-radius:99px;width:38px;height:38px;padding:0}.SOz1_a_tag{border:1px solid var(--dsw-alias-border-l3,#d9dde3);color:var(--dsw-alias-label-secondary,#6b7280);border-radius:4px;flex-shrink:0;padding:1px 6px;font-size:11px;line-height:16px}.SOz1_a_okState{color:var(--dsw-alias-state-success-primary,#16a34a);white-space:nowrap;font-size:12px;font-weight:600}.SOz1_a_catsWrap{flex-wrap:wrap;flex:1;align-items:center;gap:6px;min-width:0;display:flex}.SOz1_a_catsCollapsed{max-height:62px;overflow:hidden}.SOz1_a_catsToggle.SOz1_a_catsToggle{height:26px;min-height:26px;color:var(--dsw-alias-label-secondary,#6b7280);padding:0 6px}.SOz1_a_shots{-webkit-overflow-scrolling:touch;scrollbar-width:thin;gap:8px;margin:0 0 8px;padding:2px 0 6px;display:flex;overflow-x:auto}.SOz1_a_shot{object-fit:cover;border:1px solid var(--dsw-alias-border-default,#e5e7eb);background:var(--dsw-alias-bg-layer-2,#f3f4f6);border-radius:8px;flex:none;max-width:260px;height:150px}.SOz1_a_cmd{background:var(--dsw-alias-bg-layer-2,#f3f4f6);word-break:break-all;border-radius:6px;margin:8px 0 0;padding:8px 10px;font-family:ui-monospace,Menlo,monospace;font-size:11px;line-height:18px}.SOz1_a_warnLine{color:var(--dsw-alias-state-warn-primary,#b45309);align-items:center;gap:4px;margin:0;font-size:12px;font-weight:600;line-height:18px;display:flex}.SOz1_a_modalNote{color:var(--dsw-alias-label-tertiary,#8b93a1);align-items:center;gap:4px;margin:12px 0 0;font-size:12px;line-height:18px;display:flex}.SOz1_a_grid{grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;display:grid}.SOz1_a_swatches{border:1px solid var(--dsw-alias-border-l2,#e5e7eb);border-radius:8px;gap:0;height:34px;display:flex;overflow:hidden}.SOz1_a_themesGrid{margin-bottom:12px}.SOz1_a_swatches i{flex:1}.SOz1_a_card{background:var(--dsw-alias-bg-layer-1,#fff);border:1px solid var(--dsw-alias-border-l2,#e5e7eb);border-radius:12px;flex-direction:column;gap:12px;padding:12px 14px;display:flex}.SOz1_a_row1{align-items:center;gap:10px;min-width:0;display:flex}.SOz1_a_srcBtn{flex-shrink:0;align-self:flex-start}.SOz1_a_av{color:#fff;object-fit:cover;background:var(--dsw-alias-bg-layer-2,#f3f4f6);border-radius:8px;flex-shrink:0;place-items:center;width:32px;height:32px;font-size:14px;font-weight:700;display:grid}.SOz1_a_nm{text-overflow:ellipsis;white-space:nowrap;font-size:14px;font-weight:500;line-height:22px;overflow:hidden}.SOz1_a_owner{color:var(--dsw-alias-label-secondary,#9ca3af);font-size:11px}.SOz1_a_desc{color:var(--dsw-alias-label-tertiary,#8b93a1);min-height:36px;margin:0;font-size:12px;line-height:18px}.SOz1_a_foot{align-items:center;gap:8px;margin-top:auto;display:flex}.SOz1_a_grow{flex:1}.SOz1_a_titleRow{align-items:center;gap:10px;display:flex}.SOz1_a_descTight{min-height:0}.SOz1_a_src{color:var(--dsw-alias-label-secondary,#9ca3af);font-size:11px;text-decoration:none}.SOz1_a_src:hover{color:var(--dsw-alias-brand-primary,#4f6ef7)}.SOz1_a_dot{vertical-align:2px;margin-left:5px}.SOz1_a_act{flex-wrap:wrap;align-items:center;gap:6px;margin-top:6px;font-size:11px;display:flex}.SOz1_a_actLive{color:var(--dsw-alias-state-success-primary,#16a34a);align-items:center;gap:4px;font-weight:600;display:inline-flex}.SOz1_a_actWarn{color:var(--dsw-alias-state-warn-primary,#b45309);align-items:center;gap:4px;font-weight:600;display:inline-flex}.SOz1_a_actBroken{color:var(--dsw-alias-state-error-primary,#dc2626);align-items:center;gap:4px;font-weight:600;display:inline-flex}.SOz1_a_actWhy{color:var(--dsw-alias-label-secondary,#6b7280);margin-top:2px}.SOz1_a_loading{color:var(--dsw-alias-label-secondary,#9ca3af);flex-direction:column;align-items:center;gap:12px;padding:48px;font-size:13px;display:flex}.SOz1_a_spin{color:var(--dsw-alias-brand-primary,#4f6ef7);flex-shrink:0;animation:.8s linear infinite SOz1_a_sp;display:inline-flex}@keyframes SOz1_a_sp{to{transform:rotate(360deg)}}.SOz1_a_progress{background:var(--dsw-alias-bg-layer-2,#f3f4f6);border:1px solid var(--dsw-alias-border-l2,#e5e7eb);color:var(--dsw-alias-label-secondary,#6b7280);border-radius:8px;flex-wrap:wrap;align-items:center;gap:9px;margin:0;padding:8px 12px;font-size:12px;display:flex}.SOz1_a_bar{background:var(--dsw-alias-border-l1,#e5e7eb);border-radius:99px;width:100%;height:4px;overflow:hidden}.SOz1_a_barFill{background:var(--dsw-alias-brand-primary,#4f6ef7);border-radius:99px;height:100%;transition:width .6s}.SOz1_a_barWave{width:30%;animation:1.2s ease-in-out infinite SOz1_a_dshmSlide}@keyframes SOz1_a_dshmSlide{0%{margin-left:-30%}to{margin-left:100%}}.SOz1_a_irow .SOz1_a_progress{margin-top:8px}.SOz1_a_progress code{text-overflow:ellipsis;white-space:nowrap;font-family:ui-monospace,Menlo,monospace;font-size:11px;overflow:hidden}.SOz1_a_empty{color:var(--dsw-alias-label-secondary,#9ca3af);text-align:center;padding:32px;font-size:13px}.SOz1_a_err{color:var(--dsw-alias-state-error-primary,#dc2626);white-space:pre-wrap;word-break:break-all;margin:8px 0;font-size:12px}.SOz1_a_irow{background:var(--dsw-alias-bg-layer-1,#fff);border:1px solid var(--dsw-alias-border-l2,#e5e7eb);border-radius:12px;align-items:center;gap:10px;margin-bottom:8px;padding:12px 14px;display:flex}.SOz1_a_irowMissing{filter:grayscale();opacity:.5}.SOz1_a_irow>.SOz1_a_src,.SOz1_a_irow>.SOz1_a_owner,.SOz1_a_irow button{white-space:nowrap;flex-shrink:0}.SOz1_a_tabSearchRow{padding:0 4px 10px;display:flex}.SOz1_a_tabSearch{width:260px}.SOz1_a_spec{color:var(--dsw-alias-label-secondary,#9ca3af);font-family:ui-monospace,Menlo,monospace;font-size:11px}.SOz1_a_staleAction{margin-top:8px}.SOz1_a_pct{color:var(--dsw-alias-label-secondary,#6b7280);flex-shrink:0;font-size:11px;font-weight:600}.SOz1_a_pager{flex-wrap:wrap;justify-content:space-between;align-items:center;gap:12px;margin:16px 0 4px;display:flex}.SOz1_a_pagerPages{flex-wrap:wrap;flex:1;justify-content:center;align-items:center;gap:6px;min-width:0;display:flex}.SOz1_a_pageEllipsis{color:var(--dsw-alias-label-secondary,#9ca3af);padding:0 2px;font-size:12px}.SOz1_a_pageInfo{color:var(--dsw-alias-label-secondary,#6b7280);white-space:nowrap;font-size:12px}.SOz1_a_depBadge{border:1px solid var(--dsw-alias-state-warn-primary,#b45309);color:var(--dsw-alias-state-warn-primary,#b45309);white-space:nowrap;border-radius:4px;flex-shrink:0;margin-left:6px;padding:1px 6px;font-size:11px;font-weight:600;line-height:16px}.SOz1_a_deprecate{color:var(--dsw-alias-state-warn-primary,#b45309);background:var(--dsw-alias-bg-layer-2,#fdf3e3);border:1px solid var(--dsw-alias-border-l2,#f3e3c3);border-radius:8px;margin:0;padding:8px 10px;font-size:12px;line-height:18px}.SOz1_a_deprecate a{color:var(--dsw-alias-state-warn-primary,#b45309);text-decoration:underline}.SOz1_a_deprecate .SOz1_a_src{margin-left:8px}.SOz1_a_depLine{flex-wrap:wrap;align-items:center;gap:8px;display:flex}.SOz1_a_switch{border:1px solid var(--dsw-alias-border-l2,#d9dde3);background:var(--dsw-alias-bg-layer-2,#e5e7eb);cursor:pointer;border-radius:99px;flex-shrink:0;width:38px;height:22px;padding:0;transition:background .15s,border-color .15s;position:relative}.SOz1_a_switchOn{background:var(--dsw-alias-state-success-primary,#16a34a);border-color:var(--dsw-alias-state-success-primary,#16a34a)}.SOz1_a_switchMixed{background:var(--dsw-alias-state-warn-primary,#b45309);border-color:var(--dsw-alias-state-warn-primary,#b45309)}.SOz1_a_switchKnob{background:#fff;border-radius:99px;width:16px;height:16px;transition:left .15s;position:absolute;top:2px;left:2px;box-shadow:0 1px 2px #00000040}.SOz1_a_switchOn .SOz1_a_switchKnob,.SOz1_a_switchMixed .SOz1_a_switchKnob{left:18px}.SOz1_a_switch:disabled{opacity:.5;cursor:default}.SOz1_a_viewBar{border:1px solid var(--dsw-alias-border-l2,#e5e7eb);border-radius:8px;align-items:center;gap:2px;width:fit-content;margin-bottom:12px;padding:2px;display:flex}.SOz1_a_viewBtn{font:inherit;color:var(--dsw-alias-label-secondary,#6b7280);cursor:pointer;white-space:nowrap;background:0 0;border:none;border-radius:6px;padding:4px 10px;font-size:12px;line-height:18px}.SOz1_a_viewBtn:hover{color:var(--dsw-alias-brand-primary,#4f6ef7)}.SOz1_a_viewOn{background:var(--dsw-alias-bg-layer-2,#eef0f4);color:var(--dsw-alias-label-primary,#1f2328);font-weight:600}.SOz1_a_groupRow{background:var(--dsw-alias-bg-layer-1,#fff);border:1px solid var(--dsw-alias-border-l2,#e5e7eb);border-radius:12px;margin-bottom:10px;padding:12px 14px}.SOz1_a_groupHead{align-items:center;gap:10px;min-width:0;display:flex}.SOz1_a_groupName{text-overflow:ellipsis;white-space:nowrap;font-size:13px;font-weight:600;line-height:20px;overflow:hidden}.SOz1_a_groupActions{flex-shrink:0;align-items:center;gap:6px;display:flex}.SOz1_a_groupMembers{flex-direction:column;gap:6px;margin-top:10px;display:flex}.SOz1_a_groupMember{background:var(--dsw-alias-bg-layer-2,#f7f8fa);border-radius:8px;align-items:center;gap:8px;padding:6px 8px;font-size:12px;line-height:18px;display:flex}.SOz1_a_groupMember .SOz1_a_nm{flex:1;min-width:0;font-size:12px}.SOz1_a_groupAddPanel{border-top:1px dashed var(--dsw-alias-border-l2,#e5e7eb);flex-direction:column;gap:6px;margin-top:10px;padding-top:10px;display:flex}.SOz1_a_groupCreate{align-items:center;gap:8px;margin-bottom:10px;display:flex}.SOz1_a_inlineInput{flex:1;min-width:120px}.SOz1_a_assignRow{flex-wrap:wrap;align-items:center;gap:8px;display:flex}.SOz1_a_assignSelect{border:1px solid var(--dsw-alias-border-l2,#e5e7eb);background:var(--dsw-alias-bg-layer-1,#fff);color:var(--dsw-alias-label-primary,#1f2328);font:inherit;border-radius:6px;padding:3px 6px;font-size:12px;line-height:18px}.SOz1_a_groupHint{color:var(--dsw-alias-label-tertiary,#8b93a1);font-size:11px}.SOz1_a_sectAction{color:var(--dsw-alias-label-secondary,#6b7280);align-items:center;gap:8px;margin:14px 2px 8px;font-size:12px;font-weight:600;display:flex}.SOz1_a_backupGrid{grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;display:grid}.SOz1_a_backupCard{background:var(--dsw-alias-bg-layer-1,#fff);border:1px solid var(--dsw-alias-border-l2,#e5e7eb);border-radius:12px;flex-direction:column;gap:10px;padding:16px;display:flex}.SOz1_a_backupCard h3{margin:0;font-size:14px}.SOz1_a_backupCard p{color:var(--dsw-alias-label-secondary,#6b7280);margin:0;font-size:12px;line-height:18px}.SOz1_a_backupActions{flex-wrap:wrap;gap:8px;display:flex;position:relative}.SOz1_a_hiddenFile{opacity:0;pointer-events:none;width:1px;height:1px;position:absolute}.SOz1_a_backupInput{box-sizing:border-box;width:100%}.SOz1_a_backupCheck{cursor:pointer;align-items:center;gap:6px;font-size:12px;display:flex}.SOz1_a_backupWarn{margin:0;font-size:12px;line-height:18px;color:var(--dsw-alias-state-warn-primary,#b45309)!important}.SOz1_a_backupMessage{color:var(--dsw-alias-label-secondary,#6b7280);grid-column:1/-1;font-size:12px}";
 		const tagId = "dshmarket/Market.module.css";
 		if (typeof document !== "undefined" && document.querySelector("style[data-plugin-css=" + JSON.stringify(tagId) + "]") === null) {
 			const tag = document.createElement("style");
@@ -614,82 +675,105 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 			document.head.appendChild(tag);
 		}
 		var Market_module_css_default = {
-			"card": "SOz1_a_card",
-			"bannerHint": "SOz1_a_bannerHint",
-			"catsWrap": "SOz1_a_catsWrap",
-			"actWarn": "SOz1_a_actWarn",
-			"body": "SOz1_a_body",
-			"tabSearchRow": "SOz1_a_tabSearchRow",
-			"owner": "SOz1_a_owner",
-			"foot": "SOz1_a_foot",
-			"tabSearch": "SOz1_a_tabSearch",
-			"empty": "SOz1_a_empty",
-			"title": "SOz1_a_title",
-			"backupGrid": "SOz1_a_backupGrid",
-			"backupInput": "SOz1_a_backupInput",
-			"srcBtn": "SOz1_a_srcBtn",
-			"tab": "SOz1_a_tab",
-			"swatches": "SOz1_a_swatches",
-			"warnLine": "SOz1_a_warnLine",
-			"src": "SOz1_a_src",
-			"backupCheck": "SOz1_a_backupCheck",
-			"barWave": "SOz1_a_barWave",
-			"topBtn": "SOz1_a_topBtn",
-			"tabs": "SOz1_a_tabs",
-			"grow": "SOz1_a_grow",
-			"spin": "SOz1_a_spin",
-			"dshmSlide": "SOz1_a_dshmSlide",
-			"descTight": "SOz1_a_descTight",
-			"backupCard": "SOz1_a_backupCard",
-			"progress": "SOz1_a_progress",
-			"barFill": "SOz1_a_barFill",
-			"irow": "SOz1_a_irow",
-			"themesGrid": "SOz1_a_themesGrid",
-			"backupWarn": "SOz1_a_backupWarn",
-			"backupMessage": "SOz1_a_backupMessage",
-			"pager": "SOz1_a_pager",
-			"titleRow": "SOz1_a_titleRow",
-			"pct": "SOz1_a_pct",
-			"pagerPages": "SOz1_a_pagerPages",
-			"pageInfo": "SOz1_a_pageInfo",
-			"shot": "SOz1_a_shot",
-			"nm": "SOz1_a_nm",
-			"grid": "SOz1_a_grid",
-			"catsToggle": "SOz1_a_catsToggle",
-			"desc": "SOz1_a_desc",
-			"pageEllipsis": "SOz1_a_pageEllipsis",
-			"backupActions": "SOz1_a_backupActions",
-			"staleAction": "SOz1_a_staleAction",
-			"sp": "SOz1_a_sp",
-			"cmd": "SOz1_a_cmd",
-			"actBroken": "SOz1_a_actBroken",
-			"dot": "SOz1_a_dot",
-			"sub": "SOz1_a_sub",
-			"cats": "SOz1_a_cats",
-			"bar": "SOz1_a_bar",
-			"hiddenFile": "SOz1_a_hiddenFile",
-			"head": "SOz1_a_head",
-			"okState": "SOz1_a_okState",
-			"catsCollapsed": "SOz1_a_catsCollapsed",
-			"actLive": "SOz1_a_actLive",
-			"loading": "SOz1_a_loading",
-			"shots": "SOz1_a_shots",
-			"banner": "SOz1_a_banner",
-			"bannerIcon": "SOz1_a_bannerIcon",
-			"catsRow": "SOz1_a_catsRow",
-			"tag": "SOz1_a_tag",
-			"row1": "SOz1_a_row1",
 			"on": "SOz1_a_on",
-			"act": "SOz1_a_act",
-			"actWhy": "SOz1_a_actWhy",
-			"modalNote": "SOz1_a_modalNote",
-			"star": "SOz1_a_star",
-			"root": "SOz1_a_root",
-			"irowMissing": "SOz1_a_irowMissing",
+			"viewBtn": "SOz1_a_viewBtn",
+			"switchMixed": "SOz1_a_switchMixed",
+			"groupHint": "SOz1_a_groupHint",
+			"catsCollapsed": "SOz1_a_catsCollapsed",
+			"body": "SOz1_a_body",
 			"top": "SOz1_a_top",
-			"err": "SOz1_a_err",
+			"spin": "SOz1_a_spin",
+			"tabSearchRow": "SOz1_a_tabSearchRow",
+			"actBroken": "SOz1_a_actBroken",
+			"staleAction": "SOz1_a_staleAction",
+			"backupMessage": "SOz1_a_backupMessage",
+			"desc": "SOz1_a_desc",
+			"bar": "SOz1_a_bar",
+			"backupCheck": "SOz1_a_backupCheck",
+			"tabSearch": "SOz1_a_tabSearch",
+			"sectAction": "SOz1_a_sectAction",
 			"av": "SOz1_a_av",
-			"spec": "SOz1_a_spec"
+			"swatches": "SOz1_a_swatches",
+			"backupActions": "SOz1_a_backupActions",
+			"catsToggle": "SOz1_a_catsToggle",
+			"groupRow": "SOz1_a_groupRow",
+			"pager": "SOz1_a_pager",
+			"topBtn": "SOz1_a_topBtn",
+			"switch": "SOz1_a_switch",
+			"groupActions": "SOz1_a_groupActions",
+			"inlineInput": "SOz1_a_inlineInput",
+			"barFill": "SOz1_a_barFill",
+			"root": "SOz1_a_root",
+			"backupWarn": "SOz1_a_backupWarn",
+			"dot": "SOz1_a_dot",
+			"viewBar": "SOz1_a_viewBar",
+			"loading": "SOz1_a_loading",
+			"title": "SOz1_a_title",
+			"grow": "SOz1_a_grow",
+			"star": "SOz1_a_star",
+			"shots": "SOz1_a_shots",
+			"depLine": "SOz1_a_depLine",
+			"act": "SOz1_a_act",
+			"catsRow": "SOz1_a_catsRow",
+			"srcBtn": "SOz1_a_srcBtn",
+			"groupAddPanel": "SOz1_a_groupAddPanel",
+			"groupName": "SOz1_a_groupName",
+			"owner": "SOz1_a_owner",
+			"actLive": "SOz1_a_actLive",
+			"groupMember": "SOz1_a_groupMember",
+			"sp": "SOz1_a_sp",
+			"hiddenFile": "SOz1_a_hiddenFile",
+			"actWhy": "SOz1_a_actWhy",
+			"tabs": "SOz1_a_tabs",
+			"catsWrap": "SOz1_a_catsWrap",
+			"tab": "SOz1_a_tab",
+			"barWave": "SOz1_a_barWave",
+			"themesGrid": "SOz1_a_themesGrid",
+			"descTight": "SOz1_a_descTight",
+			"actWarn": "SOz1_a_actWarn",
+			"dshmSlide": "SOz1_a_dshmSlide",
+			"banner": "SOz1_a_banner",
+			"groupCreate": "SOz1_a_groupCreate",
+			"backupGrid": "SOz1_a_backupGrid",
+			"foot": "SOz1_a_foot",
+			"warnLine": "SOz1_a_warnLine",
+			"shot": "SOz1_a_shot",
+			"card": "SOz1_a_card",
+			"spec": "SOz1_a_spec",
+			"deprecate": "SOz1_a_deprecate",
+			"viewOn": "SOz1_a_viewOn",
+			"pageInfo": "SOz1_a_pageInfo",
+			"assignSelect": "SOz1_a_assignSelect",
+			"bannerIcon": "SOz1_a_bannerIcon",
+			"switchKnob": "SOz1_a_switchKnob",
+			"irowMissing": "SOz1_a_irowMissing",
+			"row1": "SOz1_a_row1",
+			"groupHead": "SOz1_a_groupHead",
+			"head": "SOz1_a_head",
+			"groupMembers": "SOz1_a_groupMembers",
+			"grid": "SOz1_a_grid",
+			"nm": "SOz1_a_nm",
+			"empty": "SOz1_a_empty",
+			"titleRow": "SOz1_a_titleRow",
+			"backupInput": "SOz1_a_backupInput",
+			"okState": "SOz1_a_okState",
+			"cmd": "SOz1_a_cmd",
+			"modalNote": "SOz1_a_modalNote",
+			"pct": "SOz1_a_pct",
+			"depBadge": "SOz1_a_depBadge",
+			"bannerHint": "SOz1_a_bannerHint",
+			"assignRow": "SOz1_a_assignRow",
+			"progress": "SOz1_a_progress",
+			"cats": "SOz1_a_cats",
+			"sub": "SOz1_a_sub",
+			"switchOn": "SOz1_a_switchOn",
+			"backupCard": "SOz1_a_backupCard",
+			"err": "SOz1_a_err",
+			"pagerPages": "SOz1_a_pagerPages",
+			"pageEllipsis": "SOz1_a_pageEllipsis",
+			"tag": "SOz1_a_tag",
+			"src": "SOz1_a_src",
+			"irow": "SOz1_a_irow"
 		};
 		//#endregion
 		//#region src/client/MarketSection.tsx
@@ -970,6 +1054,23 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 			const [progressLine, setProgressLine] = (0, react.useState)(null);
 			/** Per-package activation states from /dsh-market/installed + operations. */
 			const [activations, setActivations] = (0, react.useState)({});
+			/** #60: persisted disable list + custom groups, straight from /installed. */
+			const [disabledNames, setDisabledNames] = (0, react.useState)([]);
+			const [groups, setGroups] = (0, react.useState)({});
+			const [groupOrder, setGroupOrder] = (0, react.useState)([]);
+			/** Installed-tab sub-view: flat list or groups (All-plugins was removed —
+			* it duplicated the Discover tab). */
+			const [installedView, setInstalledView] = (0, react.useState)("list");
+			const [togglingName, setTogglingName] = (0, react.useState)(null);
+			const [creatingGroup, setCreatingGroup] = (0, react.useState)(false);
+			const [newGroupName, setNewGroupName] = (0, react.useState)("");
+			const [renamingGroup, setRenamingGroup] = (0, react.useState)(null);
+			const [renamingValue, setRenamingValue] = (0, react.useState)("");
+			const [deletingGroup, setDeletingGroup] = (0, react.useState)(null);
+			/** Open group picker: which group and whether it adds plugins or themes. */
+			const [addPanel, setAddPanel] = (0, react.useState)(null);
+			const [assignFor, setAssignFor] = (0, react.useState)(null);
+			const [assignTarget, setAssignTarget] = (0, react.useState)("");
 			/** Structured progress from pnpm ndjson (P1-6). */
 			const [progressPhase, setProgressPhase] = (0, react.useState)(null);
 			const [progressCurrent, setProgressCurrent] = (0, react.useState)(null);
@@ -1029,10 +1130,15 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 					setInstalled(body.installed || {});
 					setInstalledFiles(Array.isArray(body.present) ? body.present : Object.keys(body.installed || {}));
 					setSkins(body.live || []);
+					if (Array.isArray(body.disabled)) setDisabledNames(body.disabled);
+					if (body.groups && typeof body.groups === "object") setGroups(body.groups);
+					if (Array.isArray(body.groupOrder)) setGroupOrder(body.groupOrder);
 					if (body.activation && typeof body.activation === "object") setActivations(body.activation);
 				}).catch(() => {});
 				fetch("/dsh-market/updates" + (force === true ? "?force=1" : ""), { cache: "no-store" }).then((res) => res.json()).then((body) => setUpdates(body.updates || {})).catch(() => {});
 			}, []);
+			/** Lookup set for the persisted disable list (#60). */
+			const disabledSet = (0, react.useMemo)(() => new Set(disabledNames), [disabledNames]);
 			(0, react.useEffect)(() => {
 				fetch("/dsh-market/registry", { cache: "no-store" }).then((res) => {
 					if (!res.ok) throw new Error("HTTP " + res.status);
@@ -1443,6 +1549,150 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 					}
 				}).catch((error) => setInstallError(String(error))).finally(() => setRemovingName(null));
 			}, [refreshInstalled]);
+			/** Live enable/disable of one installed plugin (#60). */
+			const doToggle = (0, react.useCallback)((name, enabled) => {
+				setTogglingName(name);
+				setInstallError(null);
+				return fetch("/dsh-market/toggle", {
+					method: "POST",
+					headers: { "content-type": "application/json" },
+					body: JSON.stringify({
+						name,
+						enabled
+					})
+				}).then((res) => res.json().then((body) => ({
+					status: res.status,
+					body
+				}))).then(({ status, body }) => {
+					if (status === 200 && body.ok) {
+						if (Array.isArray(body.disabled)) setDisabledNames(body.disabled);
+						if (Array.isArray(body.live)) setSkins(body.live);
+						if (body.activation && typeof body.activation === "object") setActivations((prev) => ({
+							...prev,
+							...body.activation
+						}));
+						refreshInstalled();
+					} else {
+						const text = (v) => typeof v === "string" ? v : v == null ? "" : JSON.stringify(v);
+						setInstallError(text(body.error) || t("toggleFail"));
+					}
+				}).catch((error) => setInstallError(String(error))).finally(() => setTogglingName(null));
+			}, [refreshInstalled, t]);
+			/** Adopt the groups payload returned by POST /dsh-market/groups. */
+			const setGroupPayload = (0, react.useCallback)((body) => {
+				if (body.groups && typeof body.groups === "object") setGroups(body.groups);
+				if (Array.isArray(body.groupOrder)) setGroupOrder(body.groupOrder);
+				if (Array.isArray(body.disabled)) setDisabledNames(body.disabled);
+			}, []);
+			/** One POST /dsh-market/groups round trip (create/rename/delete/members/toggle). */
+			const doGroupAction = (0, react.useCallback)((payload) => {
+				setInstallError(null);
+				return fetch("/dsh-market/groups", {
+					method: "POST",
+					headers: { "content-type": "application/json" },
+					body: JSON.stringify(payload)
+				}).then((res) => res.json().then((body) => ({
+					status: res.status,
+					body
+				}))).then(({ status, body }) => {
+					if (status === 200 && body.ok) {
+						setGroupPayload(body);
+						refreshInstalled();
+						return true;
+					}
+					const text = (v) => typeof v === "string" ? v : v == null ? "" : JSON.stringify(v);
+					setInstallError(text(body.error) || t("toggleFail"));
+					return false;
+				}).catch((error) => {
+					setInstallError(String(error));
+					return false;
+				});
+			}, [
+				refreshInstalled,
+				setGroupPayload,
+				t
+			]);
+			const doGroupToggle = (0, react.useCallback)((name, enabled) => {
+				return doGroupAction({
+					action: "toggle",
+					name,
+					enabled
+				});
+			}, [doGroupAction]);
+			const doCreateGroup = (0, react.useCallback)(() => {
+				const name = newGroupName.trim();
+				if (name === "") return;
+				doGroupAction({
+					action: "create",
+					name
+				}).then((ok) => {
+					if (ok) {
+						setCreatingGroup(false);
+						setNewGroupName("");
+					}
+				});
+			}, [doGroupAction, newGroupName]);
+			const doRenameGroup = (0, react.useCallback)((name) => {
+				const newName = renamingValue.trim();
+				if (newName === "" || newName === name) {
+					setRenamingGroup(null);
+					return;
+				}
+				doGroupAction({
+					action: "rename",
+					name,
+					newName
+				}).then((ok) => {
+					if (ok) {
+						setRenamingGroup(null);
+						setRenamingValue("");
+					}
+				});
+			}, [doGroupAction, renamingValue]);
+			const doDeleteGroup = (0, react.useCallback)((name) => {
+				doGroupAction({
+					action: "delete",
+					name
+				}).then((ok) => {
+					if (ok) setDeletingGroup(null);
+				});
+			}, [doGroupAction]);
+			const doAssign = (0, react.useCallback)((name) => {
+				const group = assignTarget;
+				if (group === "") return;
+				const members = groups[group] ?? [];
+				doGroupAction({
+					action: "set-members",
+					name: group,
+					members: [...members, name]
+				}).then((ok) => {
+					if (ok) {
+						setAssignFor(null);
+						setAssignTarget("");
+					}
+				});
+			}, [
+				assignTarget,
+				doGroupAction,
+				groups
+			]);
+			const doRemoveMember = (0, react.useCallback)((group, name) => {
+				const members = (groups[group] ?? []).filter((member) => member !== name);
+				doGroupAction({
+					action: "set-members",
+					name: group,
+					members
+				});
+			}, [doGroupAction, groups]);
+			/** Add one installed plugin to a group (picker stays open for batch adds). */
+			const doAddMember = (0, react.useCallback)((group, name) => {
+				const members = groups[group] ?? [];
+				doGroupAction({
+					action: "set-members",
+					name: group,
+					members: [...members, name]
+				});
+			}, [doGroupAction, groups]);
 			const selfName = installed["dshmarket"] !== void 0 ? "dshmarket" : "dsh-market";
 			const updatableNames = Object.keys(installed).filter((name) => name !== selfName && !updatedNames.includes(name) && updates[name] && updates[name].updateAvailable);
 			const doUpdateAll = (0, react.useCallback)(() => {
@@ -1621,11 +1871,14 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 				qThemes,
 				lang
 			]);
+			/** The catalog entry a deprecated plugin's `replacement` names, if any. */
+			const replacementOf = (p) => p.deprecated === true && p.replacement !== void 0 ? data?.plugins.find((r) => r.name === p.replacement) : void 0;
 			const pluginCard = (p) => {
 				const desc = p.description && (p.description[lang] || p.description.en) || "";
 				const done = doneUrls.includes(p.url) || hotUrls.includes(p.url);
 				const already = isInstalled(p, installed);
 				const busy = busyUrl === p.url;
+				const replacement = replacementOf(p);
 				return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
 					className: Market_module_css_default.card,
 					children: [
@@ -1638,9 +1891,12 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 								}),
 								/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
 									style: { minWidth: 0 },
-									children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+									children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
 										className: Market_module_css_default.nm,
-										children: p.name
+										children: [p.name, p.deprecated === true && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+											className: Market_module_css_default.depBadge,
+											children: t("deprecatedBadge")
+										})]
 									}), /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
 										className: Market_module_css_default.owner,
 										children: [
@@ -1670,6 +1926,19 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 						/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
 							className: Market_module_css_default.desc,
 							children: desc
+						}),
+						p.deprecated === true && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+							className: Market_module_css_default.deprecate,
+							children: /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+								className: Market_module_css_default.depLine,
+								children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("span", { children: ["⚠️ ", t("deprecatedWarn")] }), replacement !== void 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("a", {
+									className: Market_module_css_default.src,
+									href: replacement.url,
+									target: "_blank",
+									rel: "noreferrer",
+									children: t("replacementHint") + " " + replacement.name
+								})]
+							})
 						}),
 						/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
 							className: Market_module_css_default.foot,
@@ -1740,6 +2009,7 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 				if (instName === null) return pluginCard(p);
 				const mounted = skins.includes(instName) || bootEntries.some((e) => e.id === instName);
 				const desc = p.description && (p.description[lang] || p.description.en) || "";
+				const replacement = replacementOf(p);
 				return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
 					className: Market_module_css_default.card,
 					children: [
@@ -1752,9 +2022,12 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 								}),
 								/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
 									style: { minWidth: 0 },
-									children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+									children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
 										className: Market_module_css_default.nm,
-										children: p.name
+										children: [p.name, p.deprecated === true && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+											className: Market_module_css_default.depBadge,
+											children: t("deprecatedBadge")
+										})]
 									}), /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
 										className: Market_module_css_default.owner,
 										children: [
@@ -1784,6 +2057,19 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 						/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
 							className: Market_module_css_default.desc,
 							children: desc
+						}),
+						p.deprecated === true && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+							className: Market_module_css_default.deprecate,
+							children: /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+								className: Market_module_css_default.depLine,
+								children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("span", { children: ["⚠️ ", t("deprecatedWarn")] }), replacement !== void 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("a", {
+									className: Market_module_css_default.src,
+									href: replacement.url,
+									target: "_blank",
+									rel: "noreferrer",
+									children: t("replacementHint") + " " + replacement.name
+								})]
+							})
 						}),
 						/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
 							className: Market_module_css_default.foot,
@@ -1868,6 +2154,22 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 				visibleCats,
 				data
 			]);
+			/** Installed plugins the market itself cannot group (#60). */
+			const groupableNames = Object.keys(installed).filter((name) => name !== "dsh-market" && name !== "dshmarket");
+			/** Names already inside some group; everything else shows under "ungrouped". */
+			const groupedNames = (0, react.useMemo)(() => new Set(Object.values(groups).flat()), [groups]);
+			const ungroupedNames = groupableNames.filter((name) => !groupedNames.has(name));
+			/** Installed package names the catalog classifies as themes (client-side
+			* mirror of the server's classification; themes are exclusive per group). */
+			const installedThemeNames = (0, react.useMemo)(() => {
+				const names = /* @__PURE__ */ new Set();
+				if (data === null) return names;
+				for (const [name, spec] of Object.entries(installed)) {
+					const entry = entryForDep(data.plugins, name, String(spec));
+					if (entry !== void 0 && entry.category === "theme") names.add(name);
+				}
+				return names;
+			}, [data, installed]);
 			return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
 				className: Market_module_css_default.root,
 				children: [
@@ -2482,168 +2784,540 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 								className: Market_module_css_default.grid,
 								children: filteredThemePlugins.map(themePluginCard)
 							})
-						] }) : /* @__PURE__ */ (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
-							className: Market_module_css_default.tabSearchRow,
-							children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Input, {
-								className: Market_module_css_default.tabSearch,
-								icon: /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconSearchOutline16, { size: 14 }),
-								placeholder: t("searchPh"),
-								value: qInstalled,
-								onChange: (e) => setQInstalled(e.target.value)
-							})
-						}), Object.keys(displayedInstalled).length === 0 ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
-							className: Market_module_css_default.empty,
-							children: t("installedEmpty")
-						}) : Object.entries(displayedInstalled).filter(([name, spec]) => {
-							const needle = qInstalled.trim().toLowerCase();
-							if (needle === "") return true;
-							if (name.toLowerCase().includes(needle)) return true;
-							if (String(spec).toLowerCase().includes(needle)) return true;
-							const entry = data === null ? void 0 : entryForDep(data.plugins, name, String(spec));
-							if (entry !== void 0) {
-								if ((entry.description && (entry.description[lang] || entry.description.en) || "").toLowerCase().includes(needle)) return true;
-								if ((entry.owner || "").toLowerCase().includes(needle)) return true;
-							}
-							return false;
-						}).map(([name, spec]) => {
-							const missing = pendingBackup !== null && !installedFiles.includes(name);
-							const entry = data === null ? void 0 : entryForDep(data.plugins, name, String(spec));
-							const status = updates[name];
-							const act = activations[name];
-							const meta = act !== void 0 ? activationMeta(act.state, t) : null;
-							const version = status && status.version ? "v" + status.version : "";
-							const specText = String(spec);
-							const ghSpec = /^github:([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+?)(?:#|$)/.exec(specText);
-							const repoUrl = entry !== void 0 ? entry.url : ghSpec !== null ? "https://github.com/" + ghSpec[1] : null;
-							return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-								className: missing ? `${Market_module_css_default.irow} ${Market_module_css_default.irowMissing}` : Market_module_css_default.irow,
-								children: [
-									/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-										style: { minWidth: 0 },
+						] }) : /* @__PURE__ */ (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [
+							/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+								className: Market_module_css_default.viewBar,
+								children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
+									type: "button",
+									className: installedView === "list" ? `${Market_module_css_default.viewBtn} ${Market_module_css_default.viewOn}` : Market_module_css_default.viewBtn,
+									onClick: () => setInstalledView("list"),
+									children: t("tabList")
+								}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
+									type: "button",
+									className: installedView === "groups" ? `${Market_module_css_default.viewBtn} ${Market_module_css_default.viewOn}` : Market_module_css_default.viewBtn,
+									onClick: () => setInstalledView("groups"),
+									children: t("tabGroups")
+								})]
+							}),
+							/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+								className: Market_module_css_default.tabSearchRow,
+								children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Input, {
+									className: Market_module_css_default.tabSearch,
+									icon: /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconSearchOutline16, { size: 14 }),
+									placeholder: t("searchPh"),
+									value: qInstalled,
+									onChange: (e) => setQInstalled(e.target.value)
+								})
+							}),
+							installedView === "groups" ? /* @__PURE__ */ (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [
+								/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+									className: Market_module_css_default.groupCreate,
+									children: creatingGroup ? /* @__PURE__ */ (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [
+										/* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Input, {
+											className: Market_module_css_default.inlineInput,
+											placeholder: t("groupNamePh"),
+											value: newGroupName,
+											onChange: (e) => setNewGroupName(e.target.value),
+											onKeyDown: (e) => {
+												if (e.key === "Enter") doCreateGroup();
+											},
+											autoFocus: true
+										}),
+										/* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
+											variant: "primary",
+											size: "sm",
+											onClick: doCreateGroup,
+											children: t("groupCreate")
+										}),
+										/* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
+											variant: "ghost",
+											size: "sm",
+											onClick: () => {
+												setCreatingGroup(false);
+												setNewGroupName("");
+											},
+											children: t("cancel")
+										})
+									] }) : /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
+										variant: "outline",
+										size: "sm",
+										onClick: () => setCreatingGroup(true),
+										children: t("groupNew")
+									})
+								}),
+								groupOrder.length === 0 ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+									className: Market_module_css_default.empty,
+									children: t("noGroups")
+								}) : groupOrder.map((gid) => {
+									const members = groups[gid] ?? [];
+									const sw = groupSwitchState(members, disabledSet);
+									return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+										className: Market_module_css_default.groupRow,
 										children: [
 											/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-												className: Market_module_css_default.nm,
-												children: [name, version && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-													className: Market_module_css_default.owner,
-													children: " " + version
-												})]
-											}),
-											repoUrl !== null ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("a", {
-												className: `${Market_module_css_default.spec} ${Market_module_css_default.src}`,
-												href: repoUrl,
-												target: "_blank",
-												rel: "noreferrer",
-												style: { display: "inline-block" },
-												children: specText
-											}) : /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
-												className: Market_module_css_default.spec,
-												children: specText
-											}),
-											entry !== void 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
-												className: `${Market_module_css_default.desc} ${Market_module_css_default.descTight}`,
-												children: entry.description && (entry.description[lang] || entry.description.en) || ""
-											}),
-											act !== void 0 && meta !== null && /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-												className: Market_module_css_default.act,
-												children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("span", {
-													className: meta.dot === "done" ? Market_module_css_default.actLive : meta.dot === "error" ? Market_module_css_default.actBroken : Market_module_css_default.actWarn,
-													children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.StateDot, {
-														state: meta.dot,
-														size: 7
-													}), meta.label]
-												}), act.state !== "live" && act.reasons.length > 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.DisclosureRow, {
-													icon: /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconQuestionOutline14, { size: 14 }),
-													title: t("actWhy"),
-													open: whyOpen === name,
-													expandable: true,
-													onToggle: () => setWhyOpen(whyOpen === name ? null : name),
-													className: Market_module_css_default.actWhy,
-													children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
-														className: Market_module_css_default.spec,
-														children: act.reasons.join(" / ")
-													})
-												})]
-											}),
-											updatingName === name && /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-												className: Market_module_css_default.progress,
+												className: Market_module_css_default.groupHead,
 												children: [
+													/* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
+														type: "button",
+														role: "switch",
+														"aria-checked": sw === "on" ? true : sw === "off" ? false : "mixed",
+														"aria-label": (sw !== "on" ? t("enable") : t("disable")) + " " + gid,
+														className: sw === "on" ? `${Market_module_css_default.switch} ${Market_module_css_default.switchOn}` : sw === "mixed" ? `${Market_module_css_default.switch} ${Market_module_css_default.switchMixed}` : Market_module_css_default.switch,
+														disabled: togglingName !== null || sw === "empty",
+														onClick: () => doGroupToggle(gid, sw !== "on"),
+														children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { className: Market_module_css_default.switchKnob })
+													}),
 													/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-														className: Market_module_css_default.spin,
-														children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconLoadingOutline16, { size: 14 })
+														className: Market_module_css_default.groupName,
+														children: gid
 													}),
-													/* @__PURE__ */ (0, react_jsx_runtime.jsx)("code", {
-														className: Market_module_css_default.grow,
-														children: progressText
+													sw === "mixed" && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+														className: Market_module_css_default.groupHint,
+														children: t("groupMixed")
 													}),
-													progressPct !== null && /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("span", {
-														className: Market_module_css_default.pct,
-														children: [progressPct, "%"]
-													}),
-													/* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
-														variant: "outline",
-														size: "sm",
-														disabled: cancelling,
-														onClick: doCancel,
-														children: cancelling ? t("cancelling") : t("cancelOp")
-													}),
-													/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
-														className: Market_module_css_default.bar,
-														children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
-															className: progressPct !== null ? Market_module_css_default.barFill : `${Market_module_css_default.barFill} ${Market_module_css_default.barWave}`,
-															style: progressPct !== null ? { width: `${progressPct}%` } : void 0
-														})
+													/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { className: Market_module_css_default.grow }),
+													/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+														className: Market_module_css_default.groupActions,
+														children: [
+															renamingGroup === gid ? /* @__PURE__ */ (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [
+																/* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Input, {
+																	className: Market_module_css_default.inlineInput,
+																	placeholder: t("groupNamePh"),
+																	value: renamingValue,
+																	onChange: (e) => setRenamingValue(e.target.value),
+																	onKeyDown: (e) => {
+																		if (e.key === "Enter") doRenameGroup(gid);
+																	},
+																	autoFocus: true
+																}),
+																/* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
+																	variant: "primary",
+																	size: "sm",
+																	onClick: () => doRenameGroup(gid),
+																	children: t("groupRename")
+																}),
+																/* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
+																	variant: "ghost",
+																	size: "sm",
+																	onClick: () => {
+																		setRenamingGroup(null);
+																		setRenamingValue("");
+																	},
+																	children: t("cancel")
+																})
+															] }) : /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
+																variant: "ghost",
+																size: "sm",
+																onClick: () => {
+																	setRenamingGroup(gid);
+																	setRenamingValue(gid);
+																},
+																children: t("groupRename")
+															}),
+															deletingGroup === gid ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
+																variant: "primary",
+																size: "sm",
+																className: Market_module_css_default.dangerArmed,
+																onClick: () => doDeleteGroup(gid),
+																children: t("groupConfirmDelete")
+															}) : /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
+																variant: "outline",
+																size: "sm",
+																className: Market_module_css_default.dangerBtn,
+																onClick: () => setDeletingGroup(gid),
+																children: t("groupDelete")
+															}),
+															/* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
+																variant: "outline",
+																size: "sm",
+																onClick: () => setAddPanel(addPanel !== null && addPanel.group === gid && addPanel.kind === "plugin" ? null : {
+																	group: gid,
+																	kind: "plugin"
+																}),
+																children: t("groupAdd")
+															}),
+															/* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
+																variant: "outline",
+																size: "sm",
+																disabled: members.some((member) => installedThemeNames.has(member)),
+																onClick: () => setAddPanel(addPanel !== null && addPanel.group === gid && addPanel.kind === "theme" ? null : {
+																	group: gid,
+																	kind: "theme"
+																}),
+																children: t("groupAddTheme")
+															})
+														]
 													})
 												]
+											}),
+											addPanel !== null && addPanel.group === gid && (() => {
+												const candidates = addPanel.kind === "theme" ? [...installedThemeNames].filter((name) => !members.includes(name)) : groupableNames.filter((name) => !members.includes(name) && !installedThemeNames.has(name));
+												return /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+													className: Market_module_css_default.groupAddPanel,
+													children: candidates.length === 0 ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+														className: Market_module_css_default.groupHint,
+														children: t("groupAddEmpty")
+													}) : candidates.map((name) => /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+														className: Market_module_css_default.groupMember,
+														children: [
+															/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+																className: Market_module_css_default.nm,
+																children: name
+															}),
+															disabledSet.has(name) && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+																className: Market_module_css_default.spec,
+																children: t("disabledState")
+															}),
+															/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { className: Market_module_css_default.grow }),
+															/* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
+																variant: "outline",
+																size: "sm",
+																onClick: () => doAddMember(gid, name),
+																children: addPanel.kind === "theme" ? t("groupAddTheme") : t("groupAdd")
+															})
+														]
+													}, name))
+												});
+											})(),
+											/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+												className: Market_module_css_default.groupMembers,
+												children: [members.length === 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+													className: Market_module_css_default.groupHint,
+													children: t("groupEmpty")
+												}), members.map((member) => /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+													className: Market_module_css_default.groupMember,
+													children: [
+														/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+															className: Market_module_css_default.nm,
+															children: member
+														}),
+														disabledSet.has(member) && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+															className: Market_module_css_default.spec,
+															children: t("disabledState")
+														}),
+														/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { className: Market_module_css_default.grow }),
+														/* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
+															type: "button",
+															role: "switch",
+															"aria-checked": !disabledSet.has(member),
+															"aria-label": (disabledSet.has(member) ? t("enable") : t("disable")) + " " + member,
+															className: disabledSet.has(member) ? Market_module_css_default.switch : `${Market_module_css_default.switch} ${Market_module_css_default.switchOn}`,
+															disabled: togglingName !== null,
+															onClick: () => doToggle(member, disabledSet.has(member)),
+															children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { className: Market_module_css_default.switchKnob })
+														}),
+														/* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
+															variant: "ghost",
+															size: "sm",
+															onClick: () => doRemoveMember(gid, member),
+															children: t("groupRemove")
+														})
+													]
+												}, member))]
 											})
 										]
-									}),
-									/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { className: Market_module_css_default.grow }),
-									repoUrl !== null && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("a", {
-										className: Market_module_css_default.src,
-										href: repoUrl + "#readme",
-										target: "_blank",
-										rel: "noreferrer",
-										children: t("readme")
-									}),
-									missing ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-										className: Market_module_css_default.owner,
-										children: t("notInstalled")
-									}) : updatedNames.includes(name) ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-										className: Market_module_css_default.okState,
-										children: act?.state === "live" ? t("updatedLive") : t("updated")
-									}) : updatingName === name ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
-										variant: "primary",
-										size: "sm",
-										disabled: true,
-										children: t("updating")
-									}) : status && status.updateAvailable ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
-										variant: "primary",
-										size: "sm",
-										disabled: updatingName !== null,
-										onClick: () => doUpdate(name),
-										children: t("update")
-									}) : status && status.kind === "linked" ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-										className: Market_module_css_default.owner,
-										children: t("linkedDev")
-									}) : /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-										className: Market_module_css_default.owner,
-										children: t("upToDate")
-									}),
-									!missing && name !== "dsh-market" && name !== "dshmarket" && (removingName === name ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
-										variant: "outline",
-										size: "sm",
-										disabled: true,
-										children: t("uninstalling")
-									}) : /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
-										variant: "outline",
-										size: "sm",
-										disabled: removingName !== null || busyUrl !== null || updatingName !== null,
-										onClick: () => setRemoveConfirm(name),
-										children: t("uninstall")
-									}))
-								]
-							}, name);
-						})] })
+									}, gid);
+								}),
+								/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+									className: Market_module_css_default.sect,
+									children: t("ungrouped")
+								}),
+								ungroupedNames.length === 0 ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+									className: Market_module_css_default.empty,
+									children: t("installedEmpty")
+								}) : ungroupedNames.map((name) => {
+									const entry = data === null ? void 0 : entryForDep(data.plugins, name, String(installed[name]));
+									const off = disabledSet.has(name);
+									return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+										className: Market_module_css_default.irow,
+										children: [
+											/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+												style: { minWidth: 0 },
+												children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+													className: Market_module_css_default.nm,
+													children: [name, entry?.deprecated === true && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+														className: Market_module_css_default.depBadge,
+														children: t("deprecatedBadge")
+													})]
+												}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+													className: Market_module_css_default.act,
+													children: off ? /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("span", {
+														className: Market_module_css_default.actWarn,
+														children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.StateDot, {
+															state: "warning",
+															size: 7
+														}), t("disabledState")]
+													}) : /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("span", {
+														className: Market_module_css_default.actLive,
+														children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.StateDot, {
+															state: "done",
+															size: 7
+														}), t("stateLive")]
+													})
+												})]
+											}),
+											/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { className: Market_module_css_default.grow }),
+											assignFor === name ? /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+												className: Market_module_css_default.assignRow,
+												children: [
+													/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("select", {
+														className: Market_module_css_default.assignSelect,
+														value: assignTarget,
+														onChange: (e) => setAssignTarget(e.target.value),
+														children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("option", {
+															value: "",
+															children: t("groupNamePh")
+														}), groupOrder.map((gid) => /* @__PURE__ */ (0, react_jsx_runtime.jsx)("option", {
+															value: gid,
+															children: gid
+														}, gid))]
+													}),
+													/* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
+														variant: "primary",
+														size: "sm",
+														disabled: assignTarget === "",
+														onClick: () => doAssign(name),
+														children: t("groupAssign")
+													}),
+													/* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
+														variant: "ghost",
+														size: "sm",
+														onClick: () => {
+															setAssignFor(null);
+															setAssignTarget("");
+														},
+														children: t("cancel")
+													})
+												]
+											}) : /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
+												variant: "outline",
+												size: "sm",
+												disabled: groupOrder.length === 0,
+												onClick: () => {
+													setAssignFor(name);
+													setAssignTarget("");
+												},
+												children: t("groupAssign")
+											})
+										]
+									}, "ug-" + name);
+								})
+							] }) : Object.keys(displayedInstalled).length === 0 ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+								className: Market_module_css_default.empty,
+								children: t("installedEmpty")
+							}) : Object.entries(displayedInstalled).filter(([name, spec]) => {
+								const needle = qInstalled.trim().toLowerCase();
+								if (needle === "") return true;
+								if (name.toLowerCase().includes(needle)) return true;
+								if (String(spec).toLowerCase().includes(needle)) return true;
+								const entry = data === null ? void 0 : entryForDep(data.plugins, name, String(spec));
+								if (entry !== void 0) {
+									if ((entry.description && (entry.description[lang] || entry.description.en) || "").toLowerCase().includes(needle)) return true;
+									if ((entry.owner || "").toLowerCase().includes(needle)) return true;
+								}
+								return false;
+							}).map(([name, spec]) => {
+								const missing = pendingBackup !== null && !installedFiles.includes(name);
+								const entry = data === null ? void 0 : entryForDep(data.plugins, name, String(spec));
+								const status = updates[name];
+								const act = activations[name];
+								const meta = act !== void 0 ? activationMeta(act.state, t) : null;
+								const version = status && status.version ? "v" + status.version : "";
+								const specText = String(spec);
+								const ghSpec = /^github:([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+?)(?:#|$)/.exec(specText);
+								const repoUrl = entry !== void 0 ? entry.url : ghSpec !== null ? "https://github.com/" + ghSpec[1] : null;
+								const off = disabledSet.has(name);
+								const toggleable = off || act !== void 0 && (act.state === "live" || act.state === "restart");
+								return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+									className: missing ? `${Market_module_css_default.irow} ${Market_module_css_default.irowMissing}` : Market_module_css_default.irow,
+									children: [
+										/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+											style: { minWidth: 0 },
+											children: [
+												/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+													className: Market_module_css_default.nm,
+													children: [
+														name,
+														entry?.deprecated === true && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+															className: Market_module_css_default.depBadge,
+															children: t("deprecatedBadge")
+														}),
+														version && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+															className: Market_module_css_default.owner,
+															children: " " + version
+														})
+													]
+												}),
+												repoUrl !== null ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("a", {
+													className: `${Market_module_css_default.spec} ${Market_module_css_default.src}`,
+													href: repoUrl,
+													target: "_blank",
+													rel: "noreferrer",
+													style: { display: "inline-block" },
+													children: specText
+												}) : /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+													className: Market_module_css_default.spec,
+													children: specText
+												}),
+												entry !== void 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+													className: `${Market_module_css_default.desc} ${Market_module_css_default.descTight}`,
+													children: entry.description && (entry.description[lang] || entry.description.en) || ""
+												}),
+												off ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+													className: Market_module_css_default.act,
+													children: /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("span", {
+														className: Market_module_css_default.actWarn,
+														children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.StateDot, {
+															state: "warning",
+															size: 7
+														}), t("disabledState")]
+													})
+												}) : act !== void 0 && meta !== null && /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+													className: Market_module_css_default.act,
+													children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("span", {
+														className: meta.dot === "done" ? Market_module_css_default.actLive : meta.dot === "error" ? Market_module_css_default.actBroken : Market_module_css_default.actWarn,
+														children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.StateDot, {
+															state: meta.dot,
+															size: 7
+														}), meta.label]
+													}), act.state !== "live" && act.reasons.length > 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.DisclosureRow, {
+														icon: /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconQuestionOutline14, { size: 14 }),
+														title: t("actWhy"),
+														open: whyOpen === name,
+														expandable: true,
+														onToggle: () => setWhyOpen(whyOpen === name ? null : name),
+														className: Market_module_css_default.actWhy,
+														children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+															className: Market_module_css_default.spec,
+															children: act.reasons.join(" / ")
+														})
+													})]
+												}),
+												entry !== void 0 && entry.deprecated === true && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+													className: Market_module_css_default.deprecate,
+													style: { marginTop: 8 },
+													children: /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+														className: Market_module_css_default.depLine,
+														children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("span", { children: ["⚠️ ", t("deprecatedWarn")] }), entry.replacement !== void 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+															className: Market_module_css_default.src,
+															children: t("replacementHint") + " " + entry.replacement
+														})]
+													})
+												}),
+												updatingName === name && /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+													className: Market_module_css_default.progress,
+													children: [
+														/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+															className: Market_module_css_default.spin,
+															children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconLoadingOutline16, { size: 14 })
+														}),
+														/* @__PURE__ */ (0, react_jsx_runtime.jsx)("code", {
+															className: Market_module_css_default.grow,
+															children: progressText
+														}),
+														progressPct !== null && /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("span", {
+															className: Market_module_css_default.pct,
+															children: [progressPct, "%"]
+														}),
+														/* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
+															variant: "outline",
+															size: "sm",
+															disabled: cancelling,
+															onClick: doCancel,
+															children: cancelling ? t("cancelling") : t("cancelOp")
+														}),
+														/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+															className: Market_module_css_default.bar,
+															children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+																className: progressPct !== null ? Market_module_css_default.barFill : `${Market_module_css_default.barFill} ${Market_module_css_default.barWave}`,
+																style: progressPct !== null ? { width: `${progressPct}%` } : void 0
+															})
+														})
+													]
+												})
+											]
+										}),
+										/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { className: Market_module_css_default.grow }),
+										toggleable && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
+											type: "button",
+											role: "switch",
+											"aria-checked": !off,
+											"aria-label": (off ? t("enable") : t("disable")) + " " + name,
+											className: off ? Market_module_css_default.switch : `${Market_module_css_default.switch} ${Market_module_css_default.switchOn}`,
+											disabled: togglingName !== null || busyUrl !== null || updatingName !== null || removingName !== null,
+											onClick: () => doToggle(name, off),
+											children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { className: Market_module_css_default.switchKnob })
+										}),
+										repoUrl !== null && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("a", {
+											className: Market_module_css_default.src,
+											href: repoUrl + "#readme",
+											target: "_blank",
+											rel: "noreferrer",
+											children: t("readme")
+										}),
+										entry !== void 0 && entry.deprecated === true && entry.replacement !== void 0 && (() => {
+											const replacement = data?.plugins.find((r) => r.name === entry.replacement);
+											if (replacement === void 0) return null;
+											return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
+												variant: "outline",
+												size: "sm",
+												onClick: () => {
+													setCat("all");
+													setQ(entry.replacement);
+													setTab("discover");
+												},
+												children: t("viewReplacement")
+											}), !isInstalled(replacement, installed) && /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
+												variant: "outline",
+												size: "sm",
+												onClick: () => setConfirming(replacement),
+												children: t("installReplacement")
+											})] });
+										})(),
+										missing ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+											className: Market_module_css_default.owner,
+											children: t("notInstalled")
+										}) : updatedNames.includes(name) ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+											className: Market_module_css_default.okState,
+											children: act?.state === "live" ? t("updatedLive") : t("updated")
+										}) : updatingName === name ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
+											variant: "primary",
+											size: "sm",
+											className: Market_module_css_default.warnBtn,
+											disabled: true,
+											children: t("updating")
+										}) : status && status.updateAvailable ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
+											variant: "primary",
+											size: "sm",
+											className: Market_module_css_default.warnBtn,
+											disabled: updatingName !== null,
+											onClick: () => doUpdate(name),
+											children: t("update")
+										}) : status && status.kind === "linked" ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+											className: Market_module_css_default.owner,
+											children: t("linkedDev")
+										}) : /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+											className: Market_module_css_default.owner,
+											children: t("upToDate")
+										}),
+										!missing && name !== "dsh-market" && name !== "dshmarket" && (removingName === name ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
+											variant: "outline",
+											size: "sm",
+											className: Market_module_css_default.dangerBtn,
+											disabled: true,
+											children: t("uninstalling")
+										}) : /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
+											variant: "outline",
+											size: "sm",
+											className: Market_module_css_default.dangerBtn,
+											disabled: removingName !== null || busyUrl !== null || updatingName !== null,
+											onClick: () => setRemoveConfirm(name),
+											children: t("uninstall")
+										}))
+									]
+								}, name);
+							})
+						] })
 					}),
 					showTop && /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Tooltip, {
 						label: t("backTop"),
@@ -2715,6 +3389,22 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 									})
 								]
 							}),
+							confirming.deprecated === true && (() => {
+								const replacement = replacementOf(confirming);
+								return /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+									className: Market_module_css_default.deprecate,
+									children: /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+										className: Market_module_css_default.depLine,
+										children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("span", { children: ["⚠️ ", t("deprecatedWarn")] }), replacement !== void 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("a", {
+											className: Market_module_css_default.src,
+											href: replacement.url,
+											target: "_blank",
+											rel: "noreferrer",
+											children: t("replacementHint") + " " + replacement.name
+										})]
+									})
+								});
+							})(),
 							/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("p", {
 								className: Market_module_css_default.modalNote,
 								children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconWarningOutline16, {
