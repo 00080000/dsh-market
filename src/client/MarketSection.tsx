@@ -305,6 +305,8 @@ export function MarketSection(props: MarketSectionProps) {
   const [progressCurrent, setProgressCurrent] = useState<string | null>(null)
   const [progressDone, setProgressDone] = useState(0)
   const [cancelling, setCancelling] = useState(false)
+  /** Server-side operation lock from /dsh-market/status (#91). */
+  const [hostBusy, setHostBusy] = useState(false)
   /** Non-live activation results from the last operation, shown as a banner. */
   const [activationWarnings, setActivationWarnings] = useState<{ name: string; info: ActivationInfo }[]>([])
   /** Plugin name awaiting uninstall confirmation (Modal). */
@@ -461,6 +463,7 @@ export function MarketSection(props: MarketSectionProps) {
       fetch('/dsh-market/status', { cache: 'no-store' })
         .then(res => res.json())
         .then(status => {
+          setHostBusy(status.busy === true)
           if (status.active) {
             setCancelling(status.cancelling === true)
             if (status.phase !== null && status.phase !== undefined) {
@@ -492,7 +495,11 @@ export function MarketSection(props: MarketSectionProps) {
             setCancelling(false)
             setInstalled(status.installed || {})
             const pending = readSession('dshm-pending')
-            if (pending !== null && busyUrl !== null) {
+            // status.busy (#91): pnpm exited but the install route still
+            // holds the operation lock (validation, hot-mount). Neither
+            // declare the install done nor count an idle strike yet — a
+            // premature banner here invited a restart click into a 409.
+            if (pending !== null && busyUrl !== null && status.busy !== true) {
               const nowInstalled = data !== null && data.plugins.some(p =>
                 p.url === busyUrl && isInstalled(p, status.installed || {}))
               if (nowInstalled) {
@@ -679,17 +686,28 @@ export function MarketSection(props: MarketSectionProps) {
       }
       poll()
     }
-    fetch('/dsh-market/restart', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })
-      .then(res => res.json().then(body => ({ status: res.status, body })))
-      .then(({ status, body }) => {
-        if (status !== 202 || body.ok !== true) {
+    const requestRestart = (attemptsLeft: number) => {
+      fetch('/dsh-market/restart', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })
+        .then(res => res.json().then(body => ({ status: res.status, body })))
+        .then(({ status, body }) => {
+          if (status === 202 && body.ok === true) {
+            awaitNewBoot()
+            return
+          }
+          // 409 = the install route still holds the operation lock for its
+          // post-processing (#91) — a short quiet retry beats surfacing
+          // "cannot restart while a plugin operation is running" to a user
+          // who just followed our own banner.
+          if (status === 409 && attemptsLeft > 0) {
+            setTimeout(() => requestRestart(attemptsLeft - 1), 1500)
+            return
+          }
           setRestarting(false)
           setInstallError(t('restartFail') + ': ' + String(body.error || ('HTTP ' + String(status))))
-          return
-        }
-        awaitNewBoot()
-      })
-      .catch(awaitNewBoot) // the host may die mid-response; keep polling
+        })
+        .catch(awaitNewBoot) // the host may die mid-response; keep polling
+    }
+    requestRestart(10)
   }, [bootId, restarting, t])
 
   /** Cancel the running plugin command (#6 by @qichuang321). */
@@ -1183,7 +1201,7 @@ export function MarketSection(props: MarketSectionProps) {
               <Button
                 variant="primary"
                 size="sm"
-                disabled={restarting || busyUrl !== null || updatingName !== null || removingName !== null}
+                disabled={restarting || hostBusy || busyUrl !== null || updatingName !== null || removingName !== null}
                 onClick={doRestart}
               >{restarting ? t('restarting') : t('restartNow')}</Button>
             )}

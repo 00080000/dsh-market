@@ -427,6 +427,11 @@ export function mountMarketRoutes(
           ndjson: progress.ndjson,
           error: progress.error,
           cancelling: progress.cancelling,
+          // The route-level operation flag, NOT progress.active: after pnpm
+          // exits, install post-processing (retarget, validation, hot-mount)
+          // still holds the operation lock for a moment — the exact window
+          // where clicking the restart banner used to bounce off a 409 (#91).
+          busy: installing,
           pnpm: await commands.probePnpm(),
           boot: BOOT_ID,
           restart: restartAllowed(config),

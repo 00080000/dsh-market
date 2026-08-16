@@ -55,6 +55,12 @@ export interface MarketStatus {
   size?: number | null
   /** True once the user asked to cancel and the host is killing the run. */
   cancelling?: boolean
+  /**
+   * The route-level operation lock (#91): stays true through install
+   * post-processing after pnpm already exited (progress.active false).
+   * Restart must not be offered while it is held.
+   */
+  busy?: boolean
 }
 
 /** Post-install activation state (P0-2), per installed package. */

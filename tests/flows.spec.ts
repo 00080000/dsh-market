@@ -868,6 +868,24 @@ describe('concurrency', () => {
     fake.gate = null
     expect((await first).status).toBe(200)
   })
+
+  it('status reports the route-level operation lock as busy while an install is in flight (#91)', async () => {
+    fake.npm['dsh-loop'] = { latest: '1.0.0', versions: { '1.0.0': { manifest: { dsh: {}, main: 'lib/index.js' }, artifacts: ['lib/index.js'] } } }
+    let release!: () => void
+    fake.gate = new Promise<void>((resolvePromise) => { release = resolvePromise })
+    const install = bed.dispatch('POST', '/dsh-market/install', { url: 'https://github.com/o/dsh-loop' })
+    await new Promise(resolvePromise => setTimeout(resolvePromise, 20))
+    // The window #91 hit: the fake runner is "idle" from the progress
+    // tracker's view, but the route still holds the lock — status must say
+    // busy so the client neither offers restart nor declares the install done.
+    const during = await bed.dispatch('GET', '/dsh-market/status')
+    expect(during.json.busy).toBe(true)
+    release()
+    fake.gate = null
+    await install
+    const after = await bed.dispatch('GET', '/dsh-market/status')
+    expect(after.json.busy).toBe(false)
+  })
 })
 
 describe('cancel flow (#6)', () => {
