@@ -215,6 +215,33 @@ export function MarketSection(props: MarketSectionProps) {
   const idleStrikes = useRef(0)
   const [doneUrls, setDoneUrls] = useState<string[]>([])
   const [installError, setInstallError] = useState<string | null>(null)
+  /** Log export lifecycle for visible feedback (#84): idle → busy → done/fail. */
+  const [exportState, setExportState] = useState<'idle' | 'busy' | 'done' | 'fail'>('idle')
+
+  /**
+   * Programmatic log download with explicit feedback (#84) — the plain
+   * `<a download>` gave no sign anything happened, and the error banner's
+   * "export the log" wording pointed at text that was not clickable at all.
+   */
+  const doExportLog = useCallback(() => {
+    setExportState('busy')
+    fetch('/dsh-market/logs')
+      .then(async (res) => {
+        if (!res.ok) throw new Error(`HTTP ${String(res.status)}`)
+        const blob = await res.blob()
+        const url = URL.createObjectURL(blob)
+        const anchor = document.createElement('a')
+        anchor.href = url
+        anchor.download = 'dsh-market-log.txt'
+        document.body.appendChild(anchor)
+        anchor.click()
+        anchor.remove()
+        URL.revokeObjectURL(url)
+        setExportState('done')
+      })
+      .catch(() => setExportState('fail'))
+      .finally(() => { setTimeout(() => setExportState('idle'), 6000) })
+  }, [])
   const [updates, setUpdates] = useState<Record<string, UpdateStatus>>({})
   const [updatingName, setUpdatingName] = useState<string | null>(null)
   // Plugin blocked by pnpm's fresh-release safety wait; arms the update-now button.
@@ -997,8 +1024,12 @@ export function MarketSection(props: MarketSectionProps) {
           )}
         </div>
         <div className={css.sub}>
-          {t('subtitle') + (data ? ' · ' + data.count : '') + ' · '}
-          <a className={css.src} href="/dsh-market/logs" download="dsh-market-log.txt">{t('exportLog')}</a>
+          {t('subtitle') + (data ? ' · ' + data.count : '') + ' '}
+          <Button size="sm" variant="ghost" disabled={exportState === 'busy'} onClick={doExportLog}>
+            {exportState === 'busy' ? t('exportingLog') : t('exportLog')}
+          </Button>
+          {exportState === 'done' && <span className={css.exportNote}>{'✓ ' + t('exportedLog')}</span>}
+          {exportState === 'fail' && <span className={css.exportNoteErr}>{t('exportLogFail')}</span>}
         </div>
         <div className={css.tabs}>
           <button className={tab === 'discover' ? `${css.tab} ${css.on}` : css.tab} onClick={() => setTab('discover')}>{t('tabDiscover')}</button>
@@ -1103,11 +1134,17 @@ export function MarketSection(props: MarketSectionProps) {
       {installError !== null && (
         <div className={css.err}>
           {installError}
-          {staleName !== null && (
-            <div className={css.staleAction}>
+          <div className={css.staleAction}>
+            {staleName !== null && (
               <Button size="sm" onClick={() => doUpdate(staleName, true)}>{t('updateNow')}</Button>
-            </div>
-          )}
+            )}
+            {/* The banner text told users to export the log; now it IS the button (#84). */}
+            <Button size="sm" variant="ghost" disabled={exportState === 'busy'} onClick={doExportLog}>
+              {exportState === 'busy' ? t('exportingLog') : t('exportLog')}
+            </Button>
+            {exportState === 'done' && <span className={css.exportNote}>{'✓ ' + t('exportedLog')}</span>}
+            {exportState === 'fail' && <span className={css.exportNoteErr}>{t('exportLogFail')}</span>}
+          </div>
         </div>
       )}
       <div

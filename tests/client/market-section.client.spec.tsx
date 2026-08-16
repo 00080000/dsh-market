@@ -119,6 +119,16 @@ describe('MarketSection (jsdom)', () => {
     await waitFor(() => expect(screen.queryByRole('button', { name: en.confirm })).toBeNull())
   })
 
+  it('export log is a real button with visible feedback (#84)', async () => {
+    stubFetch({ '/dsh-market/logs': 'log-lines' })
+    render(<MarketSection {...props()} />)
+    await screen.findByText('dsh-loop')
+    const exportButton = screen.getByRole('button', { name: en.exportLog })
+    fireEvent.click(exportButton)
+    // Success feedback appears, then the button returns to idle.
+    await waitFor(() => { expect(screen.getByText('✓ ' + en.exportedLog)).toBeTruthy() })
+  })
+
   it('shows curated registry screenshots in the dialog, and README-extracted ones as fallback (#61)', async () => {
     const CURATED = 'https://raw.githubusercontent.com/alice/dsh-loop/main/assets/demo.png'
     const registry = JSON.parse(JSON.stringify(REGISTRY))

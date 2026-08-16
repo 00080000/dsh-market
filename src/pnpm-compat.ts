@@ -36,11 +36,21 @@ export function pluginArgsFor(profileDir: string, pluginArgs: string[]): string[
 /** One recognized pnpm failure, with a bilingual explanation for the UI. */
 export interface PnpmFailure {
   code: 'adding-to-root' | 'not-a-workspace' | 'hoist-pattern-diff' | 'pnpm-missing' | 'release-age-violation'
-    | 'ignored-builds' | 'git-prepare-not-allowed' | 'fetch-404'
+    | 'ignored-builds' | 'git-prepare-not-allowed' | 'fetch-404' | 'transient-network'
   /** Bilingual, actionable message shown to the user instead of the raw wall of text. */
   message: string
   /** True when re-running `pnpm install` in the profile is the documented recovery. */
   recoverable: boolean
+}
+
+/**
+ * Momentary network failures — worth exactly one automatic retry (#83).
+ * pnpm 5xx fetch codes, its meta-fetch give-up, and the raw socket errors
+ * that surface through dsh's wrapper. Permanent shapes (404, auth) are
+ * deliberately absent: retrying those just doubles the wait for bad news.
+ */
+export function isTransientPnpmFailure(output: string): boolean {
+  return /ERR_PNPM_FETCH_5\d\d|ERR_PNPM_META_FETCH_FAIL|FetchError|ECONNRESET|ETIMEDOUT|EAI_AGAIN|ENETUNREACH|socket hang up|network timeout/i.test(output)
 }
 
 /**
@@ -122,6 +132,19 @@ export function classifyPnpmFailure(output: string): PnpmFailure | null {
       code: 'fetch-404',
       recoverable: false,
       message: `有一个依赖在 registry 上不存在${zh}，pnpm 因此拒绝任何安装操作。它可能是之前失败操作残留在 profile package.json 里的幽灵依赖（可手动删除该行），也可能是需要登录的私有包 / a dependency cannot be resolved from the registry${en}; pnpm refuses every install while it is present. It may be a ghost entry left in the profile's package.json by an earlier failed operation (remove that line by hand), or a private package needing registry credentials`,
+    }
+  }
+  // #83: pnpm replays the WHOLE dependency tree on every add/remove, so a
+  // moment of network flakiness against ANY already-installed dependency
+  // (codeload tarball, registry meta) fails the run — and the market then
+  // reported "install failed" for a plugin that was perfectly fine, only for
+  // a plain retry to succeed seconds later. withHoistRecovery retries once;
+  // this message covers the case where the retry lost too.
+  if (isTransientPnpmFailure(output)) {
+    return {
+      code: 'transient-network',
+      recoverable: false,
+      message: '拉取依赖时网络临时失败（不一定是你正在装的插件——安装会重放整个依赖树，任何一个既有依赖抖动都会中断）。已自动重试一次仍失败，请稍后再试 / a transient network failure while fetching dependencies (not necessarily the plugin you are installing — installs replay the whole dependency tree, so any existing dependency can hiccup); one automatic retry failed too — please try again shortly',
     }
   }
   if (output.includes('pnpm not found on PATH')) {

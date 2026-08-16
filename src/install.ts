@@ -8,7 +8,7 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import type { InstallResult, PluginRunner } from './dsh-cli.ts'
-import { classifyPnpmFailure } from './pnpm-compat.ts'
+import { classifyPnpmFailure, isTransientPnpmFailure } from './pnpm-compat.ts'
 import { entryArtifactExists, hasDshManifest, pluginSubdirs, profileDir, readInstalled } from './profile.ts'
 import { logEvent } from './log.ts'
 
@@ -49,6 +49,15 @@ export async function withHoistRecovery(run: PluginRunner, profile: string, plug
     ) {
       logEvent('warn', 'install', `a too-young release blocks pnpm's lockfile verification (#39) — retrying once with ${RELEASE_AGE_OVERRIDE}`)
       result = await run(profile, [pluginArgs[0], RELEASE_AGE_OVERRIDE, ...pluginArgs.slice(1)])
+    } else if (
+      failure?.code === 'transient-network'
+      && (pluginArgs[0] === 'add' || pluginArgs[0] === 'remove')
+    ) {
+      // #83: pnpm replays the whole tree, so any existing dependency's
+      // momentary network hiccup fails the run — and a plain retry succeeds.
+      // Do that retry ourselves instead of reporting a false failure.
+      logEvent('warn', 'install', `transient network failure while pnpm replayed the dependency tree (#83) — retrying once`)
+      result = await run(profile, pluginArgs)
     }
   }
   if (!ok(result) && !result.cancelled) {
