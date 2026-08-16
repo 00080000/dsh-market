@@ -159,4 +159,13 @@ describe('parsePrepareNotAllowed (#68)', () => {
     expect(parsePrepareNotAllowed('all good', '')).toBeNull()
     expect(parsePrepareNotAllowed('', 'Ignored build scripts: esbuild.')).toBeNull()
   })
+
+  it('matches the ndjson form, whose quotes arrive escaped (#113)', () => {
+    // The market always passes --reporter=ndjson, so in production this
+    // sentence is nested in a JSON string: the literal-quote regex missed it
+    // and the approve-and-retry banner never appeared.
+    const ndjson = String.raw`{"name":"pnpm","level":"error","err":{"message":"Failed to prepare git-hosted package fetched from \"https://codeload.github.com/s/r/tar.gz/abc\": The git-hosted package \"dsh-queue-plus@0.3.0\" needs to execute build scripts but is not in the \"allowBuilds\" allowlist."}}`
+    expect(parsePrepareNotAllowed(ndjson, '')).toBe('dsh-queue-plus')
+    expect(parsePrepareNotAllowed('', ndjson.replace('dsh-queue-plus@0.3.0', '@scope/pkg@1.0.0'))).toBe('@scope/pkg')
+  })
 })
