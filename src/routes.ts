@@ -8,7 +8,7 @@
  * same-origin POSTs and only sources present in the curated registry.
  */
 
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { loadRegistry } from './registry.ts'
@@ -29,6 +29,9 @@ import { createThemeManager, type LoaderEntry } from './themes.ts'
 import { readJsonBody, sameOrigin, sendJson } from './http.ts'
 import { restartAllowed, scheduleRestart, trustedRestartRequest } from './restart.ts'
 import { verifyActivation } from './verify.ts'
+import {
+  createProfileBackup, downloadWebdav, MAX_BACKUP_BYTES, restoreProfileBackup, secretFileCount, uploadWebdav,
+} from './backup.ts'
 
 export type { LoaderEntry } from './themes.ts'
 export type { UpdateStatus } from './updates.ts'
@@ -164,7 +167,160 @@ export function mountMarketRoutes(
   /** Every plugin command goes through the pnpm-drift recovery wrapper (#20). */
   const runPlugin = (profile: string, args: string[]) => withHoistRecovery(commands.runPlugin, profile, args)
 
+  async function restoreBackup(value: unknown): Promise<{ files: number; errors: { name: string; error: string }[] }> {
+    if (installing) throw new Error('another plugin operation is already running')
+    if (!await probePnpm()) throw new Error('pnpm is required to restore plugins')
+    installing = true
+    const restored = restoreProfileBackup(config.profile, value, activeProfileDir)
+    try {
+      const result = await runPlugin(config.profile, ['install'])
+      if (result.exitCode === 0 && !result.timedOut && !result.cancelled) {
+        invalidateUpdates()
+        return { files: restored.files, errors: [] }
+      }
+
+      // A bad dependency makes pnpm abort the whole install. Retry from an
+      // empty dependency list so one broken plugin cannot block the rest.
+      // activeProfileDir, NOT profileDir(config.profile): in DSH Desktop the
+      // profile directory is host-authoritative (#72) and the ambient
+      // derivation would edit the WRONG profile's manifest.
+      const manifestFile = join(activeProfileDir, 'package.json')
+      const manifest = JSON.parse(readFileSync(manifestFile, 'utf8')) as {
+        dependencies?: Record<string, string>
+        dsh?: { profile?: { bundles?: string[] } }
+      }
+      const dependencies = Object.entries(manifest.dependencies ?? {})
+      const desiredBundles = [...(manifest.dsh?.profile?.bundles ?? [])]
+      const dependencyNames = new Set(dependencies.map(([name]) => name))
+      manifest.dependencies = {}
+      if (Array.isArray(manifest.dsh?.profile?.bundles)) {
+        manifest.dsh.profile.bundles = desiredBundles.filter(bundle => !dependencyNames.has(bundle))
+      }
+      writeFileSync(manifestFile, `${JSON.stringify(manifest, null, 2)}\n`)
+      const errors: { name: string; error: string }[] = []
+      let installed = 0
+      for (const [name, spec] of dependencies) {
+        const target = /^(?:file|link|github|git\+|https?):/.test(spec) ? spec : `${name}@${spec}`
+        try {
+          const item = await runPlugin(config.profile, ['add', target])
+          if (item.exitCode === 0 && !item.timedOut && !item.cancelled
+            && existsSync(join(activeProfileDir, 'node_modules', name, 'package.json'))) {
+            installed += 1
+            if (desiredBundles.includes(name)) {
+              const current = JSON.parse(readFileSync(manifestFile, 'utf8')) as typeof manifest
+              current.dsh ??= {}
+              current.dsh.profile ??= {}
+              current.dsh.profile.bundles ??= []
+              if (!current.dsh.profile.bundles.includes(name)) current.dsh.profile.bundles.push(name)
+              writeFileSync(manifestFile, `${JSON.stringify(current, null, 2)}\n`)
+            }
+            continue
+          }
+          errors.push({ name, error: (item.stderr || item.stdout || 'pnpm failed').trim().slice(-300) })
+        } catch (error) {
+          errors.push({ name, error: error instanceof Error ? error.message : String(error) })
+        }
+        const current = JSON.parse(readFileSync(manifestFile, 'utf8')) as typeof manifest
+        if (current.dependencies !== undefined) delete current.dependencies[name]
+        writeFileSync(manifestFile, `${JSON.stringify(current, null, 2)}\n`)
+      }
+      if (installed === 0 && dependencies.length > 0) {
+        restored.rollback()
+      }
+      invalidateUpdates()
+      return { files: restored.files, errors }
+    } catch (error) {
+      restored.rollback()
+      throw error
+    } finally {
+      installing = false
+    }
+  }
+
   const disposers = [
+    host.webServer.register({
+      kind: 'exact',
+      path: '/dsh-market/backup',
+      handler: (request, response) => {
+        if (request.method !== 'GET') {
+          response.writeHead(405, { allow: 'GET' })
+          response.end()
+          return
+        }
+        // Profile exports carry configuration that may include credentials
+        // (config.toml, .env, …), so they are limited to same-origin loopback
+        // requests exactly like process control (review #63).
+        if (!trustedRestartRequest(request)) {
+          sendJson(response, 403, { error: 'backup export is limited to same-origin loopback requests' })
+          return
+        }
+        try {
+          const data = createProfileBackup(config.profile, activeProfileDir)
+          const backup = JSON.stringify(data, null, 2)
+          const timestamp = new Date(data.createdAt).toLocaleString('sv-SE').replace(/\D/g, '')
+          response.writeHead(200, {
+            'cache-control': 'no-store',
+            'content-type': 'application/json; charset=utf-8',
+            'content-disposition': `attachment; filename="dsh-dshmarket-backup-${timestamp}.json"`,
+          })
+          response.end(backup)
+        } catch (error) {
+          sendJson(response, 500, { error: error instanceof Error ? error.message : String(error) })
+        }
+      },
+    }),
+
+    host.webServer.register({
+      kind: 'exact',
+      path: '/dsh-market/restore',
+      handler: async (request, response) => {
+        if (request.method !== 'POST') {
+          response.writeHead(405, { allow: 'POST' })
+          response.end()
+          return
+        }
+        if (!sameOrigin(request)) return sendJson(response, 403, { error: 'untrusted origin' })
+        try {
+          const body = await readJsonBody(request, MAX_BACKUP_BYTES + 4096) as { backup?: unknown }
+          sendJson(response, 200, { ok: true, ...await restoreBackup(body.backup) })
+        } catch (error) {
+          sendJson(response, 400, { error: error instanceof Error ? error.message : String(error) })
+        }
+      },
+    }),
+
+    host.webServer.register({
+      kind: 'exact',
+      path: '/dsh-market/webdav',
+      handler: async (request, response) => {
+        if (request.method !== 'POST') {
+          response.writeHead(405, { allow: 'POST' })
+          response.end()
+          return
+        }
+        if (!sameOrigin(request)) return sendJson(response, 403, { error: 'untrusted origin' })
+        try {
+          const body = await readJsonBody(request) as { action?: unknown; url?: unknown; username?: unknown; password?: unknown }
+          const url = typeof body.url === 'string' ? body.url : ''
+          const username = typeof body.username === 'string' ? body.username : ''
+          const password = typeof body.password === 'string' ? body.password : ''
+          if (body.action === 'backup') {
+            await uploadWebdav(url, username, password, createProfileBackup(config.profile, activeProfileDir))
+            sendJson(response, 200, { ok: true })
+          } else if (body.action === 'restore') {
+            // The preview flow first returns the downloaded backup so the
+            // client can show what will be restored; the real restore then
+            // posts it to /dsh-market/restore, where downloadWebdav's strict
+            // validation guarantees the fetch result is never blindly echoed
+            // (review #63).
+            sendJson(response, 200, { ok: true, backup: await downloadWebdav(url, username, password) })
+          } else sendJson(response, 400, { error: 'invalid WebDAV action' })
+        } catch (error) {
+          sendJson(response, 400, { error: error instanceof Error ? error.message : String(error) })
+        }
+      },
+    }),
+
     host.webServer.register({
       kind: 'exact',
       path: '/dsh-market/registry',
@@ -194,6 +350,9 @@ export function mountMarketRoutes(
         }
         await dropStaleHotMounts()
         const installed = readInstalled(config.profile, activeProfileDir)
+        const present = Object.keys(installed).filter(
+          name => readInstalledVersion(config.profile, name, activeProfileDir) !== null,
+        )
         const activation: Record<string, ReturnType<typeof verifyActivation>> = {}
         const live = liveNames()
         for (const name of Object.keys(installed)) {
@@ -202,6 +361,7 @@ export function mountMarketRoutes(
         sendJson(response, 200, {
           profile: config.profile,
           installed,
+          present,
           activation,
           live: listHotMounts(),
         })
