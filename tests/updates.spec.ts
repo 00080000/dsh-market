@@ -8,8 +8,11 @@
  * boot. Direction — not inequality — is what decides.
  */
 
-import { describe, expect, it } from 'vitest'
-import { compareVersions, isUpgrade } from '../src/updates.ts'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { checkUpdates, compareVersions, isUpgrade } from '../src/updates.ts'
 
 describe('compareVersions', () => {
   it('orders by major, minor, then patch', () => {
@@ -78,5 +81,90 @@ describe('isUpgrade', () => {
     expect(isUpgrade(null, '1.2.0')).toBe(false)
     expect(isUpgrade('1.0.0', null)).toBe(false)
     expect(isUpgrade('not-a-version', '1.2.0')).toBe(false)
+  })
+})
+
+/**
+ * checkUpdates itself — the resolution around those comparisons. Only the
+ * pure helpers above had unit coverage; the github branch (pinned commit vs
+ * the repo's HEAD) reached the suite solely through whole-route flow tests,
+ * where a mutation could drop the sha check or invert the availability
+ * condition and nothing failed.
+ *
+ * Getting this wrong is not cosmetic: a plugin that reads "up to date" when
+ * it is not never surfaces its fix, and one that always claims an update
+ * makes the button lie on every poll.
+ */
+describe('checkUpdates — github pins', () => {
+  const HEAD = 'a'.repeat(40)
+  const OLD = 'b'.repeat(40)
+  let home: string
+
+  /** Profile with one github-installed plugin pinned at `commit`. */
+  function profileWith(spec: string, commit: string | null): string {
+    const dir = join(mkdtempSync(join(tmpdir(), 'dshm-upd-')), 'profiles', 'web')
+    mkdirSync(join(dir, 'node_modules', 'themer'), { recursive: true })
+    writeFileSync(join(dir, 'package.json'), JSON.stringify({ dependencies: { themer: spec } }))
+    writeFileSync(join(dir, 'node_modules', 'themer', 'package.json'), JSON.stringify({ name: 'themer', version: '1.0.0' }))
+    writeFileSync(join(dir, 'pnpm-lock.yaml'), commit === null ? 'lockfileVersion: 9\n'
+      : `  resolution: {tarball: https://codeload.github.com/owner/themer/tar.gz/${commit}}\n`)
+    return dir
+  }
+
+  beforeEach(() => {
+    home = mkdtempSync(join(tmpdir(), 'dshm-updhome-'))
+    vi.stubGlobal('fetch', vi.fn(async () => ({
+      ok: true, status: 200, json: async () => ({ sha: HEAD }),
+    })))
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    rmSync(home, { recursive: true, force: true })
+  })
+
+  it('flags an update when the pinned commit differs from HEAD', async () => {
+    const result = await checkUpdates('web', true, profileWith('github:owner/themer', OLD))
+    expect(result.themer).toMatchObject({ kind: 'github', current: OLD, latest: HEAD, updateAvailable: true })
+  })
+
+  it('reports no update when the pin already IS HEAD', async () => {
+    const result = await checkUpdates('web', true, profileWith('github:owner/themer', HEAD))
+    expect(result.themer).toMatchObject({ current: HEAD, latest: HEAD, updateAvailable: false })
+  })
+
+  it('claims no update when the pin is unknown — an unknown is not a difference', async () => {
+    // No lockfile entry: `current` is null. Reporting an update here would
+    // offer a reinstall the user cannot evaluate.
+    const result = await checkUpdates('web', true, profileWith('github:owner/themer', null))
+    expect(result.themer).toMatchObject({ current: null, latest: HEAD, updateAvailable: false })
+  })
+
+  it('claims no update when the API answers without a usable sha', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, status: 200, json: async () => ({}) })))
+    expect(await checkUpdates('web', true, profileWith('github:owner/themer', OLD)))
+      .toMatchObject({ themer: { latest: null, updateAvailable: false } })
+
+    // A sha of the wrong TYPE is the case a truthiness check would let
+    // through: it is not a commit, so it cannot mean "newer".
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ sha: 12345 }) })))
+    expect(await checkUpdates('web', true, profileWith('github:owner/themer', OLD)))
+      .toMatchObject({ themer: { latest: null, updateAvailable: false } })
+  })
+
+  it('treats a bare owner/repo spec as npm, not as a github pin', async () => {
+    // pnpm accepts the shorthand, and it parses as a repo — but without the
+    // `github:` prefix the package came from the registry, so asking GitHub
+    // for a HEAD commit would compare two unrelated things.
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ version: '1.0.0' }) })))
+    const result = await checkUpdates('web', true, profileWith('owner/themer', OLD))
+    expect(result.themer).toMatchObject({ kind: 'npm' })
+  })
+
+  it('never offers an update for a linked or file: dependency', async () => {
+    for (const spec of ['link:../themer', 'file:/tmp/themer.tgz']) {
+      const result = await checkUpdates('web', true, profileWith(spec, OLD))
+      expect(result.themer, spec).toMatchObject({ kind: 'linked', updateAvailable: false })
+    }
   })
 })

@@ -19,6 +19,7 @@ import { join } from 'node:path'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { dump } from 'js-yaml'
 import { mountMarketRoutes, type MarketHost } from '../src/routes.ts'
+import { sameOrigin } from '../src/http.ts'
 import * as orderApi from '../src/order.ts'
 import type { PluginCommandRuntime } from '../src/dsh-cli.ts'
 
@@ -469,5 +470,40 @@ describe('POST /dsh-market/bundle-order', () => {
     expect(JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'))).toEqual(JSON.parse(before))
     expect((JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')) as { dsh: { profile: { bundles: string[] } } }).dsh.profile.bundles)
       .toEqual(['@deepseek-ai/dsh-base', 'alpha', 'beta'])
+  })
+})
+
+/**
+ * The same-origin gate every mutating route calls before doing anything —
+ * the reason a page on another site cannot POST an install at the local
+ * server. It was only ever reached through whole-route tests, which meant
+ * the unparseable-Origin path was never observed: a mutation making the
+ * catch return true (trusting a malformed Origin) failed nothing.
+ */
+describe('sameOrigin', () => {
+  const req = (headers: Record<string, string>) => ({ headers }) as unknown as IncomingMessage
+
+  it('accepts an Origin whose host matches the Host header', () => {
+    expect(sameOrigin(req({ host: '127.0.0.1:3080', origin: 'http://127.0.0.1:3080' }))).toBe(true)
+    // Scheme is not part of the comparison; host:port is.
+    expect(sameOrigin(req({ host: 'localhost:3080', origin: 'https://localhost:3080' }))).toBe(true)
+  })
+
+  it('refuses a different host, or the same host on a different port', () => {
+    expect(sameOrigin(req({ host: '127.0.0.1:3080', origin: 'http://evil.example' }))).toBe(false)
+    expect(sameOrigin(req({ host: '127.0.0.1:3080', origin: 'http://127.0.0.1:9999' }))).toBe(false)
+  })
+
+  it('refuses a request with no Origin or no Host', () => {
+    // Unlike the download navigation, a mutating POST must carry Origin.
+    expect(sameOrigin(req({ host: '127.0.0.1:3080' }))).toBe(false)
+    expect(sameOrigin(req({ origin: 'http://127.0.0.1:3080' }))).toBe(false)
+    expect(sameOrigin(req({}))).toBe(false)
+  })
+
+  it('refuses an Origin that does not parse, rather than trusting it', () => {
+    for (const origin of ['not a url', '://', 'http://', '']) {
+      expect(sameOrigin(req({ host: '127.0.0.1:3080', origin })), origin).toBe(false)
+    }
   })
 })

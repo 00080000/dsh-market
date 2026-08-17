@@ -9,7 +9,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { respawnInvocation, trustedDownloadRequest } from '../src/restart.ts'
+import { respawnInvocation, trustedDownloadRequest, trustedRestartRequest } from '../src/restart.ts'
 
 const LAUNCH = { file: 'C:\\Program Files\\nodejs\\node.exe', args: ['--import', 'tsx/esm', 'bin.ts', '--profile', 'web'], viaShell: false }
 
@@ -67,5 +67,56 @@ describe('trustedDownloadRequest', () => {
     expect(trustedDownloadRequest(req({ host: 'x', 'x-forwarded-for': '1.2.3.4' }))).toBe(false)
     expect(trustedDownloadRequest(req({ host: 'x', 'x-real-ip': '1.2.3.4' }))).toBe(false)
     expect(trustedDownloadRequest(req({}, '127.0.0.1'))).toBe(false) // Host required
+  })
+})
+
+/**
+ * The gate on the one-click restart endpoint — the market's only route that
+ * relaunches the host process. Three independent conditions have to hold,
+ * and each was reachable only through the flow suite's HTTP tests, so a
+ * mutation that trusted a MALFORMED Origin broke nothing: the catch's
+ * `return false` was never observed.
+ */
+describe('trustedRestartRequest', () => {
+  const req = (headers: Record<string, string>, remoteAddress = '127.0.0.1') =>
+    ({ headers, socket: { remoteAddress } }) as unknown as Parameters<typeof trustedRestartRequest>[0]
+  const ok = { host: '127.0.0.1:3080', origin: 'http://127.0.0.1:3080' }
+
+  it('accepts a same-origin request from a direct loopback peer', () => {
+    expect(trustedRestartRequest(req(ok))).toBe(true)
+    expect(trustedRestartRequest(req(ok, '::1'))).toBe(true)
+    expect(trustedRestartRequest(req(ok, '::ffff:127.0.0.1'))).toBe(true)
+  })
+
+  it('refuses a peer that is not loopback', () => {
+    expect(trustedRestartRequest(req(ok, '192.168.1.5'))).toBe(false)
+    expect(trustedRestartRequest(req(ok, '10.0.0.2'))).toBe(false)
+    // A socket with no remoteAddress at all — built directly, since passing
+    // undefined through `req` would just take its default.
+    const noPeer = { headers: ok, socket: {} } as unknown as Parameters<typeof trustedRestartRequest>[0]
+    expect(trustedRestartRequest(noPeer)).toBe(false)
+  })
+
+  it('refuses anything carrying a forwarding trace — the peer is a proxy', () => {
+    for (const header of ['forwarded', 'x-forwarded-for', 'x-real-ip']) {
+      expect(trustedRestartRequest(req({ ...ok, [header]: 'for=1.2.3.4' })), header).toBe(false)
+    }
+  })
+
+  it('refuses a missing, cross-origin or MALFORMED Origin', () => {
+    expect(trustedRestartRequest(req({ host: '127.0.0.1:3080' }))).toBe(false)
+    expect(trustedRestartRequest(req({ ...ok, origin: 'http://evil.example' }))).toBe(false)
+    // Unparseable: the catch must refuse, not fall through to trusting it.
+    expect(trustedRestartRequest(req({ ...ok, origin: 'not a url' }))).toBe(false)
+    expect(trustedRestartRequest(req({ ...ok, origin: '' }))).toBe(false)
+  })
+
+  it('refuses a non-http scheme even when the host matches', () => {
+    expect(trustedRestartRequest(req({ ...ok, origin: 'file://127.0.0.1:3080' }))).toBe(false)
+    expect(trustedRestartRequest(req({ ...ok, origin: 'javascript://127.0.0.1:3080' }))).toBe(false)
+  })
+
+  it('refuses when the Host header is absent', () => {
+    expect(trustedRestartRequest(req({ origin: 'http://127.0.0.1:3080' }))).toBe(false)
   })
 })
