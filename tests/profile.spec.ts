@@ -8,7 +8,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
-  entryArtifactExists, hasDshManifest, pluginSubdirs, profileDir,
+  conflictingEntryIds, entryArtifactExists, hasDshManifest, pluginSubdirs, profileDir,
   readInstalled, readInstalledManifest, readInstalledVersion, readLockCommits,
 } from '../src/profile.ts'
 
@@ -248,5 +248,44 @@ describe('setAllowBuilds (#6)', () => {
     writeFileSync(join(dir, 'pnpm-workspace.yaml'), 'packages:\n  - .\n')
     setAllowBuilds('web', ['pkg-a'])
     expect(readFileSync(join(dir, 'pnpm-workspace.yaml'), 'utf8')).toMatch(/packages:[\s\S]*allowBuilds:\n  pkg-a: true/)
+  })
+})
+
+describe('conflictingEntryIds (#122)', () => {
+  /** Write a package whose bundle patch holds the given rows. */
+  function bundle(dir: string, name: string, patch: string): void {
+    const root = join(dir, 'node_modules', name)
+    mkdirSync(root, { recursive: true })
+    writeFileSync(join(root, 'package.json'), JSON.stringify({
+      name, version: '1.0.0', dsh: { bundle: { patch: './cordis.patch.yml' } },
+    }))
+    writeFileSync(join(root, 'cordis.patch.yml'), patch)
+  }
+
+  it('flags two packages that INSERT the same loader entry id', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'dshm-clash-'))
+    try {
+      bundle(dir, 'incumbent', '- insert:\n    - id: shared\n      name: incumbent\n')
+      bundle(dir, 'newcomer', '- insert:\n    - id: shared\n      name: newcomer\n')
+      // Two entries under one id is what makes cordis refuse the next boot.
+      expect(conflictingEntryIds(dir, 'newcomer', ['incumbent'])).toEqual([{ id: 'shared', owner: 'incumbent' }])
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('does not flag a row that merely CONFIGURES another plugin\'s entry', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'dshm-clash-'))
+    try {
+      bundle(dir, 'incumbent', '- insert:\n    - id: theirs\n      name: incumbent\n')
+      // A top-level `- id:` row patches an existing entry; it creates
+      // nothing, so it cannot brick a boot. Counting it here refused a
+      // legitimate plugin outright — the same owned-vs-referenced
+      // distinction #147 drew for the disable path.
+      bundle(dir, 'newcomer', '- insert:\n    - id: mine\n      name: newcomer\n- id: theirs\n  config:\n    tweaked: true\n')
+      expect(conflictingEntryIds(dir, 'newcomer', ['incumbent'])).toEqual([])
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 })

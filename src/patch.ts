@@ -359,7 +359,7 @@ export function enableRow(patchPath: string, rowId: string): Promise<{ ok: boole
       try { return readFileSync(patchPath, 'utf8') } catch { return '' }
     })()
     if (blockRe.test(text)) {
-      writeFileSync(patchPath, text.replace(blockRe, ''))
+      writeFileSync(patchPath, withPlaceholderRestored(text.replace(blockRe, '')))
       logEvent('info', 'patch', `enabled row ${rowId} in ${patchPath}`)
       return { ok: true, reason: null }
     }
@@ -368,6 +368,23 @@ export function enableRow(patchPath: string, rowId: string): Promise<{ ok: boole
     if (result.ok) logEvent('info', 'patch', `force-enabled row ${rowId} in ${patchPath}`)
     return result
   })
+}
+
+/**
+ * Put the empty-list placeholder back when nothing else is left.
+ *
+ * Appending the first row comments the template's `[]` out (see
+ * appendPatchEntry), so removing the LAST row leaves a file of pure
+ * comments. That is not a top-level array, and dsh refuses to boot the
+ * profile at all — "must be a top-level YAML array of loader patch
+ * entries". Disable a plugin, enable it again, and the profile is bricked.
+ */
+function withPlaceholderRestored(text: string): string {
+  if (text.replace(/^[ \t]*#.*$/gmu, '').trim() !== '') return text
+  const uncommented = text.replace(/^[ \t]*#[ \t]*\[[ \t]*\][ \t]*(?:\r?\n|$)/mu, '[]\n')
+  if (uncommented !== text) return uncommented
+  // No commented placeholder to revive (hand-written file): add one.
+  return text === '' || text.endsWith('\n') ? `${text}[]\n` : `${text}\n[]\n`
 }
 
 /** Remove every disable/force block the market (or the user) wrote for a
@@ -383,7 +400,7 @@ export function removeRowBlocks(patchPath: string, rowIds: readonly string[]): v
     next = next.replace(blockRe, '')
   }
   if (next !== text) {
-    writeFileSync(patchPath, next)
+    writeFileSync(patchPath, withPlaceholderRestored(next))
     logEvent('info', 'patch', `removed patch rows for ${rowIds.join(', ')}`)
   }
 }

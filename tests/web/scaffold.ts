@@ -55,6 +55,8 @@ export function dshAvailable(): boolean {
 export interface WebScaffold {
   baseUrl: string
   home: string
+  /** Stop dsh and boot it again on the same DSH_HOME, same port. */
+  restart(): Promise<void>
   close(): Promise<void>
 }
 
@@ -105,41 +107,63 @@ export async function launchMarketScaffold(options: ScaffoldOptions = {}): Promi
   }
 
   const port = 3200 + Math.floor(Math.random() * 500)
-  const child: ChildProcess = spawn(`${command} --profile web --port ${String(port)}`, {
-    shell: true,
-    cwd: DSH_CWD,
-    env,
-    stdio: ['ignore', 'pipe', 'pipe'],
-    detached: true,
-  })
-  let output = ''
-  child.stdout?.on('data', (chunk: Buffer) => { output = (output + chunk.toString()).slice(-8192) })
-  child.stderr?.on('data', (chunk: Buffer) => { output = (output + chunk.toString()).slice(-8192) })
-
   const baseUrl = `http://127.0.0.1:${String(port)}`
-  const deadline = Date.now() + 120_000
-  for (;;) {
-    if (child.exitCode !== null) throw new Error(`dsh exited ${String(child.exitCode)}:\n${output.slice(-2000)}`)
-    try {
-      const res = await fetch(`${baseUrl}/dsh-market/status`, { signal: AbortSignal.timeout(2000) })
-      if (res.ok) break
-    } catch { /* not up yet */ }
-    if (Date.now() > deadline) throw new Error(`dsh boot timeout:\n${output.slice(-2000)}`)
-    await new Promise(resolvePromise => setTimeout(resolvePromise, 1000))
+
+  /** Spawn dsh and wait until the market answers, or explain why it never did. */
+  const boot = async (): Promise<ChildProcess> => {
+    const process_ = spawn(`${command} --profile web --port ${String(port)}`, {
+      shell: true,
+      cwd: DSH_CWD,
+      env,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      detached: true,
+    })
+    let output = ''
+    const capture = (chunk: Buffer): void => { output = (output + chunk.toString()).slice(-8192) }
+    process_.stdout?.on('data', capture)
+    process_.stderr?.on('data', capture)
+    const deadline = Date.now() + 120_000
+    for (;;) {
+      if (process_.exitCode !== null) throw new Error(`dsh exited ${String(process_.exitCode)}:\n${output.slice(-2000)}`)
+      try {
+        const res = await fetch(`${baseUrl}/dsh-market/status`, { signal: AbortSignal.timeout(2000) })
+        if (res.ok) break
+      } catch { /* not up yet */ }
+      if (Date.now() > deadline) throw new Error(`dsh boot timeout:\n${output.slice(-2000)}`)
+      await new Promise(resolvePromise => setTimeout(resolvePromise, 1000))
+    }
+    return process_
   }
+
+  const stop = async (process_: ChildProcess): Promise<void> => {
+    if (process_.pid !== undefined) {
+      try { process.kill(-process_.pid, 'SIGTERM') } catch { process_.kill('SIGTERM') }
+    }
+    await new Promise(resolvePromise => setTimeout(resolvePromise, 1500))
+    if (process_.pid !== undefined) {
+      try { process.kill(-process_.pid, 'SIGKILL') } catch { /* already gone */ }
+    }
+  }
+
+  let child = await boot()
 
   return {
     baseUrl,
     home,
+    /**
+     * Stop dsh and start it again on the same DSH_HOME. This is the only way
+     * to observe what the market's file-level work actually did: the profile
+     * is recomposed from disk, so a patch layer that hot-mount never touched
+     * takes effect, and a profile the install logic bricked fails to come up
+     * at all (the real consequence #122 guards against).
+     */
+    restart: async () => {
+      await stop(child)
+      child = await boot()
+    },
     close: async () => {
       await registry?.close()
-      if (child.pid !== undefined) {
-        try { process.kill(-child.pid, 'SIGTERM') } catch { child.kill('SIGTERM') }
-      }
-      await new Promise(resolvePromise => setTimeout(resolvePromise, 1500))
-      if (child.pid !== undefined) {
-        try { process.kill(-child.pid, 'SIGKILL') } catch { /* already gone */ }
-      }
+      await stop(child)
       rmSync(home, { recursive: true, force: true })
     },
   }

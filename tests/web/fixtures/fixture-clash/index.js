@@ -16,7 +16,7 @@
 import { writeFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 
-export const name = 'dshm-e2e-fixture-a'
+export const name = 'dshm-e2e-fixture-clash'
 
 const marker = () => join(process.env.DSH_HOME ?? '.', `e2e-${name}.alive`)
 

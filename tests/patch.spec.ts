@@ -12,6 +12,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
+import { load } from 'js-yaml'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -87,17 +88,22 @@ describe('disableRow / enableRow', () => {
       await disableRow(patch, 'workbench')
       const on = await enableRow(patch, 'workbench')
       expect(on.ok).toBe(true)
-      expect(readPatch(dir)).toBe('')
+      // `[]`, not an empty file: dsh parses this file on every boot and
+      // rejects anything that is not an array — and `yaml.load('')` is
+      // undefined, so an emptied file bricks the profile just as surely as
+      // a comments-only one did.
+      expect(readPatch(dir)).toBe('[]\n')
 
       // No user-disable block: force-enable with disabled:false (covers rows
-      // a lower layer — the bundle patch — disabled).
+      // a lower layer — the bundle patch — disabled). The placeholder is
+      // commented out rather than appended after, as for the dsh template.
       const forced = await enableRow(patch, 'workbench')
       expect(forced.ok).toBe(true)
-      expect(readPatch(dir)).toBe('- id: workbench\n  disabled: false\n')
-      // Already forced: no-op.
+      expect(readPatch(dir)).toBe('# []\n- id: workbench\n  disabled: false\n')
+      // Already forced: no-op, file untouched.
       const again = await enableRow(patch, 'workbench')
       expect(again.ok).toBe(true)
-      expect(readPatch(dir)).toBe('- id: workbench\n  disabled: false\n')
+      expect(readPatch(dir)).toBe('# []\n- id: workbench\n  disabled: false\n')
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }
@@ -371,6 +377,55 @@ describe('packagePatchFlags', () => {
       const flags = packagePatchFlags(emptyHost, dir, ['dsh-a', 'dsh-b'], state)
       expect(flags.disabled).toEqual(['dsh-a'])
       expect(flags.forced).toEqual(['dsh-b'])
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+})
+describe('the patch file always stays a top-level array', () => {
+  /**
+   * dsh boots a profile by parsing this file and refusing anything that is
+   * not an array ("must be a top-level YAML array of loader patch entries").
+   * Appending the first row comments the template's `[]` out, so removing
+   * the last row used to leave a file of pure comments — disable a plugin,
+   * enable it again, and the profile would not start at all. Found by the
+   * layer-3 install chain, where the restart simply failed.
+   */
+  const bootWouldAccept = (text: string): boolean => Array.isArray(load(text))
+
+  const template = [
+    '# Your patch layer for this dsh profile, applied after every bundle layer:',
+    '# a top-level YAML array of loader patch entries.',
+    '[]',
+    '',
+  ].join('\n')
+
+  it('survives a disable/enable round trip', async () => {
+    const dir = patchDir()
+    try {
+      const file = join(dir, 'cordis.patch.yml')
+      writeFileSync(file, template)
+      await disableRow(file, 'some-plugin')
+      expect(bootWouldAccept(readPatch(dir))).toBe(true)
+
+      await enableRow(file, 'some-plugin')
+      // The row is gone AND the file is still something dsh can boot.
+      expect(readPatch(dir)).not.toContain('some-plugin')
+      expect(bootWouldAccept(readPatch(dir))).toBe(true)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('survives uninstall cleanup removing the last row', async () => {
+    const dir = patchDir()
+    try {
+      const file = join(dir, 'cordis.patch.yml')
+      writeFileSync(file, template)
+      await disableRow(file, 'going-away')
+      removeRowBlocks(file, ['going-away'])
+      expect(readPatch(dir)).not.toContain('going-away')
+      expect(bootWouldAccept(readPatch(dir))).toBe(true)
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }

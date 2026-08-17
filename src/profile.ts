@@ -289,12 +289,17 @@ export function conflictingEntryIds(
   candidate: string,
   installedBundles: readonly string[],
 ): { id: string; owner: string }[] {
-  const mine = bundlePatchEntryIds(join(profileDirectory, 'node_modules', candidate))
+  // INSERTED ids on both sides, not every id in the file. What bricks the
+  // next boot is two entries created under one id; a row that merely
+  // CONFIGURES another plugin's entry creates nothing, so counting it here
+  // refuses a legitimate plugin outright — the same distinction #147 drew
+  // for the disable path, which this guard was left out of.
+  const mine = bundlePatchInsertedIds(join(profileDirectory, 'node_modules', candidate))
   if (mine.length === 0) return []
   const conflicts: { id: string; owner: string }[] = []
   for (const bundle of installedBundles) {
     if (bundle === candidate) continue
-    const theirs = new Set(bundlePatchEntryIds(join(profileDirectory, 'node_modules', bundle)))
+    const theirs = new Set(bundlePatchInsertedIds(join(profileDirectory, 'node_modules', bundle)))
     for (const id of mine) {
       if (theirs.has(id) && !conflicts.some(hit => hit.id === id)) conflicts.push({ id, owner: bundle })
     }
