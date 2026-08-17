@@ -11,10 +11,12 @@
 
 import { execSync, spawn, spawnSync } from 'node:child_process'
 import type { ChildProcess } from 'node:child_process'
-import { mkdtempSync, readdirSync, rmSync } from 'node:fs'
+import { mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import type { Page } from 'playwright'
+import { packFixture, startFixtureRegistry } from './registry.ts'
+import type { FixtureRegistry } from './registry.ts'
 
 const REPO_ROOT = resolve(new URL('../..', import.meta.url).pathname)
 
@@ -30,10 +32,39 @@ export function dshCommand(): string | null {
   return probe.status === 0 ? 'dsh' : null
 }
 
+/**
+ * Whether the e2e specs can run — and, where they are supposed to be
+ * ENFORCING something, whether their absence is an error.
+ *
+ * Skipping is right on a contributor's machine that has no dsh. It is a trap
+ * in CI: this lane installs the CLI itself, so if that step ever breaks (a
+ * pinned prerelease unpublished, a registry hiccup) every spec would skip and
+ * the job would still go green — reporting "e2e passed" for a run that
+ * asserted nothing. CI sets DSHM_E2E_REQUIRED=1 to make that loud.
+ */
+export function dshAvailable(): boolean {
+  if (dshCommand() !== null) return true
+  if (process.env.DSHM_E2E_REQUIRED === '1') {
+    throw new Error(
+      'DSHM_E2E_REQUIRED=1 but no dsh CLI is reachable — the e2e lane would have skipped every spec and passed green',
+    )
+  }
+  return false
+}
+
 export interface WebScaffold {
   baseUrl: string
   home: string
   close(): Promise<void>
+}
+
+export interface ScaffoldOptions {
+  /**
+   * Fixture directories under `tests/web/fixtures` to publish to a local
+   * npm registry and list in a curated catalog the market is pointed at.
+   * With this set the specs can drive the REAL install route end to end.
+   */
+  fixtures?: string[]
 }
 
 function run(command: string, env: NodeJS.ProcessEnv, cwd: string = REPO_ROOT): void {
@@ -44,16 +75,34 @@ function run(command: string, env: NodeJS.ProcessEnv, cwd: string = REPO_ROOT): 
  * Pack the working tree and boot `dsh --profile web` on a free port inside
  * a temp DSH_HOME with the market installed from the tarball.
  */
-export async function launchMarketScaffold(): Promise<WebScaffold> {
+export async function launchMarketScaffold(options: ScaffoldOptions = {}): Promise<WebScaffold> {
   const command = dshCommand()
   if (command === null) throw new Error('no dsh available — set DSHM_E2E_DSH')
   const home = mkdtempSync(join(tmpdir(), 'dshm-e2e-home-'))
-  const env = { ...process.env, DSH_HOME: home, CI: 'true' }
+  let env: NodeJS.ProcessEnv = { ...process.env, DSH_HOME: home, CI: 'true' }
 
-  // prepack builds lib/ + client and runs the preflight guard.
+  // prepack builds lib/ + client and runs the preflight guard. The market's
+  // own install resolves from the real npm registry — it has dependencies.
   run('npm pack --pack-destination ' + JSON.stringify(home), env)
   const tarball = join(home, readdirSync(home).find(name => name.endsWith('.tgz'))!)
   run(`${command} plugin --profile web add ${JSON.stringify(tarball)}`, env, DSH_CWD)
+
+  // Only now redirect pnpm at the fixture registry, so the fixtures the
+  // specs install go through real resolution without touching the network.
+  let registry: FixtureRegistry | null = null
+  if (options.fixtures !== undefined && options.fixtures.length > 0) {
+    registry = await startFixtureRegistry(options.fixtures.map(dir => packFixture(dir, home)))
+    writeFileSync(
+      join(home, 'profiles', 'web', '.npmrc'),
+      // minimum-release-age=0: a fixture "published" seconds ago would
+      // otherwise trip pnpm 11's fresh-release hold (#39).
+      `registry=${registry.npmUrl}\nminimum-release-age=0\n`,
+    )
+    // npm_config_registry OUTRANKS .npmrc, and `npm run test:web` puts the
+    // caller's registry there — so the file alone silently sends pnpm to the
+    // public registry, where a fixture does not exist. Set both.
+    env = { ...env, DSHM_REGISTRY_URL: registry.catalogUrl, npm_config_registry: registry.npmUrl }
+  }
 
   const port = 3200 + Math.floor(Math.random() * 500)
   const child: ChildProcess = spawn(`${command} --profile web --port ${String(port)}`, {
@@ -83,6 +132,7 @@ export async function launchMarketScaffold(): Promise<WebScaffold> {
     baseUrl,
     home,
     close: async () => {
+      await registry?.close()
       if (child.pid !== undefined) {
         try { process.kill(-child.pid, 'SIGTERM') } catch { child.kill('SIGTERM') }
       }

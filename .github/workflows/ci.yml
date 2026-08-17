@@ -54,3 +54,7 @@ jobs:
       - run: npm install -g @deepseek-ai/dsh@0.1.0-rc.6
       - run: npx playwright install --with-deps chromium
       - run: npm run test:web
+        # Fail loudly if the CLI install above ever breaks: without this the
+        # specs would skip and the job would pass green having asserted nothing.
+        env:
+          DSHM_E2E_REQUIRED: '1'

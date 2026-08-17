@@ -13,10 +13,10 @@
 import { chromium } from 'playwright'
 import type { Browser, Page } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { dshCommand, launchMarketScaffold, watchConsole } from './scaffold.ts'
+import { dshAvailable, launchMarketScaffold, watchConsole } from './scaffold.ts'
 import type { WebScaffold } from './scaffold.ts'
 
-const HAS_DSH = dshCommand() !== null
+const HAS_DSH = dshAvailable()
 
 describe.skipIf(!HAS_DSH)('web e2e: plugin market', () => {
   let scaffold: WebScaffold

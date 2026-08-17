@@ -1,0 +1,5 @@
+# Bundle patch: inserts this fixture into the profile's layer stack, the
+# same way a real community plugin does.
+- insert:
+    - id: dshm-fixture-a
+      name: 'dshm-e2e-fixture-a'
