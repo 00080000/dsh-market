@@ -332,6 +332,67 @@ describe('rowIdsForPackage', () => {
     }
   })
 
+  /**
+   * The block open/close transitions, which the single-insert fixture above
+   * never exercises: a mutation audit could flip either indentation test in
+   * readBundlePatchRows without breaking a single spec.
+   *
+   * Ownership is decided by nesting — ids under an `insert:` belong to the
+   * package, ids at or above that indentation are OTHER plugins' rows it
+   * configures — so the cases that matter are the ones where the block opens
+   * and closes more than once.
+   */
+  it('tracks insert blocks that open, close and reopen (#147)', () => {
+    const dir = patchDir()
+    try {
+      installedBundle(dir, 'multi-bundle', [
+        // A config row BEFORE any insert block: never owned.
+        '- id: llm-deepseek',
+        '  config:',
+        '    hidden: true',
+        '',
+        // First block, carrying more than one row of its own.
+        '- insert:',
+        '    - id: alpha',
+        '      name: multi-bundle',
+        '    - id: beta',
+        '      name: multi-bundle-extra',
+        '',
+        // A sibling `- id:` row closes the block. The deeper id below is
+        // therefore part of THAT neighbour's config, not ours — order
+        // matters here: this case has to come first, while the block is
+        // still open, or nothing proves the row is what closed it.
+        '- id: attachment-local',
+        '  config:',
+        '    handlers:',
+        '      - id: not-ours-nested',
+        '',
+        // Reopen, then close with a NON-id row instead: the other closing
+        // path, which a scan that only reacts to `id:` lines misses.
+        '- insert:',
+        '    - id: delta',
+        '      name: multi-bundle-delta',
+        '- disable: true',
+        '  entries:',
+        '    - id: not-ours-disabled',
+        '',
+        // Reopens: a second block after those rows.
+        '- insert:',
+        '    - id: gamma',
+        '      name: multi-bundle-late',
+        '',
+      ].join('\n'))
+      writeFileSync(
+        join(dir, 'node_modules', 'multi-bundle', 'package.json'),
+        JSON.stringify({ name: 'multi-bundle', dsh: { bundle: { patch: './cordis.patch.yml' } } }),
+      )
+      const host: PatchHost = { loader: { entries: () => [] } }
+      expect(rowIdsForPackage(host, dir, 'multi-bundle')).toEqual(['alpha', 'beta', 'delta', 'gamma'])
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
   it('collects every row of a multi-row insert block', () => {
     const dir = patchDir()
     try {

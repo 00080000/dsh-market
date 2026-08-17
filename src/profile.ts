@@ -211,27 +211,24 @@ export function bundlePatchInsertedIds(dir: string): string[] {
  * but for "what does this bundle bring in" any row counts. `insertedIds` is
  * the subset nested under an `insert:` key (#147).
  */
-function readBundlePatchRows(dir: string): { names: string[]; ids: string[]; insertedIds: string[] } {
-  let patchPath: string
-  try {
-    const manifest = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')) as {
-      dsh?: { bundle?: { patch?: unknown } }
-    }
-    const declared = manifest.dsh?.bundle?.patch
-    if (typeof declared !== 'string' || declared === '') return { names: [], ids: [], insertedIds: [] }
-    patchPath = join(dir, declared)
-  } catch {
-    return { names: [], ids: [], insertedIds: [] }
-  }
+/**
+ * Rows of one patch file. Exported because a package may ship its patch at
+ * the conventional path INSTEAD of declaring `dsh.bundle.patch`, and the
+ * patch layer has to read that one by the same rules — a second hand-rolled
+ * scan drifted from this one and re-introduced #147 on that path (it closed
+ * the insert block only on `id:` lines, so `- disable:` followed by nested
+ * ids claimed the neighbour's rows).
+ */
+export function parsePatchRows(text: string): { names: string[]; ids: string[]; insertedIds: string[] } {
   const names: string[] = []
   const ids: string[] = []
   const insertedIds: string[] = []
-  try {
+  {
     // `insert:` opens a nested list; every id below it, at deeper
     // indentation, is a row this package brings in. A row at or above the
     // `insert:` indentation closes the block — those target OTHER plugins.
     let insertIndent: number | null = null
-    for (const raw of readFileSync(patchPath, 'utf8').split('\n')) {
+    for (const raw of text.split('\n')) {
       const line = raw.replace(/#.*$/, '')
       if (line.trim() === '') continue
       const indent = line.length - line.trimStart().length
@@ -256,8 +253,23 @@ function readBundlePatchRows(dir: string): { names: string[]; ids: string[]; ins
         }
       }
     }
-  } catch { /* unreadable patch — nothing to report */ }
+  }
   return { names, ids, insertedIds }
+}
+
+/** Rows of the patch a package DECLARES through `dsh.bundle.patch`. */
+function readBundlePatchRows(dir: string): { names: string[]; ids: string[]; insertedIds: string[] } {
+  const empty = { names: [], ids: [], insertedIds: [] }
+  try {
+    const manifest = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')) as {
+      dsh?: { bundle?: { patch?: unknown } }
+    }
+    const declared = manifest.dsh?.bundle?.patch
+    if (typeof declared !== 'string' || declared === '') return empty
+    return parsePatchRows(readFileSync(join(dir, declared), 'utf8'))
+  } catch {
+    return empty
+  }
 }
 
 /** The profile manifest's `dsh.profile.bundles` — what the CLI reconciled. */

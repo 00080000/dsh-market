@@ -198,3 +198,53 @@ describe('WebDAV parent collections (#102)', () => {
     expect(webdavParentCollections('not a url')).toEqual([])
   })
 })
+
+/**
+ * Range boundaries of the private-network guard. The suite blocked the
+ * obvious RFC1918 addresses but never the carrier-NAT (100.64/10) or
+ * benchmark (198.18/15) ranges, and never an address just OUTSIDE a blocked
+ * range — so an off-by-one in any bound went unnoticed. A mutation audit
+ * found it: flipping those comparisons broke nothing.
+ *
+ * Each range is asserted from both sides on purpose. "Blocked" alone passes
+ * for a guard that rejects everything; the neighbouring public address is
+ * what proves the bound sits where it should.
+ */
+describe('private-network guard boundaries', () => {
+  const blocked = [
+    ['0.0.0.0', 'this network'],
+    ['10.255.255.255', 'RFC1918 top'],
+    ['100.64.0.0', 'carrier NAT, first'],
+    ['100.127.255.255', 'carrier NAT, last'],
+    ['127.0.0.1', 'loopback'],
+    ['169.254.169.254', 'link-local metadata'],
+    ['172.16.0.0', 'RFC1918 first'],
+    ['172.31.255.255', 'RFC1918 last'],
+    ['192.168.0.1', 'RFC1918'],
+    ['198.18.0.0', 'benchmark, first'],
+    ['198.19.255.255', 'benchmark, last'],
+    ['224.0.0.1', 'multicast'],
+    ['255.255.255.255', 'broadcast'],
+  ] as const
+
+  const allowed = [
+    ['9.255.255.255', 'just below 10/8'],
+    ['11.0.0.1', 'just above 10/8'],
+    ['100.63.255.255', 'just below carrier NAT'],
+    ['100.128.0.0', 'just above carrier NAT'],
+    ['172.15.255.255', 'just below RFC1918'],
+    ['172.32.0.1', 'just above RFC1918'],
+    ['198.17.255.255', 'just below benchmark'],
+    ['198.20.0.1', 'just above benchmark'],
+    ['223.255.255.255', 'just below multicast'],
+    ['93.184.216.34', 'ordinary public host'],
+  ] as const
+
+  it('refuses every reserved range, at both of its edges', () => {
+    for (const [ip, why] of blocked) expect(isPublicTarget(ip), `${ip} (${why})`).toBe(false)
+  })
+
+  it('still allows the addresses immediately outside those ranges', () => {
+    for (const [ip, why] of allowed) expect(isPublicTarget(ip), `${ip} (${why})`).toBe(true)
+  })
+})

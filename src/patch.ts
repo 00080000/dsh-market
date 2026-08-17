@@ -30,7 +30,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { logEvent } from './log.ts'
 import { parsePatchFile } from './check.ts'
-import { bundlePatchInsertedIds } from './profile.ts'
+import { bundlePatchInsertedIds, parsePatchRows } from './profile.ts'
 
 /** The slice of the loader tree this module needs. */
 export interface PatchHost {
@@ -205,21 +205,13 @@ export function rowIdsForPackage(host: PatchHost, profileDirectory: string, pack
   } catch { /* package not installed — loader side may still know it */ }
   // The conventional location too: a package may ship cordis.patch.yml at
   // its root without declaring dsh.bundle.patch (the loader probes it too).
-  // Same rule — only ids nested under an `insert:` key.
+  // Same parser, deliberately: this used to be a second hand-rolled scan
+  // that closed the insert block only on `id:` lines, so `- disable:` with
+  // nested ids under it claimed the neighbour's rows — #147 all over again
+  // on the path #147 did not touch.
   try {
-    let insertIndent: number | null = null
-    for (const raw of readFileSync(join(packageDir, 'cordis.patch.yml'), 'utf8').split('\n')) {
-      const line = raw.replace(/#.*$/u, '')
-      if (line.trim() === '') continue
-      const indent = line.length - line.trimStart().length
-      if (/^\s*-?\s*insert:\s*$/u.test(line)) {
-        insertIndent = indent
-        continue
-      }
-      const id = /^\s*-?\s*id:\s*['"]?([A-Za-z0-9_.-]+)/u.exec(line)
-      if (id === null) continue
-      if (insertIndent !== null && indent > insertIndent) ids.add(id[1])
-      else insertIndent = null
+    for (const id of parsePatchRows(readFileSync(join(packageDir, 'cordis.patch.yml'), 'utf8')).insertedIds) {
+      ids.add(id)
     }
   } catch { /* no conventional patch — nothing more to add */ }
   const prefix = includePrefix(host)
