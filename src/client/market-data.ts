@@ -57,6 +57,8 @@ export interface UpdateStatus {
 
 /** Poll payload from /dsh-market/status. */
 export interface MarketStatus {
+  /** The market's own version — rendered in the heading so screenshots carry it. */
+  version?: string
   active?: boolean
   lastLine?: string
   seconds?: number

@@ -2,6 +2,7 @@
 
 export const zh = {
   nav: '插件市场',
+  versionHint: '插件市场版本 — 反馈问题时请把它一起截图',
   subtitle: '发现社区为 DeepSeek Harness 打造的能力',
   searchPh: '搜索插件，比如：通知、终端、记忆…',
   tabDiscover: '发现',
@@ -287,6 +288,7 @@ export type MarketKey = keyof typeof zh
 
 export const en: Record<MarketKey, string> = {
   nav: 'Plugin Market',
+  versionHint: 'Plugin market version — include it when reporting an issue',
   subtitle: 'Discover community plugins for DeepSeek Harness',
   searchPh: 'Search plugins: notify, terminal, memory…',
   tabDiscover: 'Discover',

@@ -77,6 +77,25 @@ export interface MarketConfig {
 const PROFILE_RE = /^[A-Za-z0-9_-]+$/
 
 /**
+ * The market's own version, read once from its installed package.json.
+ *
+ * The UI puts this in the page heading so a user's screenshot carries it:
+ * most bug reports arrive as a photo of the screen, and without a version
+ * in frame the first reply always has to ask which one it was.
+ */
+let cachedVersion: string | null = null
+export function marketVersion(): string {
+  if (cachedVersion !== null) return cachedVersion
+  try {
+    const manifest = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version?: string }
+    cachedVersion = manifest.version ?? 'unknown'
+  } catch {
+    cachedVersion = 'unknown'
+  }
+  return cachedVersion
+}
+
+/**
  * Whether an installed package declares a client part (`dsh.client`). Its UI
  * is injected into the page, so toggling it needs a browser refresh to show
  * the change — the install flow prompts the same way via the hot banner.
@@ -939,6 +958,8 @@ export function mountMarketRoutes(
           busy: installing,
           pnpm: await commands.probePnpm(),
           boot: BOOT_ID,
+          // Shown in the page heading so screenshots carry it (#159).
+          version: marketVersion(),
           restart: restartAllowed(config),
           installed: readInstalled(config.profile, activeProfileDir),
         })
@@ -954,10 +975,7 @@ export function mountMarketRoutes(
           response.end()
           return
         }
-        let version = 'unknown'
-        try {
-          version = (JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version?: string }).version ?? version
-        } catch { /* export still works without the version line */ }
+        const version = marketVersion()
         response.writeHead(200, {
           'cache-control': 'no-store',
           'content-type': 'text/plain; charset=utf-8',

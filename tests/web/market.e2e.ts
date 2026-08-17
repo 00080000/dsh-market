@@ -61,6 +61,15 @@ describe.skipIf(!HAS_DSH)('web e2e: plugin market', () => {
     expect(await page.locator('[class*="pager"] button').count()).toBeGreaterThan(0)
   })
 
+  it('shows its own version next to the heading', async () => {
+    // The point of the feature is that a PHOTO of the screen carries the
+    // version, so assert what is actually rendered and visible — a unit
+    // test on the state would pass with the element hidden or unmounted.
+    const version = page.locator('[class*="titleRow"] [class*="version"]')
+    await version.waitFor({ state: 'visible', timeout: 30_000 })
+    expect((await version.textContent())?.trim()).toMatch(/^v\d+\.\d+\.\d+/)
+  })
+
   it('search and category filter the grid', async () => {
     const search = page.getByPlaceholder(/搜索插件|Search plugins/)
     const gridNames = () => page.locator('[class*="grid"] [class*="nm"]').allTextContents()

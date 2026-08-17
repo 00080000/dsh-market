@@ -45,6 +45,10 @@
 .foot{display:flex;align-items:center;gap:8px;margin-top:auto}
 .grow{flex:1}
 .titleRow{display:flex;align-items:center;gap:10px}
+/* Sits beside the heading so a screenshot of the page carries the
+   version — most reports arrive as a photo of the screen. Selectable
+   (not user-select:none) so it can also be copied into an issue. */
+.version{font-size:12px;line-height:20px;color:var(--dsw-alias-label-tertiary,#8b93a1);font-variant-numeric:tabular-nums;flex-shrink:0}
 .descTight{min-height:0}
 .src{font-size:11px;color:var(--dsw-alias-label-secondary,#9ca3af);text-decoration:none}
 .src:hover{color:var(--dsw-alias-brand-primary,#4f6ef7)}

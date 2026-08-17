@@ -380,6 +380,12 @@ export function MarketSection(props: MarketSectionProps) {
   const [cancelling, setCancelling] = useState(false)
   /** Server-side operation lock from /dsh-market/status (#91). */
   const [hostBusy, setHostBusy] = useState(false)
+  /**
+   * The market's own version, shown beside the heading. Most bug reports
+   * arrive as a photo of the screen, and without a version in frame the
+   * first reply always has to ask which one it was.
+   */
+  const [version, setVersion] = useState<string | null>(null)
   /** Non-live activation results from the last operation, shown as a banner. */
   const [activationWarnings, setActivationWarnings] = useState<{ name: string; info: ActivationInfo }[]>([])
   const [hostDependencyFindings, setHostDependencyFindings] = useState<SharedHostPackageDependencyFinding[]>([])
@@ -521,6 +527,7 @@ export function MarketSection(props: MarketSectionProps) {
           } catch { /* storage unavailable */ }
         }
         setRestartEnabled(status.restart === true)
+        if (typeof status.version === 'string' && status.version !== '') setVersion(status.version)
       })
       .catch(() => {})
     refreshInstalled()
@@ -1610,6 +1617,7 @@ export function MarketSection(props: MarketSectionProps) {
         <div className={css.titleRow}>
           <MarketLogo size={22} style={{ flexShrink: 0 }} />
           <h2 className={css.title}>{t('nav')}</h2>
+          {version !== null && <span className={css.version} title={t('versionHint')}>v{version}</span>}
           {(() => {
             const self = installed['dshmarket'] !== undefined ? 'dshmarket' : 'dsh-market'
             return updates[self] && updates[self].updateAvailable && !updatedNames.includes(self)
