@@ -11,7 +11,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { hotMount, hotUnmount, listHotMounts, mountClientOnlyDeps } from '../src/hot.ts'
+import { hotMount, hotUnmount, listHotMounts, mountClientOnlyDeps, parseSimplePatch } from '../src/hot.ts'
 
 // The harness-vendored Include class is not importable in the unit lane;
 // a minimal stand-in lets hotMount succeed so the skip logic is observable.
@@ -117,5 +117,104 @@ describe('mountClientOnlyDeps vs the persisted disable list (#60)', () => {
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }
+  })
+})
+
+/**
+ * parseSimplePatch decides whether an install activates NOW or only after a
+ * restart: it accepts a patch of plain `id`/`name` insert rows and returns
+ * null for anything richer, because hot-mounting cannot replay config
+ * overrides, disables or `!!js` expressions. Users meet this as
+ * "the bundle patch contains config/expression rows — it activates on
+ * restart", so the boundary between the two answers is the contract.
+ *
+ * It had no direct test; a mutation audit could break five of its
+ * conditions without a single spec noticing.
+ */
+describe('parseSimplePatch — hot-mountable or restart-only', () => {
+  const rows = (...lines: string[]): string => lines.join('\n')
+
+  it('accepts plain insert rows, one or many', () => {
+    expect(parseSimplePatch(rows(
+      '- insert:',
+      '    - id: alpha',
+      '      name: pkg-alpha',
+    ))).toEqual([{ id: 'alpha', name: 'pkg-alpha' }])
+
+    expect(parseSimplePatch(rows(
+      '- insert:',
+      '    - id: alpha',
+      '      name: pkg-alpha',
+      '    - id: beta',
+      '      name: "pkg-beta"',
+    ))).toEqual([{ id: 'alpha', name: 'pkg-alpha' }, { id: 'beta', name: 'pkg-beta' }])
+  })
+
+  it('ignores comments and blank lines rather than refusing them', () => {
+    expect(parseSimplePatch(rows(
+      '# what this patch does',
+      '',
+      '- insert:',
+      '    - id: alpha    # the row id',
+      '      name: pkg-alpha',
+      '',
+    ))).toEqual([{ id: 'alpha', name: 'pkg-alpha' }])
+  })
+
+  it('refuses anything hot-mount cannot replay', () => {
+    // A config override on the inserted row.
+    expect(parseSimplePatch(rows(
+      '- insert:',
+      '    - id: alpha',
+      '      name: pkg-alpha',
+      '      config:',
+      '        verbose: true',
+    ))).toBeNull()
+
+    // A row targeting somebody else's entry.
+    expect(parseSimplePatch(rows(
+      '- insert:',
+      '    - id: alpha',
+      '      name: pkg-alpha',
+      '- id: attachment-local',
+      '  config:',
+      '    maxImageBytes: 1',
+    ))).toBeNull()
+
+    // A disable row.
+    expect(parseSimplePatch(rows(
+      '- insert:',
+      '    - id: alpha',
+      '      name: pkg-alpha',
+      '- id: other',
+      '  disabled: true',
+    ))).toBeNull()
+
+    // An expression: never replayed blind.
+    expect(parseSimplePatch(rows(
+      '- insert:',
+      '    - id: alpha',
+      '      name: !!js/eval process.env.PKG',
+    ))).toBeNull()
+  })
+
+  it('refuses half-formed insert rows instead of guessing', () => {
+    // id with no name following.
+    expect(parseSimplePatch(rows('- insert:', '    - id: alpha'))).toBeNull()
+    // two ids in a row: the first would silently lose its name.
+    expect(parseSimplePatch(rows(
+      '- insert:',
+      '    - id: alpha',
+      '    - id: beta',
+      '      name: pkg-beta',
+    ))).toBeNull()
+    // a name with no id above it.
+    expect(parseSimplePatch(rows('- insert:', '      name: pkg-alpha'))).toBeNull()
+  })
+
+  it('refuses an empty patch — there is nothing to mount', () => {
+    expect(parseSimplePatch('')).toBeNull()
+    expect(parseSimplePatch('# only a comment\n\n')).toBeNull()
+    expect(parseSimplePatch('- insert:\n')).toBeNull()
   })
 })
