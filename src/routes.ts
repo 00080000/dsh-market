@@ -23,7 +23,7 @@ import {
   BOOT_ID, cancelActive, probePnpm, progress, provisionPnpm, runDshPlugin,
   type PluginCommandRuntime,
 } from './dsh-cli.ts'
-import { INBOX_BUNDLES, profileDir, readInstalled, readInstalledManifest, readInstalledVersion, readLockCommits, readManifestDeps, readProfileBundles, restoreManifestDeps, setAllowBuilds } from './profile.ts'
+import { hasLoadableEntry, INBOX_BUNDLES, profileDir, readInstalled, readInstalledManifest, readInstalledVersion, readLockCommits, readManifestDeps, readProfileBundles, restoreManifestDeps, setAllowBuilds } from './profile.ts'
 import { analyzeProfile } from './check.ts'
 import { applyBundleOrder, mergeOrder, readBundleRules, readBundleStack, validateOrder } from './order.ts'
 import { trialValidate } from './trial.ts'
@@ -1089,6 +1089,25 @@ export function mountMarketRoutes(
               })
               if (stale) ok = false
             }
+            // The new build has to be loadable (#159). pnpm exits 0 for any
+            // tarball it can extract, and the version really did change, so
+            // nothing above notices a package that arrived without its entry
+            // artifact — a registry mirror serving a source-only tarball for
+            // a just-published version is the reported case, a plugin author
+            // shipping a broken `files` list is the other one.
+            //
+            // Activation cannot stand in for this check: a package updating
+            // ITSELF still reports live, because the running fiber belongs to
+            // the OLD code that is already in memory. The failure only
+            // surfaces on the next boot, as a profile that will not start.
+            let brokenEntry = false
+            if (ok && !hasLoadableEntry(activeProfileDir, name)) {
+              brokenEntry = true
+              ok = false
+              const rolledBack = restoreManifestDeps(config.profile, manifestBefore, activeProfileDir)
+              logEvent('error', 'update',
+                `${name}: updated build has no loadable entry — rolled back the pin${rolledBack.length > 0 ? ` (${rolledBack.join(', ')})` : ''}`)
+            }
             if (ok) {
               invalidateUpdates()
               activation = { [name]: verifyActivation(config.profile, name, liveNames(), activeProfileDir, disabled.has(name)) }
@@ -1104,6 +1123,12 @@ export function mountMarketRoutes(
               : staleReason === 'release-age'
                 ? '这个新版本刚发布不久。为了安全，系统默认会等它发布满一天后再安装——刚发布的版本偶尔会被发现问题然后撤回。可以明天再试，或点「立即更新」不再等待。 / This version was just released; for safety, installs normally wait about a day after a release. Try again tomorrow, or click "Update now" to install it right away.'
                 : '更新命令执行完成，但版本没有变化，原因未能确认。点「立即更新」重试通常能解决；若仍不行，请导出日志反馈。 / The update command completed but the version did not change; the cause could not be confirmed. Clicking "Update now" to retry usually resolves it — if not, export the log and report it.'
+            // Actionable, because the user's own recovery is the right one:
+            // the bad artifact is cached under its integrity hash, so a plain
+            // re-add reuses it — the package has to be removed first.
+            const brokenEntryError = !brokenEntry ? null
+              : `${name} 更新后缺少入口文件（package.json 的 main/exports 指向的文件不存在），已回滚版本号以免下次启动失败。这通常是镜像源在新版本刚发布时同步不完整。请先卸载再从官方源重装：dsh plugin --profile ${config.profile} remove ${name} 然后 add ${name} --registry=https://registry.npmjs.org / ${name} arrived without the entry file its package.json points at; the version pin was rolled back so the next boot still works. A registry mirror serving an incomplete tarball for a just-published version is the usual cause. Remove it and reinstall from the official registry — a plain retry reuses the cached bad artifact.`
+
             const cancelDiff = cancelled ? changedSince(beforeInstalled) : null
             // Build-script blocks hit updates too (#69): a leftover invalid
             // allowBuilds entry (pnpm's placeholder bug, #56) or a newly
@@ -1124,7 +1149,7 @@ export function mountMarketRoutes(
               activation,
               ignoredBuilds,
               staleReason: staleReason ?? undefined,
-              error: staleError ?? undefined,
+              error: brokenEntryError ?? staleError ?? undefined,
               exitCode: result.exitCode,
               timedOut: result.timedOut,
               stdout: result.stdout,

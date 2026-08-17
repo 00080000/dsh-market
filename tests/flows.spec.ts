@@ -63,6 +63,11 @@ const fake = vi.hoisted(() => ({
 vi.mock('../src/dsh-cli.ts', () => {
   function writePkg(name: string, manifest: unknown, artifacts: string[] = []): void {
     const root = join(fake.profileDir, 'node_modules', name)
+    // Replace, do not merge: pnpm swaps the package directory when the
+    // version changes, so files the NEW version does not ship must be gone.
+    // Merging let a stale artifact from the previous version stand in for a
+    // missing one and hid #159 from this suite entirely.
+    rmSync(root, { recursive: true, force: true })
     mkdirSync(root, { recursive: true })
     writeFileSync(join(root, 'package.json'), JSON.stringify(manifest))
     for (const rel of artifacts) {
@@ -795,6 +800,24 @@ describe('update flow — no npm publishing required', () => {
     expect(r.json.ok).toBe(true)
     expect(installedSpec('dsh-loop')).toBe('^1.2.0')
     expect(r.json.activation['dsh-loop']).toMatchObject({ state: 'live' })
+  })
+
+  it('refuses an update whose new version has no entry artifact (#159)', async () => {
+    // The reported shape: a registry mirror served a source-only tarball for
+    // a freshly published version — package.json and src/, no lib/. pnpm
+    // exits 0, the version really did change, so every existing check passed
+    // and the market said "updated". The next boot could not resolve the
+    // entry and dsh web would not start at all.
+    fake.npm['dsh-loop'].latest = '1.3.0'
+    fake.npm['dsh-loop'].versions['1.3.0'] = { manifest: { dsh: {}, main: 'lib/index.js' }, artifacts: [] }
+    vi.stubGlobal('fetch', () => Promise.resolve(new Response(JSON.stringify({ version: '1.3.0' }), { status: 200 })))
+
+    const r = await bed.dispatch('POST', '/dsh-market/update', { name: 'dsh-loop' })
+    expect(r.json.ok).toBe(false)
+    expect(String(r.json.error)).toMatch(/入口|entry/)
+    // The pin is rolled back, so the profile is not left describing a build
+    // that cannot load.
+    expect(installedSpec('dsh-loop')).toBe('^1.0.0')
   })
 
   it('never offers or performs a downgrade when the latest dist-tag is older (#64 by @ZeroOrigin64)', async () => {
