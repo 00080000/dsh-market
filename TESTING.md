@@ -53,6 +53,48 @@ hard failure — the job installs the CLI itself, so a silent skip there would
 report "e2e passed" for a run that asserted nothing. Browser download can use a mirror:
 `PLAYWRIGHT_DOWNLOAD_HOST=https://cdn.npmmirror.com/binaries/playwright npx playwright install chromium`.
 
+## The one check no lane can run: provisioning pnpm
+
+Every automated lane has pnpm already — CI installs it, developer machines
+have it — so `provisionPnpm` (the "one small component is needed" banner and
+its one-click fix) is only ever exercised against mocks. It is also the
+subject of a standing cluster of reports (#105, #108, #132), which makes the
+gap worth naming rather than papering over.
+
+Automating it would mean installing pnpm to set the profile up and then
+removing it again, on a runner, before every run — fragile enough that it
+would fail for its own reasons more often than for the product's. So this
+one is a deliberate manual check, to repeat whenever `provisionPnpm`
+changes:
+
+1. Build a profile with the market installed, WHILE pnpm is available
+   (`npm pack` + `dsh plugin --profile web add <tarball>`).
+2. Make pnpm genuinely unreachable. Dropping it from PATH is not enough:
+   `spawnEnv` deliberately re-adds `/opt/homebrew/bin`, `/usr/local/bin` and
+   `~/.local/bin`, because a GUI-launched host (DSH Desktop) starts with a
+   PATH that has none of them. Move the binary aside instead, and put it
+   back afterwards.
+3. Point `npm_config_prefix` at a throwaway directory so the install under
+   test cannot touch the real toolchain.
+4. Boot `dsh --profile web`, confirm `/dsh-market/status` reports
+   `pnpm: false`, then POST `/dsh-market/setup-pnpm`.
+
+What to assert, and why each one:
+
+- `pnpm: false` before — otherwise the banner never appears and the rest
+  proves nothing.
+- `ok: true` from the route, and `pnpm: true` after.
+- **pnpm really landed in the throwaway prefix.** A pass can otherwise come
+  from the probe finding a leftover elsewhere; check the directory.
+- The throwaway prefix's `bin` is NOT on PATH. That is the point: the probe
+  can only succeed through the `npm prefix -g` lookup (#149), so this is the
+  only check that covers it for real.
+
+Last run: 2026-08-17 on macOS 15 (arm64), no pnpm and no corepack —
+`pnpm: false` → one click → `ok: true` in 1.0 s → 39 MB of pnpm in the
+throwaway prefix → `pnpm: true`. The corepack branch was not exercised (it
+was absent); a machine that has corepack takes that path first.
+
 ## Conventions
 
 - **Red first**: a bug fix lands with the failing test that reproduces it.
