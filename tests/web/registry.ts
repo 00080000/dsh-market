@@ -18,10 +18,13 @@ import type { Server } from 'node:http'
 import { createHash } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
 import { readFileSync, readdirSync } from 'node:fs'
-import { basename, join, resolve } from 'node:path'
+import { basename, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import type { Registry, RegistryPlugin } from '../../src/registry.ts'
 
-const FIXTURE_ROOT = resolve(new URL('./fixtures', import.meta.url).pathname)
+// fileURLToPath, not .pathname — see the note in scaffold.ts: a Windows
+// pathname keeps its leading slash and resolves to a nonexistent directory.
+const FIXTURE_ROOT = fileURLToPath(new URL('./fixtures', import.meta.url))
 const UPSTREAM = 'https://registry.npmjs.org'
 
 export interface ServedPackage {

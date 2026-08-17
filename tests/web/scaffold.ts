@@ -13,12 +13,18 @@ import { execSync, spawn, spawnSync } from 'node:child_process'
 import type { ChildProcess } from 'node:child_process'
 import { mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import type { Page } from 'playwright'
 import { packFixture, startFixtureRegistry } from './registry.ts'
 import type { FixtureRegistry } from './registry.ts'
 
-const REPO_ROOT = resolve(new URL('../..', import.meta.url).pathname)
+// fileURLToPath, not .pathname: on Windows the pathname carries a leading
+// slash (`/D:/a/repo`), and resolving that yields a directory that does not
+// exist. Node then reports the failure as ENOENT on cmd.exe — the shell it
+// never got to run — which is what made the first Windows e2e run look like
+// a missing shell rather than a bad cwd.
+const REPO_ROOT = fileURLToPath(new URL('../..', import.meta.url))
 
 /** Working directory for dsh invocations — source launches need their repo
  * root so `--import tsx/esm` resolves; a global dsh doesn't care. */
