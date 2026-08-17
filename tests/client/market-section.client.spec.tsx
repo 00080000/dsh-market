@@ -1276,3 +1276,38 @@ describe('pnpm setup banner', () => {
     expect(screen.queryByText(re(en.envFixFail))).toBeNull()
   })
 })
+
+/**
+ * A failed install has to END. #138 reported the opposite: the spinner ran
+ * forever with no message, while pnpm had already refused the spec
+ * instantly. This is the plain case — the host answered, and it answered
+ * "no". A LOST response is deliberately NOT this case (#100: pnpm often
+ * keeps working after the connection drops, so the status poll decides);
+ * its recovery has its own spec above.
+ *
+ * Both halves matter. Releasing the button without showing why leaves the
+ * user guessing; showing the error while the row still says "installing"
+ * leaves them waiting for something that already finished.
+ */
+describe('a failed install releases the UI and says why', () => {
+  const failure = {
+    ok: false,
+    error: '[ERR_PNPM_SPEC_NOT_SUPPORTED_BY_ANY_RESOLVER] "whatever" isn\'t supported by any available resolver.',
+  }
+
+  it('stops the spinner and surfaces the host error', async () => {
+    stubFetch({ '/dsh-market/install': failure })
+    render(<MarketSection {...props()} />)
+    await screen.findByText('dsh-loop')
+
+    fireEvent.click(screen.getAllByRole('button', { name: en.install })[0])
+    fireEvent.click(await screen.findByRole('button', { name: en.confirm }))
+
+    // The reason reaches the page verbatim — a resolver error names the spec
+    // that was refused, which is the only clue the user has.
+    await waitFor(() => expect(screen.getByText(re('isn\'t supported by any available resolver'))).toBeTruthy())
+    // ...and nothing is left claiming to be in progress.
+    expect(screen.queryByRole('button', { name: en.installing })).toBeNull()
+    expect(screen.getAllByRole('button', { name: en.install }).length).toBeGreaterThan(0)
+  })
+})
