@@ -16,7 +16,7 @@
 import { createServer } from 'node:http'
 import type { Server } from 'node:http'
 import { createHash } from 'node:crypto'
-import { execFileSync } from 'node:child_process'
+import { execSync } from 'node:child_process'
 import { readFileSync, readdirSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -39,7 +39,11 @@ export interface ServedPackage {
  */
 export function packFixture(dir: string, destination: string): ServedPackage {
   const source = join(FIXTURE_ROOT, dir)
-  execFileSync('npm', ['pack', '--pack-destination', destination], { cwd: source, stdio: 'pipe' })
+  // execSync, not execFileSync: on Windows `npm` is npm.cmd, a batch shim
+  // that cannot be spawned without a shell — the same trap the market's own
+  // tool spawning handles (#2/#3/#5/#80). Node reports it as ENOENT on
+  // `npm`, which reads like a missing install rather than a missing shell.
+  execSync(`npm pack --pack-destination ${JSON.stringify(destination)}`, { cwd: source, stdio: 'pipe' })
   const manifest = JSON.parse(readFileSync(join(source, 'package.json'), 'utf8')) as Record<string, unknown>
   const prefix = `${String(manifest.name)}-${String(manifest.version)}`
   const file = readdirSync(destination).find(entry => entry.startsWith(prefix) && entry.endsWith('.tgz'))
