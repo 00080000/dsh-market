@@ -29,7 +29,7 @@ import { join } from 'node:path'
 import { listHotMounts, parseSimplePatch } from './hot.ts'
 import { hasDshManifest, hasLoadableEntry, profileDir } from './profile.ts'
 
-export type ActivationState = 'live' | 'restart' | 'inert' | 'broken' | 'missing'
+export type ActivationState = 'live' | 'restart' | 'inert' | 'broken' | 'missing' | 'disabled'
 
 export interface ActivationResult {
   state: ActivationState
@@ -106,6 +106,7 @@ export function verifyActivation(
   name: string,
   live: ReadonlySet<string> = new Set(listHotMounts()),
   explicitDir?: string,
+  isDisabled = false,
 ): ActivationResult {
   const activeProfileDir = profileDir(profile, explicitDir)
   const bundles = readBundles(profile, activeProfileDir)
@@ -114,6 +115,18 @@ export function verifyActivation(
 
   if (dsh === null) {
     return { state: 'missing', reasons: ['未安装 / not installed'], bundle: inBundles, hot: false }
+  }
+
+  // A user-disabled plugin reads as disabled, never as "restart to apply":
+  // the switch state (market disable list or the user patch layer) is the
+  // dominant fact, and the loader keeps it off on every boot.
+  if (isDisabled) {
+    return {
+      state: 'disabled',
+      reasons: ['已停用(市场开关或补丁层),重启后保持关闭 / disabled (market toggle or the patch layer) — stays off across restarts'],
+      bundle: inBundles,
+      hot: false,
+    }
   }
 
   const dir = join(activeProfileDir, 'node_modules', name)

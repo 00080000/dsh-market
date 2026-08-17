@@ -58,6 +58,7 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 			installFail: "安装失败",
 			viewSource: "源码",
 			hotBanner: "个新插件已装好，刷新页面即可使用",
+			refreshBanner: "项变更需刷新页面生效",
 			refresh: "刷新页面",
 			update: "更新",
 			updating: "更新中…",
@@ -154,6 +155,7 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 			stateRestart: "已安装，重启后生效",
 			stateInert: "已安装但未成为 profile 层",
 			stateBroken: "安装完成但校验失败",
+			stateDisabled: "已停用",
 			phaseResolving: "解析依赖",
 			phaseDownloading: "下载中",
 			phaseLinking: "链接依赖",
@@ -169,6 +171,8 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 			enable: "启用",
 			disable: "停用",
 			toggleFail: "切换失败",
+			patchDisabled: "补丁停用",
+			patchForced: "补丁强制启用",
 			deprecatedBadge: "已废弃",
 			deprecatedWarn: "该插件已被目录标记为废弃，不建议新用户安装。",
 			viewReplacement: "查看替代品",
@@ -279,6 +283,7 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 			installFail: "Install failed",
 			viewSource: "Source",
 			hotBanner: "new plugin(s) ready — refresh the page to use them",
+			refreshBanner: "change(s) applied — refresh the page to see them",
 			refresh: "Refresh",
 			update: "Update",
 			updating: "Updating…",
@@ -375,6 +380,7 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 			stateRestart: "Installed — restart to apply",
 			stateInert: "Installed but not a profile-layer plugin",
 			stateBroken: "Installed but failed validation",
+			stateDisabled: "Disabled",
 			phaseResolving: "Resolving dependencies",
 			phaseDownloading: "Downloading",
 			phaseLinking: "Linking",
@@ -390,6 +396,8 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 			enable: "Enable",
 			disable: "Disable",
 			toggleFail: "Toggle failed",
+			patchDisabled: "Patch-disabled",
+			patchForced: "Patch-forced on",
 			deprecatedBadge: "Deprecated",
 			deprecatedWarn: "This plugin is marked as deprecated by the catalog; new users are advised against installing it.",
 			viewReplacement: "View replacement",
@@ -803,136 +811,136 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 			document.head.appendChild(tag);
 		}
 		var Market_module_css_default = {
-			"assignRow": "SOz1_a_assignRow",
-			"src": "SOz1_a_src",
-			"bar": "SOz1_a_bar",
-			"backupGrid": "SOz1_a_backupGrid",
-			"irow": "SOz1_a_irow",
-			"grow": "SOz1_a_grow",
-			"srcBtn": "SOz1_a_srcBtn",
-			"switchOn": "SOz1_a_switchOn",
-			"sectionOverview": "SOz1_a_sectionOverview",
-			"switchKnob": "SOz1_a_switchKnob",
-			"pageInfo": "SOz1_a_pageInfo",
-			"sectAction": "SOz1_a_sectAction",
-			"ovArrow": "SOz1_a_ovArrow",
-			"groupCreate": "SOz1_a_groupCreate",
-			"catsWrap": "SOz1_a_catsWrap",
-			"diagEmpty": "SOz1_a_diagEmpty",
-			"card": "SOz1_a_card",
-			"on": "SOz1_a_on",
-			"catsToggle": "SOz1_a_catsToggle",
-			"viewBar": "SOz1_a_viewBar",
-			"backupWarn": "SOz1_a_backupWarn",
-			"tabSearchRow": "SOz1_a_tabSearchRow",
-			"diagBadgeCommunity": "SOz1_a_diagBadgeCommunity",
-			"inlineInput": "SOz1_a_inlineInput",
-			"diagSummary": "SOz1_a_diagSummary",
-			"orphRow": "SOz1_a_orphRow",
-			"row1": "SOz1_a_row1",
-			"groupName": "SOz1_a_groupName",
-			"backupCard": "SOz1_a_backupCard",
-			"depLine": "SOz1_a_depLine",
-			"irowMissing": "SOz1_a_irowMissing",
-			"cats": "SOz1_a_cats",
-			"diagBadgeShadow": "SOz1_a_diagBadgeShadow",
-			"ovRow": "SOz1_a_ovRow",
-			"collapseTitle": "SOz1_a_collapseTitle",
-			"ovByTag": "SOz1_a_ovByTag",
-			"err": "SOz1_a_err",
-			"tab": "SOz1_a_tab",
-			"shot": "SOz1_a_shot",
-			"collapseBody": "SOz1_a_collapseBody",
-			"themesGrid": "SOz1_a_themesGrid",
-			"actWarn": "SOz1_a_actWarn",
-			"desc": "SOz1_a_desc",
-			"hiddenFile": "SOz1_a_hiddenFile",
-			"sp": "SOz1_a_sp",
-			"deprecate": "SOz1_a_deprecate",
-			"pageEllipsis": "SOz1_a_pageEllipsis",
-			"orphBadge": "SOz1_a_orphBadge",
-			"top": "SOz1_a_top",
-			"pagerPages": "SOz1_a_pagerPages",
-			"groupRow": "SOz1_a_groupRow",
-			"panelNote": "SOz1_a_panelNote",
-			"cmd": "SOz1_a_cmd",
-			"dot": "SOz1_a_dot",
-			"diagCount": "SOz1_a_diagCount",
-			"loading": "SOz1_a_loading",
-			"assignSelect": "SOz1_a_assignSelect",
-			"backupMessage": "SOz1_a_backupMessage",
-			"depBadge": "SOz1_a_depBadge",
-			"av": "SOz1_a_av",
-			"diagSection": "SOz1_a_diagSection",
-			"diagRow": "SOz1_a_diagRow",
-			"groupHead": "SOz1_a_groupHead",
-			"collapseHead": "SOz1_a_collapseHead",
-			"bannerHint": "SOz1_a_bannerHint",
-			"diagBadgeOfficial": "SOz1_a_diagBadgeOfficial",
-			"titleRow": "SOz1_a_titleRow",
-			"diagSummaryItem": "SOz1_a_diagSummaryItem",
-			"diagAlert": "SOz1_a_diagAlert",
-			"swatches": "SOz1_a_swatches",
-			"bannerIcon": "SOz1_a_bannerIcon",
-			"act": "SOz1_a_act",
-			"empty": "SOz1_a_empty",
-			"backupInput": "SOz1_a_backupInput",
-			"root": "SOz1_a_root",
-			"diagList": "SOz1_a_diagList",
-			"actBroken": "SOz1_a_actBroken",
-			"diagIndex": "SOz1_a_diagIndex",
-			"shots": "SOz1_a_shots",
-			"banner": "SOz1_a_banner",
-			"tabs": "SOz1_a_tabs",
-			"foot": "SOz1_a_foot",
-			"body": "SOz1_a_body",
-			"actLive": "SOz1_a_actLive",
-			"diagPage": "SOz1_a_diagPage",
-			"groupMembers": "SOz1_a_groupMembers",
-			"backupCheck": "SOz1_a_backupCheck",
-			"collapseIcon": "SOz1_a_collapseIcon",
-			"star": "SOz1_a_star",
-			"dshmSlide": "SOz1_a_dshmSlide",
-			"pct": "SOz1_a_pct",
-			"nm": "SOz1_a_nm",
-			"tag": "SOz1_a_tag",
-			"pager": "SOz1_a_pager",
-			"diagBundle": "SOz1_a_diagBundle",
-			"staleAction": "SOz1_a_staleAction",
-			"groupActions": "SOz1_a_groupActions",
-			"modalNote": "SOz1_a_modalNote",
 			"descTight": "SOz1_a_descTight",
-			"diagMeta": "SOz1_a_diagMeta",
-			"tabSearch": "SOz1_a_tabSearch",
-			"spin": "SOz1_a_spin",
-			"ovFrom": "SOz1_a_ovFrom",
+			"shots": "SOz1_a_shots",
+			"sectAction": "SOz1_a_sectAction",
+			"diagSummaryItem": "SOz1_a_diagSummaryItem",
+			"act": "SOz1_a_act",
+			"titleRow": "SOz1_a_titleRow",
+			"loading": "SOz1_a_loading",
+			"inlineInput": "SOz1_a_inlineInput",
+			"pager": "SOz1_a_pager",
+			"barFill": "SOz1_a_barFill",
+			"on": "SOz1_a_on",
+			"actBroken": "SOz1_a_actBroken",
+			"collapseIcon": "SOz1_a_collapseIcon",
+			"cats": "SOz1_a_cats",
+			"catsCollapsed": "SOz1_a_catsCollapsed",
+			"pct": "SOz1_a_pct",
+			"foot": "SOz1_a_foot",
 			"catsRow": "SOz1_a_catsRow",
+			"diagKey": "SOz1_a_diagKey",
+			"backupActions": "SOz1_a_backupActions",
+			"diagAlert": "SOz1_a_diagAlert",
+			"staleAction": "SOz1_a_staleAction",
+			"okState": "SOz1_a_okState",
+			"groupMembers": "SOz1_a_groupMembers",
+			"groupAddPanel": "SOz1_a_groupAddPanel",
+			"dshmSlide": "SOz1_a_dshmSlide",
+			"pageInfo": "SOz1_a_pageInfo",
+			"ovByTag": "SOz1_a_ovByTag",
+			"tabSearch": "SOz1_a_tabSearch",
+			"sectionOverview": "SOz1_a_sectionOverview",
+			"diagSummaryMeta": "SOz1_a_diagSummaryMeta",
+			"srcBtn": "SOz1_a_srcBtn",
+			"diagBundle": "SOz1_a_diagBundle",
+			"tabSearchRow": "SOz1_a_tabSearchRow",
+			"backupInput": "SOz1_a_backupInput",
+			"collapseTitle": "SOz1_a_collapseTitle",
+			"head": "SOz1_a_head",
+			"sp": "SOz1_a_sp",
+			"root": "SOz1_a_root",
+			"shot": "SOz1_a_shot",
+			"bannerHint": "SOz1_a_bannerHint",
+			"diagRow": "SOz1_a_diagRow",
+			"row1": "SOz1_a_row1",
+			"av": "SOz1_a_av",
+			"topBtn": "SOz1_a_topBtn",
+			"tag": "SOz1_a_tag",
+			"sub": "SOz1_a_sub",
+			"ovRow": "SOz1_a_ovRow",
+			"diagEmpty": "SOz1_a_diagEmpty",
+			"diagBadgeOfficial": "SOz1_a_diagBadgeOfficial",
+			"collapseBody": "SOz1_a_collapseBody",
+			"orphRow": "SOz1_a_orphRow",
+			"tabs": "SOz1_a_tabs",
+			"actWhy": "SOz1_a_actWhy",
+			"actLive": "SOz1_a_actLive",
+			"modalNote": "SOz1_a_modalNote",
+			"cmd": "SOz1_a_cmd",
+			"assignRow": "SOz1_a_assignRow",
+			"groupRow": "SOz1_a_groupRow",
+			"src": "SOz1_a_src",
+			"viewOn": "SOz1_a_viewOn",
+			"switchMixed": "SOz1_a_switchMixed",
+			"grid": "SOz1_a_grid",
+			"backupCheck": "SOz1_a_backupCheck",
+			"title": "SOz1_a_title",
+			"backupMessage": "SOz1_a_backupMessage",
+			"switchOn": "SOz1_a_switchOn",
+			"diagBadgeShadow": "SOz1_a_diagBadgeShadow",
+			"desc": "SOz1_a_desc",
+			"dot": "SOz1_a_dot",
+			"ovArrow": "SOz1_a_ovArrow",
+			"irowMissing": "SOz1_a_irowMissing",
+			"groupHead": "SOz1_a_groupHead",
+			"top": "SOz1_a_top",
 			"groupMember": "SOz1_a_groupMember",
 			"progress": "SOz1_a_progress",
-			"title": "SOz1_a_title",
-			"sub": "SOz1_a_sub",
-			"diagKey": "SOz1_a_diagKey",
-			"viewBtn": "SOz1_a_viewBtn",
-			"switchMixed": "SOz1_a_switchMixed",
-			"groupAddPanel": "SOz1_a_groupAddPanel",
-			"groupHint": "SOz1_a_groupHint",
-			"warnLine": "SOz1_a_warnLine",
-			"head": "SOz1_a_head",
-			"owner": "SOz1_a_owner",
-			"catsCollapsed": "SOz1_a_catsCollapsed",
-			"actWhy": "SOz1_a_actWhy",
-			"diagArrow": "SOz1_a_diagArrow",
+			"irow": "SOz1_a_irow",
+			"bannerIcon": "SOz1_a_bannerIcon",
+			"banner": "SOz1_a_banner",
+			"switchKnob": "SOz1_a_switchKnob",
+			"diagMeta": "SOz1_a_diagMeta",
 			"diagVal": "SOz1_a_diagVal",
-			"barFill": "SOz1_a_barFill",
-			"backupActions": "SOz1_a_backupActions",
-			"okState": "SOz1_a_okState",
-			"topBtn": "SOz1_a_topBtn",
-			"grid": "SOz1_a_grid",
-			"barWave": "SOz1_a_barWave",
-			"diagSummaryMeta": "SOz1_a_diagSummaryMeta",
-			"viewOn": "SOz1_a_viewOn",
+			"depLine": "SOz1_a_depLine",
+			"warnLine": "SOz1_a_warnLine",
+			"diagCount": "SOz1_a_diagCount",
+			"backupCard": "SOz1_a_backupCard",
+			"diagPage": "SOz1_a_diagPage",
+			"backupGrid": "SOz1_a_backupGrid",
+			"tab": "SOz1_a_tab",
+			"switch": "SOz1_a_switch",
+			"diagArrow": "SOz1_a_diagArrow",
+			"swatches": "SOz1_a_swatches",
+			"owner": "SOz1_a_owner",
+			"actWarn": "SOz1_a_actWarn",
+			"hiddenFile": "SOz1_a_hiddenFile",
+			"panelNote": "SOz1_a_panelNote",
+			"body": "SOz1_a_body",
+			"orphBadge": "SOz1_a_orphBadge",
 			"spec": "SOz1_a_spec",
-			"switch": "SOz1_a_switch"
+			"diagSummary": "SOz1_a_diagSummary",
+			"groupCreate": "SOz1_a_groupCreate",
+			"assignSelect": "SOz1_a_assignSelect",
+			"spin": "SOz1_a_spin",
+			"empty": "SOz1_a_empty",
+			"catsToggle": "SOz1_a_catsToggle",
+			"catsWrap": "SOz1_a_catsWrap",
+			"viewBar": "SOz1_a_viewBar",
+			"card": "SOz1_a_card",
+			"barWave": "SOz1_a_barWave",
+			"groupName": "SOz1_a_groupName",
+			"viewBtn": "SOz1_a_viewBtn",
+			"nm": "SOz1_a_nm",
+			"star": "SOz1_a_star",
+			"themesGrid": "SOz1_a_themesGrid",
+			"grow": "SOz1_a_grow",
+			"diagSection": "SOz1_a_diagSection",
+			"err": "SOz1_a_err",
+			"diagBadgeCommunity": "SOz1_a_diagBadgeCommunity",
+			"diagList": "SOz1_a_diagList",
+			"pageEllipsis": "SOz1_a_pageEllipsis",
+			"groupActions": "SOz1_a_groupActions",
+			"deprecate": "SOz1_a_deprecate",
+			"depBadge": "SOz1_a_depBadge",
+			"diagIndex": "SOz1_a_diagIndex",
+			"collapseHead": "SOz1_a_collapseHead",
+			"backupWarn": "SOz1_a_backupWarn",
+			"bar": "SOz1_a_bar",
+			"pagerPages": "SOz1_a_pagerPages",
+			"ovFrom": "SOz1_a_ovFrom",
+			"groupHint": "SOz1_a_groupHint"
 		};
 		//#endregion
 		//#region src/client/Diagnostics.tsx
@@ -1638,6 +1646,10 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 				label: t("stateBroken"),
 				dot: "error"
 			};
+			if (state === "disabled") return {
+				label: t("stateDisabled"),
+				dot: "warning"
+			};
 			return {
 				label: "—",
 				dot: "warning"
@@ -1894,6 +1906,13 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 			const [activations, setActivations] = (0, react.useState)({});
 			/** #60: persisted disable list + custom groups, straight from /installed. */
 			const [disabledNames, setDisabledNames] = (0, react.useState)([]);
+			/**
+			* Patch-layer flags (port of dsh-plugin-hub): packages whose bundle rows
+			* the user patch layer disables / force-enables. The UI treats them as the
+			* real switch state so hand-edited cordis.patch.yml toggles are visible.
+			*/
+			const [patchDisabledNames, setPatchDisabledNames] = (0, react.useState)([]);
+			const [patchForcedNames, setPatchForcedNames] = (0, react.useState)([]);
 			const [groups, setGroups] = (0, react.useState)({});
 			const [groupOrder, setGroupOrder] = (0, react.useState)([]);
 			/** Installed-tab sub-view: flat list or groups (All-plugins was removed —
@@ -1923,6 +1942,10 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 			const [removeConfirm, setRemoveConfirm] = (0, react.useState)(null);
 			const [removingName, setRemovingName] = (0, react.useState)(null);
 			const [removedCount, setRemovedCount] = (0, react.useState)(0);
+			/** Toggles whose live fiber did not follow the switch — restart to apply. */
+			const [toggleRestart, setToggleRestart] = (0, react.useState)(0);
+			/** Client-part plugins toggled this session — their UI needs a refresh. */
+			const [refreshNames, setRefreshNames] = (0, react.useState)([]);
 			const [envReady, setEnvReady] = (0, react.useState)(true);
 			const [envFixing, setEnvFixing] = (0, react.useState)(false);
 			const [envFailed, setEnvFailed] = (0, react.useState)(false);
@@ -1970,6 +1993,8 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 					setInstalledFiles(Array.isArray(body.present) ? body.present : Object.keys(body.installed || {}));
 					setSkins(body.live || []);
 					if (Array.isArray(body.disabled)) setDisabledNames(body.disabled);
+					if (Array.isArray(body.patchDisabled)) setPatchDisabledNames(body.patchDisabled);
+					if (Array.isArray(body.patchForced)) setPatchForcedNames(body.patchForced);
 					if (body.groups && typeof body.groups === "object") setGroups(body.groups);
 					if (Array.isArray(body.groupOrder)) setGroupOrder(body.groupOrder);
 					if (body.activation && typeof body.activation === "object") setActivations(body.activation);
@@ -1978,8 +2003,9 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 				}).catch(() => {});
 				fetch("/dsh-market/updates" + (force === true ? "?force=1" : ""), { cache: "no-store" }).then((res) => res.json()).then((body) => setUpdates(body.updates || {})).catch(() => {});
 			}, []);
-			/** Lookup set for the persisted disable list (#60). */
-			const disabledSet = (0, react.useMemo)(() => new Set(disabledNames), [disabledNames]);
+			(0, react.useMemo)(() => new Set(disabledNames), [disabledNames]);
+			/** Effective switch state: market disable list ∪ user-patch-layer disables. */
+			const effectiveDisabledSet = (0, react.useMemo)(() => /* @__PURE__ */ new Set([...disabledNames, ...patchDisabledNames]), [disabledNames, patchDisabledNames]);
 			(0, react.useEffect)(() => {
 				fetch("/dsh-market/registry", { cache: "no-store" }).then((res) => {
 					if (!res.ok) throw new Error("HTTP " + res.status);
@@ -2006,10 +2032,11 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 				if (Array.isArray(saved.doneUrls) && saved.doneUrls.length > 0) setDoneUrls(saved.doneUrls);
 				if (Array.isArray(saved.updated) && saved.updated.length > 0) setUpdatedNames(saved.updated);
 				if (typeof saved.removed === "number" && saved.removed > 0) setRemovedCount(saved.removed);
+				if (typeof saved.toggled === "number" && saved.toggled > 0) setToggleRestart(saved.toggled);
 			}, [bootId]);
 			(0, react.useEffect)(() => {
 				if (bootId === null) return;
-				if (doneUrls.length === 0 && updatedNames.length === 0 && removedCount === 0) {
+				if (doneUrls.length === 0 && updatedNames.length === 0 && removedCount === 0 && toggleRestart === 0) {
 					sessionStorage.removeItem("dshm-restart");
 					return;
 				}
@@ -2017,13 +2044,15 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 					boot: bootId,
 					doneUrls,
 					updated: updatedNames,
-					removed: removedCount
+					removed: removedCount,
+					toggled: toggleRestart
 				}));
 			}, [
 				bootId,
 				doneUrls,
 				updatedNames,
-				removedCount
+				removedCount,
+				toggleRestart
 			]);
 			const fixEnv = (0, react.useCallback)(() => {
 				setEnvFixing(true);
@@ -2412,6 +2441,8 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 							...prev,
 							...body.activation
 						}));
+						if (body.restart === true) setToggleRestart((n) => n + 1);
+						if (body.refresh === true) setRefreshNames((names) => names.includes(name) ? names : names.concat(name));
 						refreshInstalled();
 						if (reload) {
 							sessionStorage.removeItem("dshm-toast");
@@ -2421,7 +2452,9 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 						}
 					} else {
 						const text = (v) => typeof v === "string" ? v : v == null ? "" : JSON.stringify(v);
-						setInstallError(text(body.error) || t("toggleFail"));
+						setInstallError(text(body.reason) || text(body.error) || t("toggleFail"));
+						if (body.restart === true) setToggleRestart((n) => n + 1);
+						if (body.refresh === true) setRefreshNames((names) => names.includes(name) ? names : names.concat(name));
 					}
 				}).catch((error) => setInstallError(String(error))).finally(() => setTogglingName(null));
 			}, [refreshInstalled, t]);
@@ -2444,11 +2477,15 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 				}))).then(({ status, body }) => {
 					if (status === 200 && body.ok) {
 						setGroupPayload(body);
+						if (Array.isArray(body.restartMembers) && body.restartMembers.length > 0) setToggleRestart((n) => n + body.restartMembers.length);
+						if (Array.isArray(body.refreshMembers) && body.refreshMembers.length > 0) setRefreshNames((names) => [.../* @__PURE__ */ new Set([...names, ...body.refreshMembers])]);
 						refreshInstalled();
 						return true;
 					}
 					const text = (v) => typeof v === "string" ? v : v == null ? "" : JSON.stringify(v);
 					setInstallError(text(body.error) || t("toggleFail"));
+					if (Array.isArray(body.restartMembers) && body.restartMembers.length > 0) setToggleRestart((n) => n + body.restartMembers.length);
+					if (Array.isArray(body.refreshMembers) && body.refreshMembers.length > 0) setRefreshNames((names) => [.../* @__PURE__ */ new Set([...names, ...body.refreshMembers])]);
 					return false;
 				}).catch((error) => {
 					setInstallError(String(error));
@@ -2643,7 +2680,7 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 				webdavUrl,
 				webdavUser
 			]);
-			const pendingRestart = doneUrls.length + updatedNames.length + removedCount + (backupRestored ? 1 : 0);
+			const pendingRestart = doneUrls.length + updatedNames.length + removedCount + toggleRestart + (backupRestored ? 1 : 0);
 			const displayedInstalled = pendingBackup === null ? installed : {
 				...pendingDependencies,
 				...installed
@@ -2854,7 +2891,7 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 			const themePluginCard = (p) => {
 				const instName = installedNameOf(p);
 				if (instName === null) return pluginCard(p);
-				const mounted = (skins.includes(instName) || bootEntries.some((e) => e.id === instName)) && !disabledSet.has(instName);
+				const mounted = (skins.includes(instName) || bootEntries.some((e) => e.id === instName)) && !effectiveDisabledSet.has(instName);
 				const desc = p.description && (p.description[lang] || p.description.en) || "";
 				const replacement = replacementOf(p);
 				return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
@@ -2933,7 +2970,7 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 									onClick: () => setRemoveConfirm(instName),
 									children: t("uninstall")
 								}),
-								disabledSet.has(instName) && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+								effectiveDisabledSet.has(instName) && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
 									className: Market_module_css_default.spec,
 									children: t("disabledState")
 								}),
@@ -3182,6 +3219,32 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 										size: "sm",
 										onClick: () => {
 											sessionStorage.setItem("dshm-toast", JSON.stringify(hotNames));
+											sessionStorage.setItem("dshm-tab", "installed");
+											location.reload();
+										},
+										children: t("refresh")
+									})
+								]
+							}),
+							refreshNames.length > 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+								className: Market_module_css_default.banner,
+								children: [
+									/* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconRefreshOutline14, {
+										size: 14,
+										className: Market_module_css_default.bannerIcon
+									}),
+									/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("span", {
+										className: Market_module_css_default.grow,
+										children: [
+											/* @__PURE__ */ (0, react_jsx_runtime.jsx)("b", { children: refreshNames.length }),
+											" ",
+											t("refreshBanner")
+										]
+									}),
+									/* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
+										variant: "primary",
+										size: "sm",
+										onClick: () => {
 											sessionStorage.setItem("dshm-tab", "installed");
 											location.reload();
 										},
@@ -3716,7 +3779,7 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 									children: t("noGroups")
 								}) : groupOrder.map((gid) => {
 									const members = groups[gid] ?? [];
-									const sw = groupSwitchState(members, disabledSet);
+									const sw = groupSwitchState(members, effectiveDisabledSet);
 									return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
 										className: Market_module_css_default.groupRow,
 										children: [
@@ -3830,7 +3893,7 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 																className: Market_module_css_default.nm,
 																children: name
 															}),
-															disabledSet.has(name) && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+															effectiveDisabledSet.has(name) && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
 																className: Market_module_css_default.spec,
 																children: t("disabledState")
 															}),
@@ -3857,19 +3920,23 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 															className: Market_module_css_default.nm,
 															children: member
 														}),
-														disabledSet.has(member) && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+														effectiveDisabledSet.has(member) && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
 															className: Market_module_css_default.spec,
 															children: t("disabledState")
+														}),
+														patchDisabledNames.includes(member) && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+															className: Market_module_css_default.spec,
+															children: " · " + t("patchDisabled")
 														}),
 														/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { className: Market_module_css_default.grow }),
 														/* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
 															type: "button",
 															role: "switch",
-															"aria-checked": !disabledSet.has(member),
-															"aria-label": (disabledSet.has(member) ? t("enable") : t("disable")) + " " + member,
-															className: disabledSet.has(member) ? Market_module_css_default.switch : `${Market_module_css_default.switch} ${Market_module_css_default.switchOn}`,
+															"aria-checked": !effectiveDisabledSet.has(member),
+															"aria-label": (effectiveDisabledSet.has(member) ? t("enable") : t("disable")) + " " + member,
+															className: effectiveDisabledSet.has(member) ? Market_module_css_default.switch : `${Market_module_css_default.switch} ${Market_module_css_default.switchOn}`,
 															disabled: togglingName !== null,
-															onClick: () => doToggle(member, disabledSet.has(member)),
+															onClick: () => doToggle(member, effectiveDisabledSet.has(member)),
 															children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { className: Market_module_css_default.switchKnob })
 														}),
 														/* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
@@ -3893,7 +3960,7 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 									children: t("installedEmpty")
 								}) : ungroupedNames.map((name) => {
 									const entry = data === null ? void 0 : entryForDep(data.plugins, name, String(installed[name]));
-									const off = disabledSet.has(name);
+									const off = effectiveDisabledSet.has(name);
 									return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
 										className: Market_module_css_default.irow,
 										children: [
@@ -3901,10 +3968,17 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 												style: { minWidth: 0 },
 												children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
 													className: Market_module_css_default.nm,
-													children: [name, entry?.deprecated === true && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-														className: Market_module_css_default.depBadge,
-														children: t("deprecatedBadge")
-													})]
+													children: [
+														name,
+														entry?.deprecated === true && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+															className: Market_module_css_default.depBadge,
+															children: t("deprecatedBadge")
+														}),
+														patchDisabledNames.includes(name) && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+															className: Market_module_css_default.depBadge,
+															children: t("patchDisabled")
+														})
+													]
 												}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
 													className: Market_module_css_default.act,
 													children: off ? /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("span", {
@@ -3992,7 +4066,7 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 								const specText = String(spec);
 								const ghSpec = /^github:([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+?)(?:#|$)/.exec(specText);
 								const repoUrl = entry !== void 0 ? entry.url : ghSpec !== null ? "https://github.com/" + ghSpec[1] : null;
-								const off = disabledSet.has(name);
+								const off = effectiveDisabledSet.has(name);
 								const toggleable = off || act !== void 0 && (act.state === "live" || act.state === "restart");
 								return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
 									className: missing ? `${Market_module_css_default.irow} ${Market_module_css_default.irowMissing}` : Market_module_css_default.irow,
@@ -4007,6 +4081,14 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 														entry?.deprecated === true && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
 															className: Market_module_css_default.depBadge,
 															children: t("deprecatedBadge")
+														}),
+														patchDisabledNames.includes(name) && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+															className: Market_module_css_default.depBadge,
+															children: t("patchDisabled")
+														}),
+														!effectiveDisabledSet.has(name) && patchForcedNames.includes(name) && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+															className: Market_module_css_default.depBadge,
+															children: t("patchForced")
 														}),
 														version && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
 															className: Market_module_css_default.owner,
@@ -4033,10 +4115,17 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 													className: Market_module_css_default.act,
 													children: /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("span", {
 														className: Market_module_css_default.actWarn,
-														children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.StateDot, {
-															state: "warning",
-															size: 7
-														}), t("disabledState")]
+														children: [
+															/* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.StateDot, {
+																state: "warning",
+																size: 7
+															}),
+															t("disabledState"),
+															patchDisabledNames.includes(name) && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+																className: Market_module_css_default.spec,
+																children: " · " + t("patchDisabled")
+															})
+														]
 													})
 												}) : act !== void 0 && meta !== null && /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
 													className: Market_module_css_default.act,
