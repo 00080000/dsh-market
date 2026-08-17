@@ -281,7 +281,21 @@ export function mountMarketRoutes(
   function liveNames(): Set<string> {
     const live = new Set(listHotMounts())
     for (const entry of host.loader.entries()) {
-      if (entry.fiber !== undefined && entry.options.name !== undefined) live.add(entry.options.name)
+      if (entry.fiber === undefined) continue
+      if (entry.options.name !== undefined) live.add(entry.options.name)
+      // Entry IDS too, under a `#` prefix that cannot collide with a package
+      // name. A CARRIER bundle's row names the package it mounts, not
+      // itself (#156: @tt-a1i/archify-dsh inserts an entry named
+      // @deepseek-ai/dsh-skill-filesystem), so its own name never appears
+      // here — but the id it created does, and that id is unique to its
+      // patch. Verification needs both, and putting them in one set means
+      // no call site can pass the names and forget the ids.
+      if (entry.options.id !== undefined && entry.options.id !== '') {
+        live.add(`#${entry.options.id}`)
+        // Loader ids may carry an include prefix (`include:archify-…`).
+        const bare = entry.options.id.split(':').pop()
+        if (bare !== undefined && bare !== entry.options.id) live.add(`#${bare}`)
+      }
     }
     return live
   }

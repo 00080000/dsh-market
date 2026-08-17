@@ -27,7 +27,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { listHotMounts, parseSimplePatch } from './hot.ts'
-import { hasDshManifest, hasLoadableEntry, profileDir } from './profile.ts'
+import { bundlePatchInsertedIds, hasDshManifest, hasLoadableEntry, profileDir } from './profile.ts'
 
 export type ActivationState = 'live' | 'restart' | 'inert' | 'broken' | 'missing' | 'disabled'
 
@@ -75,6 +75,28 @@ function liveIncludes(live: ReadonlySet<string>, packageName: string): boolean {
   const prefix = `${packageName}/`
   for (const name of live) if (name.startsWith(prefix)) return true
   return false
+}
+
+/**
+ * True when a loader entry this package's OWN bundle patch inserts is up.
+ *
+ * A carrier bundle (#103) ships no plugin of its own: its patch mounts
+ * ANOTHER package with configuration, so the live entry carries that other
+ * package's name and `liveIncludes` can never match. The entry ID is the
+ * part that belongs to this package — its patch created it — which is why
+ * matching on it is both sufficient and precise: a neighbour that happens
+ * to mount the same package does so under a different id.
+ *
+ * Without this the market kept telling users to restart for a plugin that
+ * had been running since the restart (#156).
+ */
+function carriedRowLive(live: ReadonlySet<string>, profileDirectory: string, packageName: string): boolean {
+  try {
+    return bundlePatchInsertedIds(join(profileDirectory, 'node_modules', packageName))
+      .some(id => live.has(`#${id}`))
+  } catch {
+    return false
+  }
 }
 
 function readPkgDsh(profile: string, name: string, explicitDir?: string): PkgDsh | null {
@@ -136,7 +158,7 @@ export function verifyActivation(
   // loaded by name from a bundle patch — @deepseek-ai/dsh-tools is loaded by
   // the official dsh-base patch and has no `dsh` field at all — so this check
   // has to come before any manifest-based verdict.
-  const loaderLive = liveIncludes(live, name)
+  const loaderLive = liveIncludes(live, name) || carriedRowLive(live, activeProfileDir, name)
   if (!hasDshManifest(dir)) {
     if (loaderLive) {
       return {
