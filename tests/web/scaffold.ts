@@ -116,7 +116,11 @@ export async function launchMarketScaffold(options: ScaffoldOptions = {}): Promi
       cwd: DSH_CWD,
       env,
       stdio: ['ignore', 'pipe', 'pipe'],
-      detached: true,
+      // POSIX only: this exists so the negative-pid kill above can address
+      // the whole process group. On Windows it maps to DETACHED_PROCESS —
+      // no console at all, which is the very thing #40 had to undo — and
+      // buys nothing, since taskkill /T walks the tree by pid.
+      detached: process.platform !== 'win32',
     })
     let output = ''
     const capture = (chunk: Buffer): void => { output = (output + chunk.toString()).slice(-8192) }
@@ -135,14 +139,25 @@ export async function launchMarketScaffold(options: ScaffoldOptions = {}): Promi
     return process_
   }
 
+  /**
+   * Stop dsh and everything it spawned.
+   *
+   * `process.kill(-pid)` addresses a process GROUP, which Windows does not
+   * have — it throws there, and the fallback kills only the shell wrapper,
+   * leaving the real dsh process alive and holding the port. In CI that is
+   * a hung job, not a failed one. taskkill /T walks the tree instead.
+   */
   const stop = async (process_: ChildProcess): Promise<void> => {
-    if (process_.pid !== undefined) {
-      try { process.kill(-process_.pid, 'SIGTERM') } catch { process_.kill('SIGTERM') }
+    const pid = process_.pid
+    if (pid === undefined) return
+    if (process.platform === 'win32') {
+      spawnSync('taskkill', ['/pid', String(pid), '/T', '/F'], { stdio: 'ignore' })
+      await new Promise(resolvePromise => setTimeout(resolvePromise, 500))
+      return
     }
+    try { process.kill(-pid, 'SIGTERM') } catch { process_.kill('SIGTERM') }
     await new Promise(resolvePromise => setTimeout(resolvePromise, 1500))
-    if (process_.pid !== undefined) {
-      try { process.kill(-process_.pid, 'SIGKILL') } catch { /* already gone */ }
-    }
+    try { process.kill(-pid, 'SIGKILL') } catch { /* already gone */ }
   }
 
   let child = await boot()
