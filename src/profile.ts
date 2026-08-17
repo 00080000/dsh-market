@@ -228,7 +228,13 @@ export function parsePatchRows(text: string): { names: string[]; ids: string[]; 
     // indentation, is a row this package brings in. A row at or above the
     // `insert:` indentation closes the block — those target OTHER plugins.
     let insertIndent: number | null = null
-    for (const raw of text.split('\n')) {
+    // CRLF too, for consistency with the hot-mount parser, which a
+    // Windows-authored patch genuinely broke. Here it changes no outcome
+    // today — every row pattern below is `^`-anchored and a comment line
+    // always starts with `#`, so an unstripped comment matches nothing —
+    // and it is deliberately NOT covered by a spec, because a test that
+    // passes with or without the change tests nothing.
+    for (const raw of text.split(/\r?\n/)) {
       const line = raw.replace(/#.*$/, '')
       if (line.trim() === '') continue
       const indent = line.length - line.trimStart().length
@@ -408,7 +414,7 @@ export function setAllowBuilds(profile: string, packages: string[], explicitDir?
   const map: Record<string, string> = {}
   const blockMatch = blockRe.exec(yaml)
   if (blockMatch !== null) {
-    for (const line of blockMatch[1].split('\n')) {
+    for (const line of blockMatch[1].split(/\r?\n/)) {
       // The key itself may contain colons: git-hosted deps are only matched
       // by a `name@git+https://…` key (#68). The anchored boolean tail makes
       // the split land on the LAST colon, never inside a `://` — and doubles

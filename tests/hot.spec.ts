@@ -212,6 +212,25 @@ describe('parseSimplePatch — hot-mountable or restart-only', () => {
     expect(parseSimplePatch(rows('- insert:', '      name: pkg-alpha'))).toBeNull()
   })
 
+  it('reads a patch authored on Windows the same as one authored on Unix', () => {
+    // CRLF is not cosmetic here. `#.*$` cannot strip a comment that ends in
+    // \r — JS stops `.` at a line terminator and `$` only anchors at the end
+    // — so the comment text survived, matched no row shape, and failed the
+    // whole patch. Every plugin whose cordis.patch.yml was written on
+    // Windows then read as "contains config/expression rows" and could
+    // never hot-mount, on any platform. Found by running layer 3 on Windows.
+    const unix = rows(
+      '# what this patch does',
+      '- insert:',
+      '    - id: alpha',
+      '      name: pkg-alpha',
+      '',
+    )
+    const expected = [{ id: 'alpha', name: 'pkg-alpha' }]
+    expect(parseSimplePatch(unix)).toEqual(expected)
+    expect(parseSimplePatch(unix.replace(/\n/g, '\r\n'))).toEqual(expected)
+  })
+
   it('refuses an empty patch — there is nothing to mount', () => {
     expect(parseSimplePatch('')).toBeNull()
     expect(parseSimplePatch('# only a comment\n\n')).toBeNull()

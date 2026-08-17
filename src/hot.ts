@@ -110,7 +110,13 @@ function readPkgDsh(profileDir: string, packageName: string): { client?: unknown
 export function parseSimplePatch(patchText: string): HotRow[] | null {
   const rows: HotRow[] = []
   let pending: string | null = null
-  for (const raw of patchText.split('\n')) {
+  // Split on CRLF too. `#.*$` cannot strip a comment that ends in \r —
+  // JS treats \r as a line terminator, so `.` will not cross it and `$`
+  // only anchors at the very end — leaving the comment text in place,
+  // matching none of the row shapes, and failing the whole patch. Any
+  // plugin whose patch was authored on Windows then reads as
+  // "contains config/expression rows" and can never hot-mount.
+  for (const raw of patchText.split(/\r?\n/)) {
     const line = raw.replace(/#.*$/, '').trimEnd()
     if (line.trim() === '') continue
     if (/^-\s+insert:\s*$/.test(line)) continue
@@ -428,7 +434,7 @@ export function readUserPatchControls(profileDir: string): { ids: Set<string>; n
   const names = new Set<string>()
   try {
     const text = readFileSync(join(profileDir, 'cordis.patch.yml'), 'utf8')
-    for (const line of text.split('\n')) {
+    for (const line of text.split(/\r?\n/)) {
       const id = /^\s*-?\s*id:\s*['"]?([A-Za-z0-9._/@-]+)/.exec(line)
       if (id !== null) ids.add(id[1])
       const name = /^\s*name:\s*['"]?([^'"\s]+)/.exec(line)
