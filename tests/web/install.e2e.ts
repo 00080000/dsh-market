@@ -108,7 +108,11 @@ describe.skipIf(!HAS_DSH).sequential('web e2e: the real install chain', () => {
 
     // THE assertion: live in the running composition, mounted hot without a
     // restart. Nothing about this can pass on inference alone.
-    expect(reallyLive(A)).toBe(true)
+    //
+    // Carry the market's own verdict into the message: a bare "expected
+    // false to be true" says the plugin is not running but not why, and the
+    // reason string is where hot-mount records what stopped it.
+    expect(`${String(reallyLive(A))} ${JSON.stringify((await state()).activation[A])}`).toMatch(/^true /)
   }, 600_000)
 
   it('the market\'s own verdict matches that reality (#135)', async () => {
