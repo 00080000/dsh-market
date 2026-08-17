@@ -30,7 +30,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { logEvent } from './log.ts'
 import { parsePatchFile } from './check.ts'
-import { bundlePatchEntryIds } from './profile.ts'
+import { bundlePatchInsertedIds } from './profile.ts'
 
 /** The slice of the loader tree this module needs. */
 export interface PatchHost {
@@ -196,15 +196,30 @@ function includePrefix(host: PatchHost): string {
 export function rowIdsForPackage(host: PatchHost, profileDirectory: string, packageName: string): string[] {
   const ids = new Set<string>()
   const packageDir = join(profileDirectory, 'node_modules', packageName)
+  // ONLY the rows this package inserts (#147). A bundle patch also carries
+  // rows that merely reconfigure OTHER plugins — dsh-vision-router tunes the
+  // official `attachment-local` row — and writing `disabled: true` onto
+  // those took down attachments and the DeepSeek model along with it.
   try {
-    for (const id of bundlePatchEntryIds(packageDir)) ids.add(id)
+    for (const id of bundlePatchInsertedIds(packageDir)) ids.add(id)
   } catch { /* package not installed — loader side may still know it */ }
   // The conventional location too: a package may ship cordis.patch.yml at
   // its root without declaring dsh.bundle.patch (the loader probes it too).
+  // Same rule — only ids nested under an `insert:` key.
   try {
-    for (const line of readFileSync(join(packageDir, 'cordis.patch.yml'), 'utf8').split('\n')) {
-      const id = /^\s+- id:\s*['"]?([A-Za-z0-9_.-]+)/u.exec(line)
-      if (id !== null) ids.add(id[1])
+    let insertIndent: number | null = null
+    for (const raw of readFileSync(join(packageDir, 'cordis.patch.yml'), 'utf8').split('\n')) {
+      const line = raw.replace(/#.*$/u, '')
+      if (line.trim() === '') continue
+      const indent = line.length - line.trimStart().length
+      if (/^\s*-?\s*insert:\s*$/u.test(line)) {
+        insertIndent = indent
+        continue
+      }
+      const id = /^\s*-?\s*id:\s*['"]?([A-Za-z0-9_.-]+)/u.exec(line)
+      if (id === null) continue
+      if (insertIndent !== null && indent > insertIndent) ids.add(id[1])
+      else insertIndent = null
     }
   } catch { /* no conventional patch — nothing more to add */ }
   const prefix = includePrefix(host)

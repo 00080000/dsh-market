@@ -289,6 +289,62 @@ describe('rowIdsForPackage', () => {
     }
   })
 
+  it('never claims rows the patch merely RECONFIGURES (#147)', () => {
+    const dir = patchDir()
+    try {
+      // Real shape of dsh-vision-router: it inserts its own row, and also
+      // tunes two OFFICIAL rows it does not own. Disabling the plugin used
+      // to write `disabled: true` onto all three — taking attachments and
+      // the DeepSeek model down with it.
+      installedBundle(dir, 'dsh-vision-router', [
+        '# comment line with - id: decoy',
+        '- insert:',
+        '    - id: vision-router',
+        '      name: dsh-vision-router',
+        '      config:',
+        '        progressiveTools: false',
+        '',
+        '- id: attachment-local',
+        '  config:',
+        '    maxImageBytes: 20971520',
+        '',
+        '- id: llm-deepseek',
+        '  config:',
+        '    hidden: true',
+        '',
+      ].join('\n'))
+      // Declared through dsh.bundle.patch — the path real plugins use, and
+      // the one that handed rowIdsForPackage every id in the file.
+      writeFileSync(
+        join(dir, 'node_modules', 'dsh-vision-router', 'package.json'),
+        JSON.stringify({ name: 'dsh-vision-router', dsh: { bundle: { patch: './cordis.patch.yml' } } }),
+      )
+      const host: PatchHost = { loader: { entries: () => [] } }
+      expect(rowIdsForPackage(host, dir, 'dsh-vision-router')).toEqual(['vision-router'])
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('collects every row of a multi-row insert block', () => {
+    const dir = patchDir()
+    try {
+      installedBundle(dir, 'multi', [
+        '- insert:',
+        '    - id: one',
+        '      name: multi',
+        '    - id: two',
+        '      name: multi/second',
+        '- id: someone-else',
+        '  config: { x: 1 }',
+      ].join('\n'))
+      const host: PatchHost = { loader: { entries: () => [] } }
+      expect(rowIdsForPackage(host, dir, 'multi').sort()).toEqual(['one', 'two'])
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
   it('returns nothing for client-only packages (no bundle rows)', () => {
     const dir = patchDir()
     try {
