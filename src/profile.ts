@@ -26,7 +26,7 @@ export function profileDir(profile: string, explicitDir?: string): string {
  * filter would make them invisible and fail install validation.
  * (Diagnosis and fix proposed in #28 by @Lograthmic.)
  */
-const INBOX_BUNDLES = new Set([
+export const INBOX_BUNDLES = new Set([
   '@deepseek-ai/dsh-base',
   '@deepseek-ai/dsh-web-app',
   '@deepseek-ai/dsh-headless',

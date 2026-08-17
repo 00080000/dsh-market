@@ -23,9 +23,10 @@ import {
   BOOT_ID, cancelActive, probePnpm, progress, provisionPnpm, runDshPlugin,
   type PluginCommandRuntime,
 } from './dsh-cli.ts'
-import { profileDir, readInstalled, readInstalledManifest, readInstalledVersion, readLockCommits, readManifestDeps, readProfileBundles, restoreManifestDeps, setAllowBuilds } from './profile.ts'
+import { INBOX_BUNDLES, profileDir, readInstalled, readInstalledManifest, readInstalledVersion, readLockCommits, readManifestDeps, readProfileBundles, restoreManifestDeps, setAllowBuilds } from './profile.ts'
 import { analyzeProfile } from './check.ts'
-import { INBOX_BUNDLES, readBundleRules, readBundleStack, suggestOrder, validateOrder } from './order.ts'
+import { applyBundleOrder, mergeOrder, readBundleRules, readBundleStack, validateOrder } from './order.ts'
+import { trialValidate } from './trial.ts'
 import { findInstalledAlias, gitAllowBuildsKey, installTargetFor } from './sources.ts'
 import { isStaleUpdate, parseIgnoredBuilds, parsePrepareNotAllowed, RELEASE_AGE_OVERRIDE, retargetCollections, validateAddedPlugins, withHoistRecovery } from './install.ts'
 import { checkUpdates, fetchNpmLatest, invalidateUpdates, isUpgrade, latestPublishedRecently } from './updates.ts'
@@ -39,6 +40,7 @@ import {
 } from './patch.ts'
 import {
   createProfileBackup, downloadWebdav, MAX_BACKUP_BYTES, mergeRestoreManifest, restoreProfileBackup, secretFileCount, uploadWebdav,
+  type ProfileBackup,
 } from './backup.ts'
 import {
   createGist, fitsGistLimit, GistError, gistErrorCode, parseGistId, readGist, resolveGistTokenSource, updateGist, verifyGistToken,
@@ -163,6 +165,49 @@ export function mountMarketRoutes(
   })
   let installing = false
   let restarting = false
+  // UI-state flags ONLY: mutual exclusion is enforced by withMutationLock
+  // below (one promise chain every mutating route appends to), never by
+  // these booleans — a promise-chain serialization cannot be raced by
+  // interleaved awaits, and a second mutating request answers 409
+  // immediately instead of queueing (issue #125 review).
+  let writing = false
+  let mutationBusy = false
+  /** The shared mutation chain: every mutating operation appends to it. */
+  let mutationChain: Promise<unknown> = Promise.resolve()
+
+  /**
+   * Run a mutating operation under the shared mutation lock. `kind` selects
+   * the UI busy flag (`install` = pnpm operation, `write` = direct profile
+   * write) and the 409 message. The operation runs only after every earlier
+   * mutation settled (promise chain); while one is in flight a second
+   * mutating request answers 409 immediately — the UI polls /status for the
+   * busy flag instead of queueing (issue #125 review).
+   * @returns the operation's value, or null when the lock was busy (409 sent).
+   */
+  async function withMutationLock<T>(
+    response: ServerResponse,
+    kind: 'install' | 'write',
+    fn: () => Promise<T> | T,
+  ): Promise<T | null> {
+    if (mutationBusy) {
+      sendJson(response, 409, {
+        error: kind === 'install' ? 'another install is already running' : 'another plugin operation is running',
+      })
+      return null
+    }
+    mutationBusy = true
+    if (kind === 'install') installing = true
+    else writing = true
+    try {
+      const run = mutationChain.then(async () => fn())
+      mutationChain = run.catch(() => undefined)
+      return await run
+    } finally {
+      mutationBusy = false
+      if (kind === 'install') installing = false
+      else writing = false
+    }
+  }
 
   /** Dependency diff vs. a pre-operation snapshot (cancel aftermath). */
   function changedSince(before: Record<string, string>): { changed: string[]; partial: boolean } {
@@ -240,13 +285,12 @@ export function mountMarketRoutes(
   const runPlugin = (profile: string, args: string[]) => withHoistRecovery(commands.runPlugin, profile, args)
 
   async function restoreBackup(value: unknown): Promise<{ files: number; errors: { name: string; error: string }[] }> {
-    if (installing) throw new Error('another plugin operation is already running')
     if (!await probePnpm()) throw new Error('pnpm is required to restore plugins')
-    installing = true
-// Snapshot the target's manifest BEFORE the backup files overwrite it, so
+    // Snapshot the target's manifest BEFORE the backup files overwrite it, so
     // the restore can merge rather than replace: plugins the target already
     // has that are NOT in the backup stay installed instead of silently
-    // dropping off the manifest (partial exports, issue #89).
+    // dropping off the manifest (partial exports, issue #89). The mutation
+    // lock is owned by withMutationLock now, so no `installing` flag here.
     const manifestBefore = JSON.parse(readFileSync(join(activeProfileDir, 'package.json'), 'utf8')) as Record<string, unknown>
     const restored = restoreProfileBackup(config.profile, value, activeProfileDir)
     try {
@@ -316,9 +360,7 @@ export function mountMarketRoutes(
     } catch (error) {
       restored.rollback()
       throw error
-    } finally {
-      installing = false
-    }
+  }
   }
 
   const disposers = [
@@ -368,7 +410,9 @@ export function mountMarketRoutes(
         if (!sameOrigin(request)) return sendJson(response, 403, { error: 'untrusted origin' })
         try {
           const body = await readJsonBody(request, MAX_BACKUP_BYTES + 4096) as { backup?: unknown }
-          sendJson(response, 200, { ok: true, ...await restoreBackup(body.backup) })
+          await withMutationLock(response, 'install', async () => {
+            sendJson(response, 200, { ok: true, ...await restoreBackup(body.backup) })
+          })
         } catch (error) {
           sendJson(response, 400, { error: error instanceof Error ? error.message : String(error) })
         }
@@ -538,6 +582,100 @@ export function mountMarketRoutes(
           const report = analyzeProfile(activeProfileDir)
           sendJson(response, 200, report)
         } catch (error) {
+          sendJson(response, 500, { error: error instanceof Error ? error.message : String(error) })
+        }
+      },
+    }),
+
+    // Issue #98 phase 2: reorder the community bundles. Official bundles are
+    // fixed; the candidate is trial-validated (dry-run composition replay)
+    // before the manifest is written — a broken order is refused and the
+    // profile is never touched.
+    host.webServer.register({
+      kind: 'exact',
+      path: '/dsh-market/bundle-order',
+      handler: async (request, response) => {
+        if (request.method !== 'POST') {
+          response.writeHead(405, { allow: 'POST' })
+          response.end()
+          return
+        }
+        if (!sameOrigin(request)) {
+          sendJson(response, 403, { error: 'untrusted origin' })
+          return
+        }
+        // Mutex with pnpm operations AND other direct writes (issue #98
+        // analysis): reordering writes package.json directly; racing an
+        // install/update/uninstall — or another direct write — would
+        // corrupt the manifest (backup restore uses the same guard). The
+        // lock is taken BEFORE the body is read so a slow/pending request
+        // cannot interleave with another write either.
+        // #125 hardening (lesson from #122: a bad order write can stop DSH
+        // from starting): keep a pre-write profile backup and restore it
+        // automatically if the write throws mid-flight. Persistent snapshots
+        // (PR-C) ship separately; this is the in-route safety net.
+        let backup: ProfileBackup | null = null
+        try {
+          await withMutationLock(response, 'write', async () => {
+            const body = (await readJsonBody(request)) as { order?: unknown } | null
+            if (body === null || typeof body !== 'object') {
+              sendJson(response, 400, { error: 'JSON body is required / 需要 JSON body' })
+              return
+            }
+            if (!Array.isArray(body.order) || !body.order.every(item => typeof item === 'string')) {
+              sendJson(response, 400, { error: 'order must be an array of bundle names / order 必须是 bundle 名称数组' })
+              return
+            }
+            const order = body.order as string[]
+              // Before/after rules (issue #98 phase 2): the merged stack must
+              // satisfy every rule the bundles declare. Enforced BEFORE the
+              // trial/write so a rule-breaking order is refused outright.
+              const stack = readBundleStack(activeProfileDir)
+              const merged = mergeOrder(stack.bundles, order)
+              if (merged.ok) {
+                const conflicts = validateOrder(merged.bundles, readBundleRules(activeProfileDir))
+                if (conflicts.length > 0) {
+                  logEvent('warn', 'bundle-order', `rejected by before/after rules: ${conflicts.map(c => c.reason).join('; ')}`)
+                  sendJson(response, 422, {
+                    error: 'the order violates declared before/after rules / 该顺序违反了插件声明的 before/after 规则',
+                    conflicts,
+                  })
+                  return
+                }
+              }
+              const trial = trialValidate(activeProfileDir, order)
+              if (!trial.ok) {
+                const first = trial.errors[0]
+                logEvent('warn', 'bundle-order', `rejected by trial validation: ${first?.message ?? 'unknown'}`)
+                sendJson(response, 422, {
+                  error: `trial validation failed — ${first?.message ?? 'this order would not boot'} / 试启动校验失败：${first?.message ?? '该顺序无法启动'}`,
+                  trial: { errors: trial.errors, warnings: trial.warnings, diff: trial.diff },
+                })
+                return
+              }
+              backup = createProfileBackup(config.profile, activeProfileDir)
+              const applied = applyBundleOrder(activeProfileDir, order)
+              if (!applied.ok) {
+                sendJson(response, 400, { error: applied.error })
+                return
+              }
+              invalidateUpdates()
+              logEvent('info', 'bundle-order', 'applied new community order')
+              sendJson(response, 200, { ok: true, bundles: applied.bundles })
+          })
+        } catch (error) {
+          // The write threw mid-flight: restore the pre-write profile so a
+          // broken manifest can never stop DSH from starting (issue #125,
+          // lesson from #122). Best-effort — a failing restore must not mask
+          // the original error.
+          if (backup !== null) {
+            try {
+              restoreProfileBackup(config.profile, backup, activeProfileDir)
+              logEvent('error', 'bundle-order', `write failed — profile restored from pre-write backup: ${error instanceof Error ? error.message : String(error)}`)
+            } catch {
+              logEvent('error', 'bundle-order', 'write failed AND automatic rollback failed')
+            }
+          }
           sendJson(response, 500, { error: error instanceof Error ? error.message : String(error) })
         }
       },
@@ -865,51 +1003,46 @@ export function mountMarketRoutes(
           sendJson(response, 403, { error: 'untrusted origin' })
           return
         }
-        if (installing) {
-          sendJson(response, 409, { error: 'another install is already running' })
-          return
-        }
         try {
-          const body = (await readJsonBody(request)) as { name?: unknown; force?: unknown }
-          const name = typeof body.name === 'string' ? body.name : ''
-          const force = body.force === true
-          const spec = readInstalled(config.profile, activeProfileDir)[name]
-          if (spec === undefined) {
-            sendJson(response, 400, { error: 'plugin is not installed' })
-            return
-          }
-          if (spec.startsWith('link:') || spec.startsWith('file:')) {
-            sendJson(response, 400, { error: 'locally linked plugins update from their checkout' })
-            return
-          }
-          const beforeInstalled = readInstalled(config.profile, activeProfileDir)
-          // Re-running add re-resolves the source: git HEAD for github specs,
-          // dist-tag latest for registry installs.
-          const isGit = spec.startsWith('github:')
-          const target = isGit ? spec.replace(/#.*$/, '') : `${name}@latest`
-          // Never let `@latest` walk a profile BACKWARDS (#64 by @ZeroOrigin64):
-          // a package whose latest dist-tag was left on an older release turns
-          // this update into a downgrade that also rewrites an exact pin to
-          // `@latest`. Detection already hides the button; this guards the
-          // route itself. Unreadable versions fall through and update as before.
-          if (!isGit) {
-            const installedVersion = readInstalledVersion(config.profile, name, activeProfileDir)
-            const registryLatest = await fetchNpmLatest(name)
-            if (installedVersion !== null && registryLatest !== null && !isUpgrade(installedVersion, registryLatest)) {
-              logEvent('info', 'update', `${name} refused: latest=${registryLatest} is not newer than installed=${installedVersion}`)
-              sendJson(response, 400, {
-                error: `已是最新：registry 的 latest 是 ${registryLatest}，不高于已装的 ${installedVersion}，更新会造成降级。 / Already current: the registry's latest (${registryLatest}) is not newer than the installed ${installedVersion}, so updating would downgrade it.`,
-              })
+          await withMutationLock(response, 'install', async () => {
+            const body = (await readJsonBody(request)) as { name?: unknown; force?: unknown }
+            const name = typeof body.name === 'string' ? body.name : ''
+            const force = body.force === true
+            const spec = readInstalled(config.profile, activeProfileDir)[name]
+            if (spec === undefined) {
+              sendJson(response, 400, { error: 'plugin is not installed' })
               return
             }
-          }
-          const repoKey = isGit ? spec.slice('github:'.length).replace(/#.*$/, '').toLowerCase() : null
-          const beforeVersion = readInstalledVersion(config.profile, name, activeProfileDir)
-          const beforeCommit = repoKey !== null
-            ? readLockCommits(config.profile, activeProfileDir).get(repoKey) ?? null
-            : null
-          installing = true
-          try {
+            if (spec.startsWith('link:') || spec.startsWith('file:')) {
+              sendJson(response, 400, { error: 'locally linked plugins update from their checkout' })
+              return
+            }
+            const beforeInstalled = readInstalled(config.profile, activeProfileDir)
+            // Re-running add re-resolves the source: git HEAD for github specs,
+            // dist-tag latest for registry installs.
+            const isGit = spec.startsWith('github:')
+            const target = isGit ? spec.replace(/#.*$/, '') : `${name}@latest`
+            // Never let `@latest` walk a profile BACKWARDS (#64 by @ZeroOrigin64):
+            // a package whose latest dist-tag was left on an older release turns
+            // this update into a downgrade that also rewrites an exact pin to
+            // `@latest`. Detection already hides the button; this guards the
+            // route itself. Unreadable versions fall through and update as before.
+            if (!isGit) {
+              const installedVersion = readInstalledVersion(config.profile, name, activeProfileDir)
+              const registryLatest = await fetchNpmLatest(name)
+              if (installedVersion !== null && registryLatest !== null && !isUpgrade(installedVersion, registryLatest)) {
+                logEvent('info', 'update', `${name} refused: latest=${registryLatest} is not newer than installed=${installedVersion}`)
+                sendJson(response, 400, {
+                  error: `已是最新：registry 的 latest 是 ${registryLatest}，不高于已装的 ${installedVersion}，更新会造成降级。 / Already current: the registry's latest (${registryLatest}) is not newer than the installed ${installedVersion}, so updating would downgrade it.`,
+                })
+                return
+              }
+            }
+            const repoKey = isGit ? spec.slice('github:'.length).replace(/#.*$/, '').toLowerCase() : null
+            const beforeVersion = readInstalledVersion(config.profile, name, activeProfileDir)
+            const beforeCommit = repoKey !== null
+              ? readLockCommits(config.profile, activeProfileDir).get(repoKey) ?? null
+              : null
             // force: the user chose to install a fresh release without the
             // default one-day safety wait; scoped to this single command.
             const addArgs = force ? ['add', RELEASE_AGE_OVERRIDE, target] : ['add', target]
@@ -980,9 +1113,7 @@ export function mountMarketRoutes(
               stderr: result.stderr,
               installed: readInstalled(config.profile, activeProfileDir),
             })
-          } finally {
-            installing = false
-          }
+          })
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error)
           host.logger?.warn(`[dsh-market] update failed: ${message}`)
@@ -1032,7 +1163,7 @@ export function mountMarketRoutes(
           sendJson(response, 403, { error: 'restart is limited to same-origin loopback requests' })
           return
         }
-        if (installing) {
+        if (writing || installing) {
           sendJson(response, 409, { error: 'cannot restart while a plugin operation is running' })
           return
         }
@@ -1168,27 +1299,24 @@ export function mountMarketRoutes(
           sendJson(response, 403, { error: 'untrusted origin' })
           return
         }
-        if (installing) {
-          sendJson(response, 409, { error: 'another install is already running' })
-          return
-        }
         try {
-          const body = (await readJsonBody(request)) as { name?: unknown }
-          const name = typeof body.name === 'string' ? body.name : ''
-          if (name === 'dsh-market' || name === 'dshmarket') {
-            sendJson(response, 400, { error: 'the market cannot uninstall itself; use the dsh CLI' })
-            return
-          }
-          if (readInstalled(config.profile, activeProfileDir)[name] === undefined) {
-            sendJson(response, 400, { error: 'plugin is not installed' })
-            return
-          }
-          const beforeInstalled = readInstalled(config.profile, activeProfileDir)
-          const activation = {
-            [name]: verifyActivation(config.profile, name, liveNames(), activeProfileDir, disabled.has(name)),
-          }
-          installing = true
-          try {
+          await withMutationLock(response, 'install', async () => {
+            const body = (await readJsonBody(request)) as { name?: unknown }
+            const name = typeof body.name === 'string' ? body.name : ''
+            if (name === 'dsh-market' || name === 'dshmarket') {
+              sendJson(response, 400, { error: 'the market cannot uninstall itself; use the dsh CLI' })
+              return
+            }
+            if (readInstalled(config.profile, activeProfileDir)[name] === undefined) {
+              sendJson(response, 400, { error: 'plugin is not installed' })
+              return
+            }
+            const beforeInstalled = readInstalled(config.profile, activeProfileDir)
+            // isDisabled comes from the patch layer (#130) — keep it while the
+            // lock moves into withMutationLock (#125).
+            const activation = {
+              [name]: verifyActivation(config.profile, name, liveNames(), activeProfileDir, disabled.has(name)),
+            }
             const result = await runPlugin(config.profile, ['remove', name])
             const cancelled = result.cancelled
             const ok = result.exitCode === 0 && !result.timedOut && !cancelled
@@ -1231,9 +1359,7 @@ export function mountMarketRoutes(
               stderr: result.stderr,
               installed: readInstalled(config.profile, activeProfileDir),
             })
-          } finally {
-            installing = false
-          }
+          })
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error)
           host.logger?.warn(`[dsh-market] uninstall failed: ${message}`)
@@ -1256,85 +1382,80 @@ export function mountMarketRoutes(
           sendJson(response, 403, { error: 'untrusted origin' })
           return
         }
-        if (installing) {
-          sendJson(response, 409, { error: 'another install is already running' })
-          return
-        }
         try {
-          const body = (await readJsonBody(request)) as { url?: unknown }
-          const url = typeof body.url === 'string' ? body.url : ''
-          const { registry } = await loadRegistry()
-          const entry = registry.plugins.find(p => p.url.toLowerCase() === url.toLowerCase())
-          if (entry === undefined) {
-            logEvent('warn', 'install-rejected', `not in curated registry: ${url.slice(0, 120)}`)
-            sendJson(response, 400, { error: 'plugin is not in the curated registry' })
-            return
-          }
-          const target = installTargetFor(entry)
-          if (target === null) {
-            sendJson(response, 400, { error: 'unsupported source url' })
-            return
-          }
-          // Duplicate guard (#27): the same plugin listed under another name
-          // (an alias entry pointing at the same repo) must never install
-          // twice — two loader entries with one id brick the next boot.
-          // Monorepo subpath entries (distinct plugins in one repo) pass:
-          // their entry urls differ by subpath and identity is name-based.
-          // A dependency left in package.json by a FAILED install (blocked
-          // build scripts: pnpm writes the manifest, then exits 1) is NOT a
-          // duplicate — it was never activated. Blocking the retry would
-          // make the approve-builds flow dead-end, so a leftover that is the
-          // SAME package/source (not a repo-only alias of a different entry)
-          // and is not yet active (bundle layer or live mount) may be retried.
-          const installedNow = readInstalled(config.profile, activeProfileDir)
-          const aliasOf = findInstalledAlias(entry, installedNow)
-          // When the duplicate guard allows a retry of a leftover dep, that
-          // name must be treated as "newly added" by the post-install
-          // validation and hot-mount below (it IS in package.json from the
-          // failed attempt, so the plain before/after diff would miss it).
-          let retryAlias: string | null = null
-          if (aliasOf !== null) {
-            // Same install? The leftover's own name/spec must match what we
-            // are about to add — an npm entry retries under its npm name; a
-            // github entry's package.json spec equals the target.
-            const sameSource = aliasOf.toLowerCase() === (entry.npm ?? '').toLowerCase()
-              || String(installedNow[aliasOf] ?? '').replace(/^file:/, '').toLowerCase() === String(target).replace(/^file:/, '').toLowerCase()
-            let active = false
-            try {
-              const manifest = JSON.parse(readFileSync(join(activeProfileDir, 'package.json'), 'utf8')) as { dsh?: { profile?: { bundles?: string[] } } }
-              active = (manifest.dsh?.profile?.bundles ?? []).includes(aliasOf) || liveNames().has(aliasOf)
-            } catch {
-              // unreadable manifest — treat as active to stay safe
-              active = true
-            }
-            if (active || !sameSource) {
-              logEvent('warn', 'install-rejected', `${entry.name}: same plugin already installed as ${aliasOf}`)
-              sendJson(response, 400, { error: `已以「${aliasOf}」安装过同一个插件，无需重复安装 / this plugin is already installed as "${aliasOf}"` })
+          await withMutationLock(response, 'install', async () => {
+            const body = (await readJsonBody(request)) as { url?: unknown }
+            const url = typeof body.url === 'string' ? body.url : ''
+            const { registry } = await loadRegistry()
+            const entry = registry.plugins.find(p => p.url.toLowerCase() === url.toLowerCase())
+            if (entry === undefined) {
+              logEvent('warn', 'install-rejected', `not in curated registry: ${url.slice(0, 120)}`)
+              sendJson(response, 400, { error: 'plugin is not in the curated registry' })
               return
             }
-            retryAlias = aliasOf
-            logEvent('info', 'install', `${entry.name}: ${aliasOf} present but inactive (leftover of a failed install) — retrying`)
-          }
-          // Name-collision guard (#66): the curated registry lists DISTINCT
-          // plugins sharing one name (both dsh-usage-stats, four dsh-memory…).
-          // The alias guard above no longer cross-matches them (repo evidence
-          // decides), but two packages with one name still cannot coexist —
-          // pnpm would silently REPLACE the installed one's dependency entry.
-          // Refuse with the honest reason instead.
-          if (aliasOf === null) {
-            const clashName = [entry.npm, entry.name].find(
-              (n): n is string => typeof n === 'string' && n !== '' && installedNow[n] !== undefined,
-            )
-            if (clashName !== undefined) {
-              logEvent('warn', 'install-rejected', `${entry.name}: name collision with installed ${clashName} (${installedNow[clashName]}) from a different source`)
-              sendJson(response, 400, {
-                error: `同名冲突：已安装的「${clashName}」来自其他来源，两个同名插件无法共存于一个 profile，请先卸载再安装 / name conflict: an installed plugin already uses the name "${clashName}" but comes from a different source; two plugins with the same name cannot coexist in one profile — uninstall it first`,
-              })
+            const target = installTargetFor(entry)
+            if (target === null) {
+              sendJson(response, 400, { error: 'unsupported source url' })
               return
             }
-          }
-          installing = true
-          try {
+            // Duplicate guard (#27): the same plugin listed under another name
+            // (an alias entry pointing at the same repo) must never install
+            // twice — two loader entries with one id brick the next boot.
+            // Monorepo subpath entries (distinct plugins in one repo) pass:
+            // their entry urls differ by subpath and identity is name-based.
+            // A dependency left in package.json by a FAILED install (blocked
+            // build scripts: pnpm writes the manifest, then exits 1) is NOT a
+            // duplicate — it was never activated. Blocking the retry would
+            // make the approve-builds flow dead-end, so a leftover that is the
+            // SAME package/source (not a repo-only alias of a different entry)
+            // and is not yet active (bundle layer or live mount) may be retried.
+            const installedNow = readInstalled(config.profile, activeProfileDir)
+            const aliasOf = findInstalledAlias(entry, installedNow)
+            // When the duplicate guard allows a retry of a leftover dep, that
+            // name must be treated as "newly added" by the post-install
+            // validation and hot-mount below (it IS in package.json from the
+            // failed attempt, so the plain before/after diff would miss it).
+            let retryAlias: string | null = null
+            if (aliasOf !== null) {
+              // Same install? The leftover's own name/spec must match what we
+              // are about to add — an npm entry retries under its npm name; a
+              // github entry's package.json spec equals the target.
+              const sameSource = aliasOf.toLowerCase() === (entry.npm ?? '').toLowerCase()
+                || String(installedNow[aliasOf] ?? '').replace(/^file:/, '').toLowerCase() === String(target).replace(/^file:/, '').toLowerCase()
+              let active = false
+              try {
+                const manifest = JSON.parse(readFileSync(join(activeProfileDir, 'package.json'), 'utf8')) as { dsh?: { profile?: { bundles?: string[] } } }
+                active = (manifest.dsh?.profile?.bundles ?? []).includes(aliasOf) || liveNames().has(aliasOf)
+              } catch {
+                // unreadable manifest — treat as active to stay safe
+                active = true
+              }
+              if (active || !sameSource) {
+                logEvent('warn', 'install-rejected', `${entry.name}: same plugin already installed as ${aliasOf}`)
+                sendJson(response, 400, { error: `已以「${aliasOf}」安装过同一个插件，无需重复安装 / this plugin is already installed as "${aliasOf}"` })
+                return
+              }
+              retryAlias = aliasOf
+              logEvent('info', 'install', `${entry.name}: ${aliasOf} present but inactive (leftover of a failed install) — retrying`)
+            }
+            // Name-collision guard (#66): the curated registry lists DISTINCT
+            // plugins sharing one name (both dsh-usage-stats, four dsh-memory…).
+            // The alias guard above no longer cross-matches them (repo evidence
+            // decides), but two packages with one name still cannot coexist —
+            // pnpm would silently REPLACE the installed one's dependency entry.
+            // Refuse with the honest reason instead.
+            if (aliasOf === null) {
+              const clashName = [entry.npm, entry.name].find(
+                (n): n is string => typeof n === 'string' && n !== '' && installedNow[n] !== undefined,
+              )
+              if (clashName !== undefined) {
+                logEvent('warn', 'install-rejected', `${entry.name}: name collision with installed ${clashName} (${installedNow[clashName]}) from a different source`)
+                sendJson(response, 400, {
+                  error: `同名冲突：已安装的「${clashName}」来自其他来源，两个同名插件无法共存于一个 profile，请先卸载再安装 / name conflict: an installed plugin already uses the name "${clashName}" but comes from a different source; two plugins with the same name cannot coexist in one profile — uninstall it first`,
+                })
+                return
+              }
+            }
             const beforeSpecs = readInstalled(config.profile, activeProfileDir)
             const before = new Set(Object.keys(beforeSpecs))
             if (retryAlias !== null) before.delete(retryAlias)
@@ -1439,9 +1560,7 @@ export function mountMarketRoutes(
               stderr: result.stderr,
               installed,
             })
-          } finally {
-            installing = false
-          }
+          })
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error)
           host.logger?.warn(`[dsh-market] install failed: ${message}`)

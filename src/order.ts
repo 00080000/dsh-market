@@ -10,12 +10,10 @@
  * cordis.patch.yml and --patch overlays are not part of the bundle stack and
  * are never touched here.
  *
- * Read-only helpers — nothing here writes the manifest; no processes, no
- * network. The write side (mergeOrder / applyBundleOrder) lives on the
- * ordering branch.
+ * Pure functions plus one manifest write-back; no processes, no network.
  */
 
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join, resolve } from 'node:path'
 
@@ -25,6 +23,17 @@ export const INBOX_BUNDLES = new Set([
   '@deepseek-ai/dsh-web-app',
   '@deepseek-ai/dsh-headless',
 ])
+
+/**
+ * Atomic same-directory replace (write temp + rename): a crash mid-write can
+ * never leave the profile manifest truncated, which would break every later
+ * pnpm run. Used for every package.json write this module makes.
+ */
+function writeFileAtomic(file: string, content: string): void {
+  const temp = `${file}.tmp-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+  writeFileSync(temp, content)
+  renameSync(temp, file)
+}
 
 /** The bundle stack as it appears in the profile manifest. */
 export interface BundleStack {
@@ -185,27 +194,60 @@ export function validateOrder(bundleNames: string[], rules: BundleRule[]): Order
 }
 
 /**
- * Topologically sort the community bundles by their before/after rules AND
- * plugin-to-plugin dependencies — the "auto-fix" counterpart to validateOrder
- * (LOOT-style): the suggested order satisfies every declared rule and puts
- * each bundle after the bundles it depends on. Kahn's algorithm with
- * deterministic tie-breaking (stable input order). Bundles without
- * constraints keep their relative order among the unconstrained ones.
- *
- * `dependencyEdges` expresses "from depends on to" (usually read from each
- * bundle's dependencies/peerDependencies that name another community
- * bundle); the constraint is `to` must load before `from`.
- * @returns the suggested community order, or a cycle report when the
- * constraints cannot be satisfied (references to unlisted bundles ignored).
+ * Merge a community-bundle permutation into the full stack. Official in-box
+ * bundles keep their EXACT positions (never moved); community bundles are
+ * replaced by `newOrder` in order of appearance. Pure — nothing is written.
+ * @returns the merged full stack, or the rejection reason when `newOrder` is
+ * not a permutation of the community bundles (duplicates, additions,
+ * omissions, official names).
+ */
+export function mergeOrder(bundles: string[], newOrder: string[]): { ok: true; bundles: string[] } | { ok: false; error: string } {
+  const communitySet = new Set(bundles.filter(name => !INBOX_BUNDLES.has(name)))
+  if (new Set(newOrder).size !== newOrder.length) {
+    return { ok: false, error: 'duplicate bundle names in the new order / 新顺序包含重复的 bundle' }
+  }
+  if (newOrder.length !== communitySet.size) {
+    return { ok: false, error: 'the new order must contain exactly the current community bundles / 新顺序必须恰好包含全部社区 bundle' }
+  }
+  for (const name of newOrder) {
+    if (!communitySet.has(name)) {
+      return { ok: false, error: `${name} is not a reorderable community bundle / ${name} 不是可排序的社区 bundle` }
+    }
+  }
+  const merged = [...bundles]
+  let cursor = 0
+  for (let index = 0; index < merged.length; index += 1) {
+    const name = merged[index]
+    if (name === undefined || INBOX_BUNDLES.has(name)) continue
+    merged[index] = newOrder[cursor]
+    cursor += 1
+  }
+  return { ok: true, bundles: merged }
+}
+
+/**
+ * Topologically sort the community bundles by their before/after rules — the
+ * "auto-fix" counterpart to validateOrder. Returns null when no declared rule
+ * applies to the current stack (nothing to suggest). With rules, Kahn's
+ * algorithm breaks ties by the CURRENT order: unconstrained bundles keep
+ * their current relative order and constrained bundles move only as far as
+ * the rules require — the suggestion is the minimal change that satisfies
+ * every rule, never an arbitrary canonical rewrite of a hand-picked order
+ * (issue #125 review).
+ * @returns the suggested community order, null when there are no rules, or a
+ * cycle report when the constraints cannot be satisfied (references to
+ * unlisted bundles ignored).
  */
 export function suggestOrder(
   bundleNames: string[],
   rules: BundleRule[],
-  dependencyEdges: Array<{ from: string; to: string }> = [],
-): { ok: true; order: string[] } | { ok: false; cycle: string[] } {
+): { ok: true; order: string[] } | { ok: false; cycle: string[] } | null {
   const names = bundleNames.filter(name => !INBOX_BUNDLES.has(name))
   const inOrder = new Set(names)
   const active = rules.filter(rule => inOrder.has(rule.name))
+  // No rule applies to the current stack — nothing to suggest.
+  if (active.length === 0) return null
+  const position = new Map(names.map((name, index) => [name, index]))
   // Constraint: "a must load before b" (from a.before or b.after) → edge a → b.
   const beforeOf = new Map<string, Set<string>>() // name → bundles that must come after it
   const deps = new Map<string, Set<string>>() // name → bundles that must come before it
@@ -222,23 +264,20 @@ export function suggestOrder(
     for (const other of rule.before) addEdge(rule.name, other)
     for (const other of rule.after) addEdge(other, rule.name)
   }
-  // Dependency edges: "from depends on to" ⇒ to must load before from.
-  for (const edge of dependencyEdges) addEdge(edge.to, edge.from)
   const remaining = new Map<string, Set<string>>()
   for (const [name, depsOf] of deps) remaining.set(name, new Set(depsOf))
   const ready: string[] = names.filter(name => (remaining.get(name)?.size ?? 0) === 0)
   const ordered: string[] = []
   while (ready.length > 0) {
-    // Deterministic, INPUT-INDEPENDENT tie-break: the ready bundle with the
-    // smallest name. The suggested order is therefore UNIQUE for a given set
-    // of bundles/rules/dependencies — it never chases the user's current
-    // manual order, so re-clicking auto-sort after hand-tweaking an
-    // unconstrained bundle restores the same canonical result.
+    // Minimal-change tie-break: among the ready bundles, prefer the one that
+    // comes FIRST in the current order. Bundles the rules do not constrain
+    // therefore keep their current relative order; constrained bundles move
+    // only as far as the rules require (issue #125 review).
     let best = 0
     for (let i = 1; i < ready.length; i += 1) {
       const a = ready[i]
       const b = ready[best]
-      if (a !== undefined && b !== undefined && a.localeCompare(b) < 0) best = i
+      if (a !== undefined && b !== undefined && (position.get(a) ?? 0) < (position.get(b) ?? 0)) best = i
     }
     const name = ready.splice(best, 1)[0]
     if (name === undefined) break
@@ -254,4 +293,30 @@ export function suggestOrder(
     return { ok: false, cycle: names.filter(name => !ordered.includes(name)) }
   }
   return { ok: true, order: ordered }
+}
+
+/**
+ * Apply a new community-bundle order to the profile manifest. The official
+ * in-box bundles keep their exact positions; `newOrder` must be a permutation
+ * of the current community bundles (no duplicates, no additions, no
+ * omissions). On any failure the manifest is left untouched.
+ * @returns the new full stack on success, or an error description.
+ */
+export function applyBundleOrder(profileDir: string, newOrder: string[]): { ok: true; bundles: string[] } | { ok: false; error: string } {
+  const { bundles } = readBundleStack(profileDir)
+  const merged = mergeOrder(bundles, newOrder)
+  if (!merged.ok) return merged
+  try {
+    const manifestPath = join(profileDir, 'package.json')
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as {
+      dsh?: { profile?: { bundles?: unknown } }
+    }
+    manifest.dsh ??= {}
+    manifest.dsh.profile ??= {}
+    manifest.dsh.profile.bundles = merged.bundles
+    writeFileAtomic(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
+    return merged
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : String(error) }
+  }
 }

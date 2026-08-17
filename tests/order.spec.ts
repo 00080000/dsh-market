@@ -1,17 +1,18 @@
 /**
- * Unit tests for the read-only bundle-ordering helpers (issue #98,
- * diagnostics) — src/order.ts. The write side (mergeOrder / applyBundleOrder)
- * lives on the ordering branch. Pure filesystem logic, exercised against
- * per-test tmpdir fixtures (same pattern as tests/check.spec.ts): the profile
- * directory is constructed manually under a mkdtemp tmpdir and DSH_HOME is
- * pointed there so the home-level patch layer can never leak into a test.
+ * Unit tests for community bundle ordering (issue #98, phase 2) — src/order.ts.
+ * Pure filesystem logic, exercised against per-test tmpdir fixtures (same
+ * pattern as tests/check.spec.ts): the profile directory is constructed
+ * manually under a mkdtemp tmpdir and DSH_HOME is pointed there so the
+ * home-level patch layer can never leak into a test.
  */
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
+  applyBundleOrder,
+  mergeOrder,
   readBundleRules,
   readBundleStack,
   suggestOrder,
@@ -168,6 +169,133 @@ describe('validateOrder (#98 before/after enforcement)', () => {
   })
 })
 
+describe('applyBundleOrder (#98 manifest write-back)', () => {
+  it('keeps official in-box bundles in their exact positions (in-place merge)', () => {
+    const dir = pdir()
+    writeProfile(dir, {
+      name: 'web-profile',
+      dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', 'alpha', 'beta', '@deepseek-ai/dsh-web-app'] } },
+    })
+
+    const result = applyBundleOrder(dir, ['beta', 'alpha'])
+    expect(result.ok).toBe(true)
+    // Community slots are replaced in order; officials never move.
+    if (result.ok) expect(result.bundles).toEqual(['@deepseek-ai/dsh-base', 'beta', 'alpha', '@deepseek-ai/dsh-web-app'])
+  })
+
+  it('accepts an empty reorder for an all-official stack', () => {
+    const dir = pdir()
+    writeProfile(dir, { dsh: { profile: { bundles: ['@deepseek-ai/dsh-base'] } } })
+
+    const result = applyBundleOrder(dir, [])
+    expect(result.ok).toBe(true)
+    if (result.ok) expect(result.bundles).toEqual(['@deepseek-ai/dsh-base'])
+  })
+
+  it('rejects duplicate names without touching the manifest', () => {
+    const dir = pdir()
+    writeProfile(dir, { dsh: { profile: { bundles: ['alpha', 'beta'] } } })
+    const before = readFileSync(join(dir, 'package.json'), 'utf8')
+
+    const result = applyBundleOrder(dir, ['alpha', 'alpha'])
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error).toContain('duplicate')
+    expect(readFileSync(join(dir, 'package.json'), 'utf8')).toBe(before)
+  })
+
+  it('rejects additions and omissions (must be a permutation)', () => {
+    const dir = pdir()
+    writeProfile(dir, { dsh: { profile: { bundles: ['alpha', 'beta'] } } })
+    const before = readFileSync(join(dir, 'package.json'), 'utf8')
+
+    expect(applyBundleOrder(dir, ['alpha']).ok).toBe(false) // omission
+    const added = applyBundleOrder(dir, ['alpha', 'beta', 'gamma'])
+    expect(added.ok).toBe(false)
+    if (!added.ok) expect(added.error).toContain('exactly the current community bundles')
+    expect(readFileSync(join(dir, 'package.json'), 'utf8')).toBe(before)
+  })
+
+  it('rejects names that are not reorderable community bundles', () => {
+    const dir = pdir()
+    writeProfile(dir, { dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', 'alpha', 'beta'] } } })
+    const before = readFileSync(join(dir, 'package.json'), 'utf8')
+
+    const result = applyBundleOrder(dir, ['alpha', 'zzz'])
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error).toContain('zzz')
+    expect(readFileSync(join(dir, 'package.json'), 'utf8')).toBe(before)
+  })
+
+  it('rewrites only dsh.profile.bundles and preserves every other manifest field', () => {
+    const dir = pdir()
+    writeProfile(dir, {
+      name: 'web-profile',
+      version: '1.2.3',
+      dependencies: { alpha: '^1.0.0', beta: '^2.0.0' },
+      dsh: {
+        profile: { bundles: ['alpha', 'beta'], keepMe: { nested: true } },
+        client: { inject: ['@deepseek-ai/dsh-client-connection'] },
+      },
+    })
+
+    const result = applyBundleOrder(dir, ['beta', 'alpha'])
+    expect(result.ok).toBe(true)
+
+    const manifest = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')) as {
+      name: string
+      version: string
+      dependencies: Record<string, string>
+      dsh: { profile: { bundles: string[]; keepMe: unknown }; client: { inject: string[] } }
+    }
+    expect(manifest.dsh.profile.bundles).toEqual(['beta', 'alpha'])
+    expect(manifest.name).toBe('web-profile')
+    expect(manifest.version).toBe('1.2.3')
+    expect(manifest.dependencies).toEqual({ alpha: '^1.0.0', beta: '^2.0.0' })
+    expect(manifest.dsh.profile.keepMe).toEqual({ nested: true })
+    expect(manifest.dsh.client).toEqual({ inject: ['@deepseek-ai/dsh-client-connection'] })
+  })
+
+  it('fails cleanly when the manifest cannot be read', () => {
+    const dir = pdir()
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(join(dir, 'package.json'), '{ nope')
+    const result = applyBundleOrder(dir, [])
+    expect(result.ok).toBe(false)
+  })
+})
+
+describe('mergeOrder (#98 in-place merge)', () => {
+  it('replaces community slots in place while officials keep exact positions', () => {
+    const merged = mergeOrder(
+      ['@deepseek-ai/dsh-base', 'a', 'b', '@deepseek-ai/dsh-web-app', 'c'],
+      ['c', 'a', 'b'],
+    )
+    expect(merged).toEqual({
+      ok: true,
+      bundles: ['@deepseek-ai/dsh-base', 'c', 'a', '@deepseek-ai/dsh-web-app', 'b'],
+    })
+  })
+
+  it('rejects duplicates, additions, omissions and official names in the new order', () => {
+    expect(mergeOrder(['a', 'b'], ['a', 'a']).ok).toBe(false) // duplicate
+    expect(mergeOrder(['a', 'b'], ['a']).ok).toBe(false) // omission
+    expect(mergeOrder(['a', 'b'], ['a', 'b', 'c']).ok).toBe(false) // addition
+    // Official names are excluded from the community set, so any newOrder
+    // containing one is caught by the exact-length check.
+    const official = mergeOrder(['@deepseek-ai/dsh-base', 'a'], ['@deepseek-ai/dsh-base', 'a'])
+    expect(official.ok).toBe(false)
+    if (!official.ok) expect(official.error).toContain('exactly the current community bundles')
+    // Arbitrary unknown names at the right length trip the per-name check.
+    const unknown = mergeOrder(['a', 'b'], ['a', 'zzz'])
+    expect(unknown.ok).toBe(false)
+    if (!unknown.ok) expect(unknown.error).toContain('zzz')
+  })
+
+  it('accepts an empty new order when there are no community bundles', () => {
+    expect(mergeOrder(['@deepseek-ai/dsh-base'], [])).toEqual({ ok: true, bundles: ['@deepseek-ai/dsh-base'] })
+  })
+})
+
 describe('suggestOrder (#98 opt: LOOT-style auto-fix)', () => {
   it('topologically sorts community bundles by before/after rules', () => {
     // b after a  →  a must load before b. d before c → d must load before c.
@@ -184,20 +312,22 @@ describe('suggestOrder (#98 opt: LOOT-style auto-fix)', () => {
     }
   })
 
-  it('keeps unconstrained bundles in their relative order', () => {
+  it('keeps unconstrained bundles in their current relative order (minimal change)', () => {
     const rules = [{ name: 'x', after: ['y'], before: [] }]
     const result = suggestOrder(['a', 'x', 'b', 'y'], rules)
     expect(result.ok).toBe(true)
     if (result.ok) {
       expect(result.order.indexOf('y')).toBeLessThan(result.order.indexOf('x'))
-      // Unconstrained bundles sort deterministically by name (input order no
-      // longer matters — the result is a UNIQUE canonical order).
-      expect(result.order.indexOf('a')).toBeLessThan(result.order.indexOf('b'))
+      // The unconstrained bundles keep their CURRENT relative order — the
+      // suggestion is the minimal change the rules force (issue #125 review),
+      // never an arbitrary canonical rewrite.
+      expect(result.order).toEqual(['a', 'b', 'y', 'x'])
     }
-    // The same input order shifted produces the SAME canonical result, so
-    // re-clicking auto-sort after a manual tweak restores it.
+    // The suggestion follows the CURRENT order, not a canonical one: the
+    // same rules over a different current order produce a different minimal
+    // change.
     const again = suggestOrder(['b', 'x', 'y', 'a'], rules)
-    if (again.ok && result.ok) expect(again.order).toEqual(result.order)
+    expect(again).toEqual({ ok: true, order: ['b', 'y', 'x', 'a'] })
   })
 
   it('reports a cycle instead of an order', () => {
@@ -220,42 +350,27 @@ describe('suggestOrder (#98 opt: LOOT-style auto-fix)', () => {
     if (result.ok) expect(result.order).toEqual(['a', 'x'])
   })
 
-  it('puts a bundle after the bundles it depends on (dependency edges)', () => {
-    // a depends on b, b depends on c ⇒ order must be c, b, a.
-    const edges = [
-      { from: 'a', to: 'b' },
-      { from: 'b', to: 'c' },
-    ]
-    const result = suggestOrder(['a', 'b', 'c'], [], edges)
-    expect(result.ok).toBe(true)
-    if (result.ok) {
-      expect(result.order.indexOf('c')).toBeLessThan(result.order.indexOf('b'))
-      expect(result.order.indexOf('b')).toBeLessThan(result.order.indexOf('a'))
-    }
-  })
 
-  it('combines before/after rules with dependency edges and reports cycles', () => {
-    // Rule: c before a. Dependencies: a→b. Both satisfied by b, c, a… and c
-    // before a means c, a order; deps force b before a → b, c, a.
+  it('combines before/after rules across bundles and reports cycles', () => {
+    // Rule: c before a → the minimal change moves only what the rule forces.
     const rules = [{ name: 'c', before: ['a'], after: [] }]
-    const edges = [{ from: 'a', to: 'b' }]
-    const result = suggestOrder(['a', 'b', 'c'], rules, edges)
+    const result = suggestOrder(['a', 'b', 'c'], rules)
     expect(result.ok).toBe(true)
     if (result.ok) {
-      expect(result.order.indexOf('b')).toBeLessThan(result.order.indexOf('a'))
       expect(result.order.indexOf('c')).toBeLessThan(result.order.indexOf('a'))
     }
-    // Mutual dependency → cycle.
-    const cycle = suggestOrder(['a', 'b'], [], [
-      { from: 'a', to: 'b' },
-      { from: 'b', to: 'a' },
+    // A rule cycle has no compliant order.
+    const cycle = suggestOrder(['a', 'b'], [
+      { name: 'a', before: ['b'], after: [] },
+      { name: 'b', before: ['a'], after: [] },
     ])
     expect(cycle.ok).toBe(false)
   })
 
-  it('ignores dependency edges to unlisted bundles', () => {
-    const result = suggestOrder(['a', 'b'], [], [{ from: 'a', to: 'ghost' }])
-    expect(result.ok).toBe(true)
-    if (result.ok) expect(result.order.sort()).toEqual(['a', 'b'])
-  })
 })
+
+  it('returns null when no declared rule applies (nothing to suggest)', () => {
+    expect(suggestOrder(['a', 'b'], [])).toBeNull()
+    // Rules naming bundles outside the current stack are not active either.
+    expect(suggestOrder(['a', 'b'], [{ name: 'ghost', after: ['x'], before: [] }])).toBeNull()
+  })
