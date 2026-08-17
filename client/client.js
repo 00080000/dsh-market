@@ -69,6 +69,8 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 			approveBuilds: "放行构建脚本并重试",
 			buildsSkipped: "该插件需要运行构建脚本才能工作，出于安全默认被拦下。点击下方按钮为它放行并重装：",
 			restartNow: "立即重启",
+			dismiss: "知道了",
+			dismissNotice: "关闭此提示",
 			restarting: "正在重启…",
 			restartFail: "重启失败",
 			restartTimeout: "等待 DeepSeek Harness 启动超时",
@@ -294,6 +296,8 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 			approveBuilds: "Allow build scripts and retry",
 			buildsSkipped: "This plugin needs its build scripts to run; they are blocked by default for safety. Click below to allow them and reinstall:",
 			restartNow: "Restart now",
+			dismiss: "Dismiss",
+			dismissNotice: "Dismiss this notice",
 			restarting: "Restarting…",
 			restartFail: "Restart failed",
 			restartTimeout: "Timed out waiting for DeepSeek Harness to start",
@@ -811,136 +815,136 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 			document.head.appendChild(tag);
 		}
 		var Market_module_css_default = {
-			"assignSelect": "SOz1_a_assignSelect",
-			"tabSearchRow": "SOz1_a_tabSearchRow",
-			"shots": "SOz1_a_shots",
-			"dshmSlide": "SOz1_a_dshmSlide",
-			"backupMessage": "SOz1_a_backupMessage",
-			"viewBtn": "SOz1_a_viewBtn",
+			"backupCheck": "SOz1_a_backupCheck",
+			"viewBar": "SOz1_a_viewBar",
+			"barFill": "SOz1_a_barFill",
+			"groupMembers": "SOz1_a_groupMembers",
+			"catsRow": "SOz1_a_catsRow",
+			"diagVal": "SOz1_a_diagVal",
 			"diagBadgeOfficial": "SOz1_a_diagBadgeOfficial",
-			"diagBadgeCommunity": "SOz1_a_diagBadgeCommunity",
-			"diagMeta": "SOz1_a_diagMeta",
-			"row1": "SOz1_a_row1",
-			"groupAddPanel": "SOz1_a_groupAddPanel",
-			"tab": "SOz1_a_tab",
-			"pageInfo": "SOz1_a_pageInfo",
-			"diagSummaryMeta": "SOz1_a_diagSummaryMeta",
-			"ovFrom": "SOz1_a_ovFrom",
-			"collapseHead": "SOz1_a_collapseHead",
-			"body": "SOz1_a_body",
-			"root": "SOz1_a_root",
-			"sub": "SOz1_a_sub",
-			"diagRow": "SOz1_a_diagRow",
-			"title": "SOz1_a_title",
-			"okState": "SOz1_a_okState",
-			"grow": "SOz1_a_grow",
-			"groupName": "SOz1_a_groupName",
-			"av": "SOz1_a_av",
-			"staleAction": "SOz1_a_staleAction",
-			"actBroken": "SOz1_a_actBroken",
-			"spin": "SOz1_a_spin",
-			"bannerIcon": "SOz1_a_bannerIcon",
-			"depLine": "SOz1_a_depLine",
-			"ovByTag": "SOz1_a_ovByTag",
-			"collapseIcon": "SOz1_a_collapseIcon",
-			"tabSearch": "SOz1_a_tabSearch",
-			"backupCard": "SOz1_a_backupCard",
 			"barWave": "SOz1_a_barWave",
-			"sp": "SOz1_a_sp",
-			"groupHead": "SOz1_a_groupHead",
-			"diagSummary": "SOz1_a_diagSummary",
-			"src": "SOz1_a_src",
+			"catsToggle": "SOz1_a_catsToggle",
+			"switch": "SOz1_a_switch",
+			"diagKey": "SOz1_a_diagKey",
+			"warnLine": "SOz1_a_warnLine",
+			"irow": "SOz1_a_irow",
 			"pagerPages": "SOz1_a_pagerPages",
-			"diagBundle": "SOz1_a_diagBundle",
+			"pageEllipsis": "SOz1_a_pageEllipsis",
+			"grid": "SOz1_a_grid",
+			"star": "SOz1_a_star",
 			"bannerHint": "SOz1_a_bannerHint",
 			"catsCollapsed": "SOz1_a_catsCollapsed",
-			"collapseBody": "SOz1_a_collapseBody",
-			"ovArrow": "SOz1_a_ovArrow",
-			"actWarn": "SOz1_a_actWarn",
-			"tag": "SOz1_a_tag",
-			"desc": "SOz1_a_desc",
-			"diagList": "SOz1_a_diagList",
-			"groupActions": "SOz1_a_groupActions",
-			"groupMembers": "SOz1_a_groupMembers",
-			"grid": "SOz1_a_grid",
-			"diagArrow": "SOz1_a_diagArrow",
-			"switch": "SOz1_a_switch",
-			"catsToggle": "SOz1_a_catsToggle",
+			"themesGrid": "SOz1_a_themesGrid",
+			"row1": "SOz1_a_row1",
+			"diagSection": "SOz1_a_diagSection",
+			"owner": "SOz1_a_owner",
+			"groupHint": "SOz1_a_groupHint",
+			"body": "SOz1_a_body",
+			"pager": "SOz1_a_pager",
+			"irowMissing": "SOz1_a_irowMissing",
 			"diagCount": "SOz1_a_diagCount",
-			"empty": "SOz1_a_empty",
+			"diagBundle": "SOz1_a_diagBundle",
+			"cats": "SOz1_a_cats",
+			"deprecate": "SOz1_a_deprecate",
+			"topBtn": "SOz1_a_topBtn",
+			"dot": "SOz1_a_dot",
+			"titleRow": "SOz1_a_titleRow",
+			"switchOn": "SOz1_a_switchOn",
+			"groupAddPanel": "SOz1_a_groupAddPanel",
+			"modalNote": "SOz1_a_modalNote",
+			"collapseHead": "SOz1_a_collapseHead",
+			"panelNote": "SOz1_a_panelNote",
+			"head": "SOz1_a_head",
+			"actLive": "SOz1_a_actLive",
+			"swatches": "SOz1_a_swatches",
+			"tabSearch": "SOz1_a_tabSearch",
+			"diagBadgeCommunity": "SOz1_a_diagBadgeCommunity",
+			"bannerIcon": "SOz1_a_bannerIcon",
+			"diagSummary": "SOz1_a_diagSummary",
+			"dshmSlide": "SOz1_a_dshmSlide",
+			"backupInput": "SOz1_a_backupInput",
+			"diagPage": "SOz1_a_diagPage",
+			"actWhy": "SOz1_a_actWhy",
+			"actBroken": "SOz1_a_actBroken",
+			"sub": "SOz1_a_sub",
+			"tab": "SOz1_a_tab",
+			"orphBadge": "SOz1_a_orphBadge",
+			"ovArrow": "SOz1_a_ovArrow",
+			"descTight": "SOz1_a_descTight",
+			"cmd": "SOz1_a_cmd",
+			"sectionOverview": "SOz1_a_sectionOverview",
+			"groupCreate": "SOz1_a_groupCreate",
+			"nm": "SOz1_a_nm",
+			"diagSummaryMeta": "SOz1_a_diagSummaryMeta",
+			"backupWarn": "SOz1_a_backupWarn",
+			"switchKnob": "SOz1_a_switchKnob",
+			"orphRow": "SOz1_a_orphRow",
+			"backupGrid": "SOz1_a_backupGrid",
+			"staleAction": "SOz1_a_staleAction",
+			"depLine": "SOz1_a_depLine",
+			"loading": "SOz1_a_loading",
+			"on": "SOz1_a_on",
+			"okState": "SOz1_a_okState",
+			"top": "SOz1_a_top",
+			"desc": "SOz1_a_desc",
+			"spec": "SOz1_a_spec",
+			"groupRow": "SOz1_a_groupRow",
+			"groupActions": "SOz1_a_groupActions",
+			"card": "SOz1_a_card",
+			"assignSelect": "SOz1_a_assignSelect",
+			"backupActions": "SOz1_a_backupActions",
+			"backupMessage": "SOz1_a_backupMessage",
+			"diagIndex": "SOz1_a_diagIndex",
 			"pct": "SOz1_a_pct",
 			"banner": "SOz1_a_banner",
+			"shots": "SOz1_a_shots",
 			"sectAction": "SOz1_a_sectAction",
-			"backupInput": "SOz1_a_backupInput",
-			"diagKey": "SOz1_a_diagKey",
-			"head": "SOz1_a_head",
-			"inlineInput": "SOz1_a_inlineInput",
-			"switchOn": "SOz1_a_switchOn",
-			"pager": "SOz1_a_pager",
-			"top": "SOz1_a_top",
-			"err": "SOz1_a_err",
-			"spec": "SOz1_a_spec",
-			"depBadge": "SOz1_a_depBadge",
-			"backupGrid": "SOz1_a_backupGrid",
-			"diagSummaryItem": "SOz1_a_diagSummaryItem",
-			"pageEllipsis": "SOz1_a_pageEllipsis",
-			"diagVal": "SOz1_a_diagVal",
-			"orphRow": "SOz1_a_orphRow",
-			"assignRow": "SOz1_a_assignRow",
-			"star": "SOz1_a_star",
-			"diagBadgeShadow": "SOz1_a_diagBadgeShadow",
-			"groupMember": "SOz1_a_groupMember",
-			"actLive": "SOz1_a_actLive",
-			"groupHint": "SOz1_a_groupHint",
-			"diagEmpty": "SOz1_a_diagEmpty",
-			"catsRow": "SOz1_a_catsRow",
-			"diagAlert": "SOz1_a_diagAlert",
-			"progress": "SOz1_a_progress",
-			"titleRow": "SOz1_a_titleRow",
-			"act": "SOz1_a_act",
-			"diagPage": "SOz1_a_diagPage",
-			"bar": "SOz1_a_bar",
-			"shot": "SOz1_a_shot",
-			"actWhy": "SOz1_a_actWhy",
-			"switchKnob": "SOz1_a_switchKnob",
-			"diagIndex": "SOz1_a_diagIndex",
-			"swatches": "SOz1_a_swatches",
-			"dot": "SOz1_a_dot",
-			"groupCreate": "SOz1_a_groupCreate",
-			"barFill": "SOz1_a_barFill",
-			"sectionOverview": "SOz1_a_sectionOverview",
-			"ovRow": "SOz1_a_ovRow",
-			"on": "SOz1_a_on",
-			"collapseTitle": "SOz1_a_collapseTitle",
-			"tabs": "SOz1_a_tabs",
-			"owner": "SOz1_a_owner",
-			"modalNote": "SOz1_a_modalNote",
-			"loading": "SOz1_a_loading",
-			"nm": "SOz1_a_nm",
-			"descTight": "SOz1_a_descTight",
-			"irowMissing": "SOz1_a_irowMissing",
-			"topBtn": "SOz1_a_topBtn",
-			"panelNote": "SOz1_a_panelNote",
+			"empty": "SOz1_a_empty",
 			"viewOn": "SOz1_a_viewOn",
-			"cmd": "SOz1_a_cmd",
-			"deprecate": "SOz1_a_deprecate",
-			"switchMixed": "SOz1_a_switchMixed",
-			"diagSection": "SOz1_a_diagSection",
-			"viewBar": "SOz1_a_viewBar",
-			"warnLine": "SOz1_a_warnLine",
-			"orphBadge": "SOz1_a_orphBadge",
-			"cats": "SOz1_a_cats",
-			"foot": "SOz1_a_foot",
+			"diagEmpty": "SOz1_a_diagEmpty",
+			"depBadge": "SOz1_a_depBadge",
+			"root": "SOz1_a_root",
+			"diagSummaryItem": "SOz1_a_diagSummaryItem",
+			"assignRow": "SOz1_a_assignRow",
+			"actWarn": "SOz1_a_actWarn",
+			"viewBtn": "SOz1_a_viewBtn",
+			"groupMember": "SOz1_a_groupMember",
 			"hiddenFile": "SOz1_a_hiddenFile",
-			"card": "SOz1_a_card",
-			"irow": "SOz1_a_irow",
-			"backupWarn": "SOz1_a_backupWarn",
-			"themesGrid": "SOz1_a_themesGrid",
 			"srcBtn": "SOz1_a_srcBtn",
-			"groupRow": "SOz1_a_groupRow",
-			"backupActions": "SOz1_a_backupActions",
-			"backupCheck": "SOz1_a_backupCheck",
-			"catsWrap": "SOz1_a_catsWrap"
+			"err": "SOz1_a_err",
+			"groupName": "SOz1_a_groupName",
+			"diagRow": "SOz1_a_diagRow",
+			"tabs": "SOz1_a_tabs",
+			"foot": "SOz1_a_foot",
+			"groupHead": "SOz1_a_groupHead",
+			"tabSearchRow": "SOz1_a_tabSearchRow",
+			"act": "SOz1_a_act",
+			"title": "SOz1_a_title",
+			"ovRow": "SOz1_a_ovRow",
+			"ovFrom": "SOz1_a_ovFrom",
+			"collapseTitle": "SOz1_a_collapseTitle",
+			"collapseBody": "SOz1_a_collapseBody",
+			"backupCard": "SOz1_a_backupCard",
+			"pageInfo": "SOz1_a_pageInfo",
+			"switchMixed": "SOz1_a_switchMixed",
+			"diagArrow": "SOz1_a_diagArrow",
+			"shot": "SOz1_a_shot",
+			"sp": "SOz1_a_sp",
+			"diagMeta": "SOz1_a_diagMeta",
+			"diagBadgeShadow": "SOz1_a_diagBadgeShadow",
+			"ovByTag": "SOz1_a_ovByTag",
+			"tag": "SOz1_a_tag",
+			"inlineInput": "SOz1_a_inlineInput",
+			"av": "SOz1_a_av",
+			"grow": "SOz1_a_grow",
+			"src": "SOz1_a_src",
+			"progress": "SOz1_a_progress",
+			"diagList": "SOz1_a_diagList",
+			"bar": "SOz1_a_bar",
+			"diagAlert": "SOz1_a_diagAlert",
+			"collapseIcon": "SOz1_a_collapseIcon",
+			"catsWrap": "SOz1_a_catsWrap",
+			"spin": "SOz1_a_spin"
 		};
 		//#endregion
 		//#region src/client/Diagnostics.tsx
@@ -1944,6 +1948,12 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 			const [removedCount, setRemovedCount] = (0, react.useState)(0);
 			/** Toggles whose live fiber did not follow the switch — restart to apply. */
 			const [toggleRestart, setToggleRestart] = (0, react.useState)(0);
+			/**
+			* Dismissal of the host-reported restart notice, keyed to the current boot
+			* so it reappears after a restart that did not happen and after any new
+			* change. sessionStorage, not local: closing the tab is a fresh start.
+			*/
+			const [restartNoticeDismissed, setRestartNoticeDismissed] = (0, react.useState)(false);
 			/** Client-part plugins toggled this session — their UI needs a refresh. */
 			const [refreshNames, setRefreshNames] = (0, react.useState)([]);
 			const [envReady, setEnvReady] = (0, react.useState)(true);
@@ -2016,7 +2026,12 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 				}).catch(() => setLoadError(true));
 				fetch("/dsh-market/status", { cache: "no-store" }).then((res) => res.json()).then((status) => {
 					setEnvReady(status.pnpm !== false);
-					if (typeof status.boot === "string") setBootId(status.boot);
+					if (typeof status.boot === "string") {
+						setBootId(status.boot);
+						try {
+							setRestartNoticeDismissed(sessionStorage.getItem("dshm-restart-dismissed") === status.boot);
+						} catch {}
+					}
 					setRestartEnabled(status.restart === true);
 				}).catch(() => {});
 				refreshInstalled();
@@ -2680,7 +2695,20 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 				webdavUrl,
 				webdavUser
 			]);
-			const pendingRestart = doneUrls.length + updatedNames.length + removedCount + toggleRestart + (backupRestored ? 1 : 0);
+			const sessionPendingRestart = doneUrls.length + updatedNames.length + removedCount + toggleRestart + (backupRestored ? 1 : 0);
+			/**
+			* Plugins the HOST reports as restart-pending, independent of what this
+			* browser session happens to remember. Installing and then reloading the
+			* page used to leave no restart affordance at all: the banner is built
+			* from session state, while the Installed tab only says "activates on
+			* restart" in passing — so the user was told a restart was needed and
+			* given nothing to press. Dismissible, because a standing banner nobody
+			* wants to act on right now is just noise (it returns next session, or
+			* as soon as another change lands).
+			*/
+			const hostPendingNames = Object.keys(activations).filter((name) => activations[name]?.state === "restart");
+			const showHostPending = hostPendingNames.length > 0 && !restartNoticeDismissed && sessionPendingRestart === 0;
+			const pendingRestart = sessionPendingRestart > 0 ? sessionPendingRestart : showHostPending ? hostPendingNames.length : 0;
 			const displayedInstalled = pendingBackup === null ? installed : {
 				...pendingDependencies,
 				...installed
@@ -3281,6 +3309,18 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 										disabled: restarting || hostBusy || busyUrl !== null || updatingName !== null || removingName !== null,
 										onClick: doRestart,
 										children: restarting ? t("restarting") : t("restartNow")
+									}),
+									showHostPending && /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
+										variant: "ghost",
+										size: "sm",
+										"aria-label": t("dismissNotice"),
+										onClick: () => {
+											setRestartNoticeDismissed(true);
+											try {
+												sessionStorage.setItem("dshm-restart-dismissed", String(bootId ?? ""));
+											} catch {}
+										},
+										children: t("dismiss")
 									})
 								]
 							}),
