@@ -341,3 +341,96 @@ describe('Diagnostics panels (jsdom, #98 phase 2)', () => {
     expect(writeText).toHaveBeenCalledTimes(1)
   })
 })
+
+/**
+ * A background re-check must not throw away a reorder the user is still
+ * working on. The panel compares the incoming community bundle list with
+ * the one it last synced from and only resets the draft when they actually
+ * differ — the refetch hands back a NEW array every time, so identity alone
+ * says nothing.
+ *
+ * A mutation audit flipped that comparison without failing anything: the
+ * suite dragged rows and applied them, but never re-checked mid-edit. The
+ * bug it hides is the annoying kind — you drag three bundles into place, a
+ * refresh lands, and your work is silently gone.
+ */
+describe('Diagnostics ordering draft vs refetch', () => {
+  /** Fetch stub whose /dsh-market/check payload can change between calls. */
+  function stubMutableApi(initial: unknown) {
+    let report = initial
+    const mock = vi.fn((input: unknown, init?: RequestInit) => {
+      const url = String(input)
+      if (url === '/dsh-market/check') return Promise.resolve(json(report))
+      if (url === '/dsh-market/bundle-order') return Promise.resolve(json({ ok: true }))
+      return Promise.resolve(json({ ok: true }))
+    })
+    vi.stubGlobal('fetch', mock)
+    return { set: (next: unknown) => { report = next } }
+  }
+
+  /** Open the ordering panel and return a reader for its row labels. */
+  async function openOrderPanel(): Promise<() => string[]> {
+    const header = screen.getByText(t('orderSection'))
+    fireEvent.click(header)
+    const section = header.closest('section') as HTMLElement
+    await waitFor(() => {
+      const body = section.querySelector('[class*="collapseBody"]') as HTMLElement | null
+      expect(body?.style.display).not.toBe('none')
+    })
+    return () => Array.from(section.querySelectorAll('.' + css.diagRow)).map(r => r.textContent ?? '')
+  }
+
+  /** Drag the first community row onto the second. */
+  function swapFirstTwo(section: HTMLElement): void {
+    const rows = Array.from(section.querySelectorAll('.' + css.diagRow))
+    fireEvent.dragStart(rows[0]!, { dataTransfer: {} })
+    fireEvent.dragOver(rows[1]!, { dataTransfer: {} })
+    fireEvent.drop(rows[1]!, { dataTransfer: {} })
+    fireEvent.dragEnd(rows[1]!, { dataTransfer: {} })
+  }
+
+  it('keeps an in-progress reorder when the re-check returns the same bundles', async () => {
+    stubMutableApi(CHECK_REPORT)
+    render(<Diagnostics t={t} />)
+    await waitFor(() => expect(screen.queryByText(t('checkLoading'))).toBeNull())
+    const rows = await openOrderPanel()
+    const section = screen.getByText(t('orderSection')).closest('section') as HTMLElement
+
+    swapFirstTwo(section)
+    await waitFor(() => expect(rows()[0]).toContain('beta'))
+
+    // Same data comes back — the draft is the user's, not the server's.
+    fireEvent.click(screen.getByRole('button', { name: t('checkRefresh') }))
+    await waitFor(() => expect(rows()).toHaveLength(2))
+    expect(rows()[0]).toContain('beta')
+    expect(rows()[1]).toContain('alpha')
+  })
+
+  it('resets the draft when the re-check reports a DIFFERENT set of bundles', async () => {
+    const api = stubMutableApi(CHECK_REPORT)
+    render(<Diagnostics t={t} />)
+    await waitFor(() => expect(screen.queryByText(t('checkLoading'))).toBeNull())
+    const rows = await openOrderPanel()
+    const section = screen.getByText(t('orderSection')).closest('section') as HTMLElement
+
+    swapFirstTwo(section)
+    await waitFor(() => expect(rows()[0]).toContain('beta'))
+
+    // A plugin was installed elsewhere: the draft no longer describes
+    // reality, so the panel has to take the server's list.
+    api.set({
+      ...CHECK_REPORT,
+      bundles: [...CHECK_REPORT.bundles, {
+        name: 'gamma', source: '^1.0.0', kind: 'community',
+        directory: '/synthetic/node_modules/gamma',
+        patchPath: '/synthetic/node_modules/gamma/cordis.patch.yml',
+        error: null, entries: ['gamma-entry'], parseError: null,
+      }],
+    })
+    fireEvent.click(screen.getByRole('button', { name: t('checkRefresh') }))
+    await waitFor(() => expect(rows()).toHaveLength(3))
+    expect(rows()[0]).toContain('alpha')
+    expect(rows()[1]).toContain('beta')
+    expect(rows()[2]).toContain('gamma')
+  })
+})

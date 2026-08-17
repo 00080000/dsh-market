@@ -1233,3 +1233,46 @@ describe('standing restart notice for host-reported pending plugins', () => {
     expect(screen.queryAllByText(re(en.restartBanner)).length).toBe(0)
   })
 })
+
+/**
+ * The pnpm setup banner (#142). Before any plugin can be installed the
+ * market may have to provision pnpm, and the banner is the whole interface
+ * for that: it offers the one-click fix, and after a failed attempt it has
+ * to stop offering it and point at the log instead — a button that keeps
+ * failing is worse than no button.
+ *
+ * Neither state was asserted; a mutation audit could invert the condition
+ * that hides the button and nothing failed.
+ */
+describe('pnpm setup banner', () => {
+  const notReady = { active: false, pnpm: false, boot: 'boot-1', restart: true, installed: {} }
+
+  it('offers the one-click fix while setup is still worth trying', async () => {
+    stubFetch({ '/dsh-market/status': notReady })
+    render(<MarketSection {...props()} />)
+    await waitFor(() => expect(screen.getByText(re(en.envMissing))).toBeTruthy())
+    expect(screen.getByRole('button', { name: re(en.envFix) })).toBeTruthy()
+  })
+
+  it('after a failed setup, explains and stops offering the button', async () => {
+    stubFetch({ '/dsh-market/status': notReady, '/dsh-market/setup-pnpm': { ok: false, error: 'no Node found' } })
+    render(<MarketSection {...props()} />)
+    await waitFor(() => expect(screen.getByText(re(en.envMissing))).toBeTruthy())
+
+    fireEvent.click(screen.getByRole('button', { name: re(en.envFix) }))
+    await waitFor(() => expect(screen.getByText(re(en.envFixFail))).toBeTruthy())
+    // The retry button is gone, and the host's reason is surfaced verbatim.
+    expect(screen.queryByRole('button', { name: re(en.envFix) })).toBeNull()
+    expect(screen.getByText(re('no Node found'))).toBeTruthy()
+  })
+
+  it('clears the banner when setup succeeds', async () => {
+    stubFetch({ '/dsh-market/status': notReady, '/dsh-market/setup-pnpm': { ok: true } })
+    render(<MarketSection {...props()} />)
+    await waitFor(() => expect(screen.getByText(re(en.envMissing))).toBeTruthy())
+
+    fireEvent.click(screen.getByRole('button', { name: re(en.envFix) }))
+    await waitFor(() => expect(screen.queryByText(re(en.envMissing))).toBeNull())
+    expect(screen.queryByText(re(en.envFixFail))).toBeNull()
+  })
+})
