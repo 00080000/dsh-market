@@ -24,15 +24,26 @@ import { profileDir } from './profile.ts'
  * with ENOENT/127 (#32, #38). Append the well-known bin directories so the
  * market's children find their tools regardless of how dsh was started.
  */
+/**
+ * Directories discovered at runtime that hold a usable pnpm — currently
+ * npm's global bin, learned after a successful one-click setup (#149).
+ * Every later spawn sees them, so the market does not have to be restarted
+ * for the pnpm it just installed to become visible.
+ */
+const extraPathDirs: string[] = []
+
 function spawnEnv(): NodeJS.ProcessEnv {
   // pnpm v10+ blocks forever on a silent interactive prompt without a TTY;
   // CI mode forces it to act or fail instead of asking.
-  if (process.platform === 'win32') return { ...process.env, CI: 'true' }
-  const parts = (process.env.PATH ?? '').split(':').filter(part => part !== '')
-  for (const bin of ['/opt/homebrew/bin', '/usr/local/bin', join(homedir(), '.local', 'bin')]) {
+  const separator = process.platform === 'win32' ? ';' : ':'
+  const parts = (process.env.PATH ?? '').split(separator).filter(part => part !== '')
+  const candidates = process.platform === 'win32'
+    ? extraPathDirs
+    : ['/opt/homebrew/bin', '/usr/local/bin', join(homedir(), '.local', 'bin'), ...extraPathDirs]
+  for (const bin of candidates) {
     if (!parts.includes(bin)) parts.push(bin)
   }
-  return { ...process.env, CI: 'true', PATH: parts.join(':') }
+  return { ...process.env, CI: 'true', PATH: parts.join(separator) }
 }
 
 const INSTALL_TIMEOUT_MS = Number(process.env.DSH_MARKET_INSTALL_TIMEOUT_MS) || 15 * 60 * 1000
@@ -278,6 +289,21 @@ export async function provisionPnpm(): Promise<{ ok: boolean; hint?: string }> {
   const npm = await runQuiet('npm', ['install', '-g', 'pnpm'], 3 * 60 * 1000)
   logEvent(npm.code === 0 ? 'info' : 'error', 'setup-pnpm', `npm -g: exit=${String(npm.code)} ${npm.output.slice(-200)}`)
   if (await probePnpm()) return { ok: true }
+  // The install SUCCEEDED but the new binary is somewhere this process does
+  // not look (#149: corepack exit=0, npm -g exit=0, and the market still
+  // said "setup failed"). npm knows where it just put it, so ask — and if
+  // pnpm runs from there, remember that directory for every later spawn
+  // instead of telling the user a successful install failed.
+  if (npm.code === 0 || corepack.code === 0) {
+    const prefix = await runQuiet('npm', ['prefix', '-g'], 30 * 1000)
+    const bin = prefix.code === 0 ? join(prefix.output.trim().split('\n').pop() ?? '', 'bin') : ''
+    if (bin !== '' && isAbsolute(bin) && !extraPathDirs.includes(bin)) {
+      extraPathDirs.push(bin)
+      logEvent('info', 'setup-pnpm', `added npm's global bin to the probe path: ${bin}`)
+      if (await probePnpm()) return { ok: true }
+      extraPathDirs.pop()
+    }
+  }
   return { ok: false, hint: provisionHint(corepack.output, npm.output) }
 }
 
