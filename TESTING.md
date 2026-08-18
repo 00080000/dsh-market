@@ -95,6 +95,27 @@ Last run: 2026-08-17 on macOS 15 (arm64), no pnpm and no corepack —
 throwaway prefix → `pnpm: true`. The corepack branch was not exercised (it
 was absent); a machine that has corepack takes that path first.
 
+## Both dsh versions, before shipping a host-facing change
+
+The settings-card work assumed backward compatibility from reading the API
+contract — installSettingsSection rides its own scoped fiber, the browser
+half hides behind a nested inject — and reasoning is not evidence when the
+failure mode is "the market's page disappears for everyone still on rc.6",
+which is most reporters today.
+
+Run the layer-3 lane against both:
+
+```sh
+npm install -g @deepseek-ai/dsh@0.1.0-rc.6 && npm run test:web
+npm install -g @deepseek-ai/dsh@0.1.0-rc.7 && npm run test:web
+```
+
+Result on 2026-08-17, both green (18 specs). It also corrected the reasoning
+behind the guard: rc.6 already HAS a settings service and serves the
+market's namespace fine — what rc.7 opened is the browser-side allowlist
+deciding whose card may render. So the Host half was never the compatibility
+risk; the client half was, and the nested inject is what covers it.
+
 ## Conventions
 
 - **Red first**: a bug fix lands with the failing test that reproduces it.
