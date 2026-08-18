@@ -889,6 +889,46 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 			readmeShotsCache.set(cacheKey, task);
 			return task;
 		}
+		/**
+		* The human-readable part of a failed command's output.
+		*
+		* pnpm's ndjson reporter writes one JSON object per progress tick, and a
+		* large `github:` download emits thousands of them. When a failure matches
+		* none of the known signatures there is no diagnosis to show, so the UI
+		* falls back to the tail of stdout/stderr — which for exactly that case is
+		* 600 characters of `{"name":"pnpm:fetching-progress","downloaded":…}`.
+		* The user is handed machine noise at the one moment they need a sentence
+		* (#148, and the same shape behind #161).
+		*
+		* Progress objects are dropped; anything else — including JSON carrying a
+		* real message — is kept, because an unrecognized failure is precisely when
+		* throwing information away is most expensive.
+		*/
+		function humanOutput(raw) {
+			const lines = raw.split(/\r?\n/);
+			const kept = [];
+			for (const line of lines) {
+				const trimmed = line.trim();
+				if (trimmed === "") continue;
+				if (!trimmed.startsWith("{")) {
+					kept.push(line);
+					continue;
+				}
+				try {
+					const parsed = JSON.parse(trimmed);
+					const name = typeof parsed.name === "string" ? parsed.name : "";
+					if (parsed.err !== void 0 || typeof parsed.message === "string") {
+						kept.push(line);
+						continue;
+					}
+					if (name.startsWith("pnpm:")) continue;
+					kept.push(line);
+				} catch {
+					kept.push(line);
+				}
+			}
+			return kept.join("\n").trim();
+		}
 		//#endregion
 		//#region src/client/InstallToast.tsx
 		/**
@@ -927,155 +967,155 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 			document.head.appendChild(tag);
 		}
 		var Market_module_css_default = {
-			"setRevert": "SOz1_a_setRevert",
-			"on": "SOz1_a_on",
-			"backupCheckList": "SOz1_a_backupCheckList",
-			"diagArrow": "SOz1_a_diagArrow",
-			"depBadge": "SOz1_a_depBadge",
-			"top": "SOz1_a_top",
-			"loading": "SOz1_a_loading",
-			"backupGrid": "SOz1_a_backupGrid",
-			"diagBundle": "SOz1_a_diagBundle",
-			"diagSummaryMeta": "SOz1_a_diagSummaryMeta",
-			"ovRow": "SOz1_a_ovRow",
-			"backupCard": "SOz1_a_backupCard",
-			"card": "SOz1_a_card",
-			"diagAlert": "SOz1_a_diagAlert",
-			"pager": "SOz1_a_pager",
-			"diagIndex": "SOz1_a_diagIndex",
-			"cmd": "SOz1_a_cmd",
-			"dot": "SOz1_a_dot",
-			"progress": "SOz1_a_progress",
-			"banner": "SOz1_a_banner",
-			"pageEllipsis": "SOz1_a_pageEllipsis",
-			"switchMixed": "SOz1_a_switchMixed",
-			"groupActions": "SOz1_a_groupActions",
-			"shot": "SOz1_a_shot",
-			"setHead": "SOz1_a_setHead",
-			"panelNote": "SOz1_a_panelNote",
-			"diagList": "SOz1_a_diagList",
-			"spec": "SOz1_a_spec",
 			"bar": "SOz1_a_bar",
-			"act": "SOz1_a_act",
-			"irowMissing": "SOz1_a_irowMissing",
-			"diagBadgeCommunity": "SOz1_a_diagBadgeCommunity",
-			"sectionOverview": "SOz1_a_sectionOverview",
-			"specTagGit": "SOz1_a_specTagGit",
-			"switchOn": "SOz1_a_switchOn",
-			"empty": "SOz1_a_empty",
-			"groupCreate": "SOz1_a_groupCreate",
-			"okState": "SOz1_a_okState",
-			"irow": "SOz1_a_irow",
-			"barFill": "SOz1_a_barFill",
-			"catsRow": "SOz1_a_catsRow",
-			"pagerPages": "SOz1_a_pagerPages",
-			"fixFallbackText": "SOz1_a_fixFallbackText",
-			"pct": "SOz1_a_pct",
-			"tabSearchRow": "SOz1_a_tabSearchRow",
-			"nm": "SOz1_a_nm",
-			"desc": "SOz1_a_desc",
-			"owner": "SOz1_a_owner",
-			"actWhy": "SOz1_a_actWhy",
-			"specTag": "SOz1_a_specTag",
-			"groupHead": "SOz1_a_groupHead",
-			"backupMessage": "SOz1_a_backupMessage",
-			"setRow": "SOz1_a_setRow",
-			"collapseHead": "SOz1_a_collapseHead",
-			"collapseTitle": "SOz1_a_collapseTitle",
-			"groupMember": "SOz1_a_groupMember",
-			"catsCollapsed": "SOz1_a_catsCollapsed",
-			"groupRow": "SOz1_a_groupRow",
-			"dragOver": "SOz1_a_dragOver",
-			"modalNote": "SOz1_a_modalNote",
-			"dragging": "SOz1_a_dragging",
-			"spin": "SOz1_a_spin",
-			"switchKnob": "SOz1_a_switchKnob",
-			"diagSection": "SOz1_a_diagSection",
-			"av": "SOz1_a_av",
-			"groupMembers": "SOz1_a_groupMembers",
-			"cats": "SOz1_a_cats",
-			"descTight": "SOz1_a_descTight",
-			"backupWarn": "SOz1_a_backupWarn",
-			"barWave": "SOz1_a_barWave",
-			"backupActions": "SOz1_a_backupActions",
-			"deprecate": "SOz1_a_deprecate",
-			"groupAddPanel": "SOz1_a_groupAddPanel",
-			"backupCheck": "SOz1_a_backupCheck",
-			"setLabel": "SOz1_a_setLabel",
-			"depLine": "SOz1_a_depLine",
-			"grow": "SOz1_a_grow",
-			"pageInfo": "SOz1_a_pageInfo",
-			"title": "SOz1_a_title",
-			"sub": "SOz1_a_sub",
-			"grid": "SOz1_a_grid",
-			"swatches": "SOz1_a_swatches",
+			"ovRow": "SOz1_a_ovRow",
+			"pager": "SOz1_a_pager",
 			"topBtn": "SOz1_a_topBtn",
-			"fixFallback": "SOz1_a_fixFallback",
-			"tabs": "SOz1_a_tabs",
-			"diagSummaryItem": "SOz1_a_diagSummaryItem",
-			"catsToggle": "SOz1_a_catsToggle",
-			"themesGrid": "SOz1_a_themesGrid",
-			"tab": "SOz1_a_tab",
-			"dshmSlide": "SOz1_a_dshmSlide",
-			"actBroken": "SOz1_a_actBroken",
-			"diagSummary": "SOz1_a_diagSummary",
-			"collapseBody": "SOz1_a_collapseBody",
-			"tag": "SOz1_a_tag",
-			"backupInput": "SOz1_a_backupInput",
+			"loading": "SOz1_a_loading",
+			"empty": "SOz1_a_empty",
+			"specTagGit": "SOz1_a_specTagGit",
 			"specTagFile": "SOz1_a_specTagFile",
+			"deprecate": "SOz1_a_deprecate",
+			"depLine": "SOz1_a_depLine",
 			"assignRow": "SOz1_a_assignRow",
-			"ovByTag": "SOz1_a_ovByTag",
-			"row1": "SOz1_a_row1",
-			"titleRow": "SOz1_a_titleRow",
-			"viewBtn": "SOz1_a_viewBtn",
-			"src": "SOz1_a_src",
-			"groupName": "SOz1_a_groupName",
-			"inlineInput": "SOz1_a_inlineInput",
-			"sectAction": "SOz1_a_sectAction",
-			"diagCount": "SOz1_a_diagCount",
-			"orphRow": "SOz1_a_orphRow",
-			"setLabelBox": "SOz1_a_setLabelBox",
-			"bannerIcon": "SOz1_a_bannerIcon",
-			"version": "SOz1_a_version",
-			"sp": "SOz1_a_sp",
-			"ovFrom": "SOz1_a_ovFrom",
-			"catsWrap": "SOz1_a_catsWrap",
-			"diagVal": "SOz1_a_diagVal",
-			"tabSearch": "SOz1_a_tabSearch",
 			"orphBadge": "SOz1_a_orphBadge",
-			"dragHandle": "SOz1_a_dragHandle",
-			"warnLine": "SOz1_a_warnLine",
-			"staleAction": "SOz1_a_staleAction",
-			"diagRow": "SOz1_a_diagRow",
-			"collapseIcon": "SOz1_a_collapseIcon",
-			"actLive": "SOz1_a_actLive",
-			"head": "SOz1_a_head",
+			"backupActions": "SOz1_a_backupActions",
+			"switchMixed": "SOz1_a_switchMixed",
+			"diagSummary": "SOz1_a_diagSummary",
 			"body": "SOz1_a_body",
-			"bannerHint": "SOz1_a_bannerHint",
-			"setCard": "SOz1_a_setCard",
-			"root": "SOz1_a_root",
-			"viewBar": "SOz1_a_viewBar",
-			"setDesc": "SOz1_a_setDesc",
-			"shots": "SOz1_a_shots",
-			"actWarn": "SOz1_a_actWarn",
+			"barFill": "SOz1_a_barFill",
 			"switch": "SOz1_a_switch",
-			"hiddenFile": "SOz1_a_hiddenFile",
-			"diagKey": "SOz1_a_diagKey",
-			"setTitle": "SOz1_a_setTitle",
-			"star": "SOz1_a_star",
-			"diagPage": "SOz1_a_diagPage",
-			"diagMeta": "SOz1_a_diagMeta",
-			"diagEmpty": "SOz1_a_diagEmpty",
-			"setHint": "SOz1_a_setHint",
-			"diagBadgeOfficial": "SOz1_a_diagBadgeOfficial",
-			"viewOn": "SOz1_a_viewOn",
+			"root": "SOz1_a_root",
+			"barWave": "SOz1_a_barWave",
+			"dragHandle": "SOz1_a_dragHandle",
+			"dragOver": "SOz1_a_dragOver",
+			"av": "SOz1_a_av",
+			"bannerHint": "SOz1_a_bannerHint",
+			"diagList": "SOz1_a_diagList",
+			"descTight": "SOz1_a_descTight",
+			"pageEllipsis": "SOz1_a_pageEllipsis",
 			"foot": "SOz1_a_foot",
-			"groupHint": "SOz1_a_groupHint",
-			"assignSelect": "SOz1_a_assignSelect",
-			"srcBtn": "SOz1_a_srcBtn",
+			"head": "SOz1_a_head",
+			"tabSearchRow": "SOz1_a_tabSearchRow",
+			"diagRow": "SOz1_a_diagRow",
+			"collapseTitle": "SOz1_a_collapseTitle",
+			"specTag": "SOz1_a_specTag",
+			"ovFrom": "SOz1_a_ovFrom",
+			"setTitle": "SOz1_a_setTitle",
+			"swatches": "SOz1_a_swatches",
+			"setLabel": "SOz1_a_setLabel",
+			"pagerPages": "SOz1_a_pagerPages",
+			"bannerIcon": "SOz1_a_bannerIcon",
+			"diagSummaryItem": "SOz1_a_diagSummaryItem",
 			"ovArrow": "SOz1_a_ovArrow",
+			"setDesc": "SOz1_a_setDesc",
+			"setRow": "SOz1_a_setRow",
+			"actWhy": "SOz1_a_actWhy",
+			"catsWrap": "SOz1_a_catsWrap",
+			"setRevert": "SOz1_a_setRevert",
+			"catsToggle": "SOz1_a_catsToggle",
+			"diagCount": "SOz1_a_diagCount",
+			"switchOn": "SOz1_a_switchOn",
+			"viewBtn": "SOz1_a_viewBtn",
+			"diagIndex": "SOz1_a_diagIndex",
+			"titleRow": "SOz1_a_titleRow",
+			"backupWarn": "SOz1_a_backupWarn",
+			"orphRow": "SOz1_a_orphRow",
+			"act": "SOz1_a_act",
+			"tabs": "SOz1_a_tabs",
+			"dshmSlide": "SOz1_a_dshmSlide",
+			"catsCollapsed": "SOz1_a_catsCollapsed",
+			"diagMeta": "SOz1_a_diagMeta",
+			"collapseBody": "SOz1_a_collapseBody",
+			"warnLine": "SOz1_a_warnLine",
+			"irow": "SOz1_a_irow",
+			"version": "SOz1_a_version",
+			"panelNote": "SOz1_a_panelNote",
+			"diagBadgeShadow": "SOz1_a_diagBadgeShadow",
+			"backupCheckList": "SOz1_a_backupCheckList",
+			"diagAlert": "SOz1_a_diagAlert",
+			"dragging": "SOz1_a_dragging",
+			"setLabelBox": "SOz1_a_setLabelBox",
+			"groupMembers": "SOz1_a_groupMembers",
+			"diagArrow": "SOz1_a_diagArrow",
+			"setHead": "SOz1_a_setHead",
+			"cmd": "SOz1_a_cmd",
+			"inlineInput": "SOz1_a_inlineInput",
+			"banner": "SOz1_a_banner",
+			"desc": "SOz1_a_desc",
+			"viewBar": "SOz1_a_viewBar",
+			"setHint": "SOz1_a_setHint",
+			"okState": "SOz1_a_okState",
+			"switchKnob": "SOz1_a_switchKnob",
+			"cats": "SOz1_a_cats",
+			"backupGrid": "SOz1_a_backupGrid",
+			"groupMember": "SOz1_a_groupMember",
+			"groupName": "SOz1_a_groupName",
+			"backupCard": "SOz1_a_backupCard",
+			"spec": "SOz1_a_spec",
+			"fixFallbackText": "SOz1_a_fixFallbackText",
+			"sectionOverview": "SOz1_a_sectionOverview",
+			"tabSearch": "SOz1_a_tabSearch",
+			"diagPage": "SOz1_a_diagPage",
+			"dot": "SOz1_a_dot",
+			"nm": "SOz1_a_nm",
+			"sectAction": "SOz1_a_sectAction",
+			"actLive": "SOz1_a_actLive",
+			"groupCreate": "SOz1_a_groupCreate",
+			"star": "SOz1_a_star",
+			"depBadge": "SOz1_a_depBadge",
+			"src": "SOz1_a_src",
+			"grid": "SOz1_a_grid",
 			"err": "SOz1_a_err",
-			"diagBadgeShadow": "SOz1_a_diagBadgeShadow"
+			"card": "SOz1_a_card",
+			"diagSummaryMeta": "SOz1_a_diagSummaryMeta",
+			"diagBadgeCommunity": "SOz1_a_diagBadgeCommunity",
+			"pct": "SOz1_a_pct",
+			"actWarn": "SOz1_a_actWarn",
+			"ovByTag": "SOz1_a_ovByTag",
+			"setCard": "SOz1_a_setCard",
+			"backupCheck": "SOz1_a_backupCheck",
+			"irowMissing": "SOz1_a_irowMissing",
+			"diagKey": "SOz1_a_diagKey",
+			"groupRow": "SOz1_a_groupRow",
+			"assignSelect": "SOz1_a_assignSelect",
+			"hiddenFile": "SOz1_a_hiddenFile",
+			"shot": "SOz1_a_shot",
+			"title": "SOz1_a_title",
+			"on": "SOz1_a_on",
+			"backupInput": "SOz1_a_backupInput",
+			"pageInfo": "SOz1_a_pageInfo",
+			"sub": "SOz1_a_sub",
+			"grow": "SOz1_a_grow",
+			"collapseIcon": "SOz1_a_collapseIcon",
+			"groupAddPanel": "SOz1_a_groupAddPanel",
+			"owner": "SOz1_a_owner",
+			"top": "SOz1_a_top",
+			"spin": "SOz1_a_spin",
+			"sp": "SOz1_a_sp",
+			"groupActions": "SOz1_a_groupActions",
+			"groupHint": "SOz1_a_groupHint",
+			"groupHead": "SOz1_a_groupHead",
+			"modalNote": "SOz1_a_modalNote",
+			"tab": "SOz1_a_tab",
+			"diagVal": "SOz1_a_diagVal",
+			"viewOn": "SOz1_a_viewOn",
+			"diagBadgeOfficial": "SOz1_a_diagBadgeOfficial",
+			"tag": "SOz1_a_tag",
+			"catsRow": "SOz1_a_catsRow",
+			"srcBtn": "SOz1_a_srcBtn",
+			"diagEmpty": "SOz1_a_diagEmpty",
+			"diagSection": "SOz1_a_diagSection",
+			"themesGrid": "SOz1_a_themesGrid",
+			"row1": "SOz1_a_row1",
+			"actBroken": "SOz1_a_actBroken",
+			"backupMessage": "SOz1_a_backupMessage",
+			"diagBundle": "SOz1_a_diagBundle",
+			"collapseHead": "SOz1_a_collapseHead",
+			"shots": "SOz1_a_shots",
+			"progress": "SOz1_a_progress",
+			"fixFallback": "SOz1_a_fixFallback",
+			"staleAction": "SOz1_a_staleAction"
 		};
 		//#endregion
 		//#region src/client/Diagnostics.tsx
@@ -2740,7 +2780,7 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 							names: body.ignoredBuilds.map(String)
 						});
 						const text = (v) => typeof v === "string" ? v : v && typeof v.text === "string" ? v.text : v == null ? "" : JSON.stringify(v);
-						const detail = text(body.error) || [text(body.stderr), text(body.stdout)].filter(Boolean).join("\n").trim() || "exit " + body.exitCode;
+						const detail = text(body.error) || humanOutput([text(body.stderr), text(body.stdout)].filter(Boolean).join("\n")) || "exit " + body.exitCode;
 						setInstallError(t("installFail") + ": " + plugin.name + " — " + detail.trim().slice(-600));
 					}
 				}).catch(() => {});
@@ -2850,7 +2890,7 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 							names: body.ignoredBuilds.map(String)
 						});
 						const text = (v) => typeof v === "string" ? v : v && typeof v.text === "string" ? v.text : v == null ? "" : JSON.stringify(v);
-						const detail = text(body.error) || [text(body.stderr), text(body.stdout)].filter(Boolean).join("\n").trim() || "exit " + body.exitCode;
+						const detail = text(body.error) || humanOutput([text(body.stderr), text(body.stdout)].filter(Boolean).join("\n")) || "exit " + body.exitCode;
 						setInstallError(t("updateFail") + ": " + name + " — " + detail.trim().slice(-600));
 					}
 				}).catch((error) => setInstallError(t("updateFail") + ": " + String(error))).finally(() => setUpdatingName(null));
@@ -2896,7 +2936,7 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 							return;
 						}
 						const text = (v) => typeof v === "string" ? v : v && typeof v.text === "string" ? v.text : v == null ? "" : JSON.stringify(v);
-						setInstallError((text(body.error) || text(body.stderr) || "error").trim().slice(-600));
+						setInstallError((text(body.error) || humanOutput(text(body.stderr)) || "error").trim().slice(-600));
 					}
 				}).catch((error) => setInstallError(String(error))).finally(() => setRemovingName(null));
 			}, [refreshInstalled]);
