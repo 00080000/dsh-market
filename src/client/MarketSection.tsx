@@ -35,7 +35,7 @@ import {
 import css from './Market.module.css'
 import { Diagnostics } from './Diagnostics.tsx'
 import {
-  avatarColor, entryForDep, groupSwitchState, isInstalled, looksTerminal, matchInstalledName, orderedCategories,
+  avatarColor, entryForDep, groupSwitchState, humanOutput, isInstalled, looksTerminal, matchInstalledName, orderedCategories,
   pageItems, pluginScreenshots, readSession, themePlugins as themePluginsOf, themeSwatch, TIME_RANGE_DAYS, visiblePlugins,
 } from './market-data.ts'
 import type {
@@ -784,7 +784,7 @@ export function MarketSection(props: MarketSectionProps) {
             setBuildsSkipped({ plugin, names: body.ignoredBuilds.map(String) })
           }
           const text = (v: unknown) => typeof v === 'string' ? v : (v && typeof (v as any).text === 'string') ? (v as any).text : v == null ? '' : JSON.stringify(v)
-          const detail = text(body.error) || [text(body.stderr), text(body.stdout)].filter(Boolean).join('\n').trim() || ('exit ' + body.exitCode)
+          const detail = text(body.error) || humanOutput([text(body.stderr), text(body.stdout)].filter(Boolean).join('\n')) || ('exit ' + body.exitCode)
           setInstallError(t('installFail') + ': ' + plugin.name + ' — ' + detail.trim().slice(-600))
         }
       })
@@ -897,7 +897,7 @@ export function MarketSection(props: MarketSectionProps) {
             setBuildsSkipped({ updateName: name, names: body.ignoredBuilds.map(String) })
           }
           const text = (v: unknown) => typeof v === 'string' ? v : (v && typeof (v as any).text === 'string') ? (v as any).text : v == null ? '' : JSON.stringify(v)
-          const detail = text(body.error) || [text(body.stderr), text(body.stdout)].filter(Boolean).join('\n').trim() || ('exit ' + body.exitCode)
+          const detail = text(body.error) || humanOutput([text(body.stderr), text(body.stdout)].filter(Boolean).join('\n')) || ('exit ' + body.exitCode)
           setInstallError(t('updateFail') + ': ' + name + ' — ' + detail.trim().slice(-600))
         }
       })
@@ -948,7 +948,7 @@ export function MarketSection(props: MarketSectionProps) {
             return
           }
           const text = (v: unknown) => typeof v === 'string' ? v : (v && typeof (v as any).text === 'string') ? (v as any).text : v == null ? '' : JSON.stringify(v)
-          setInstallError((text(body.error) || text(body.stderr) || 'error').trim().slice(-600))
+          setInstallError((text(body.error) || humanOutput(text(body.stderr)) || 'error').trim().slice(-600))
         }
       })
       .catch(error => setInstallError(String(error)))

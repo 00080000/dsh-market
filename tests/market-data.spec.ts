@@ -8,8 +8,7 @@
 
 import { describe, expect, it } from 'vitest'
 import {
-  entryForDep, extractReadmeImages, groupSwitchState, isInstalled, matchInstalledName, orderedCategories, pageItems, safeScreenshots, themePlugins, visiblePlugins,
-} from '../src/client/market-data.ts'
+  entryForDep, extractReadmeImages, groupSwitchState, isInstalled, matchInstalledName, orderedCategories, pageItems, safeScreenshots, themePlugins, visiblePlugins, humanOutput} from '../src/client/market-data.ts'
 import type { RegistryPlugin } from '../src/client/market-data.ts'
 
 function plugin(partial: Partial<RegistryPlugin>): RegistryPlugin {
@@ -229,5 +228,44 @@ describe('screenshots (#61)', () => {
       'https://raw.githubusercontent.com/o/r/HEAD/packages/plug-a/shot.png',
     ])
     expect(extractReadmeImages('no images here', 'o', 'r', null)).toEqual([])
+  })
+})
+
+/**
+ * A failed install's user-visible text. pnpm's ndjson reporter emits one
+ * JSON object per progress tick, so a large `github:` download produces
+ * thousands; when the failure matches no known signature there is no
+ * diagnosis to show and the UI falls back to the tail of the output —
+ * handing the user 600 characters of `{"name":"pnpm:fetching-progress"}`
+ * at the one moment they need a sentence (#148, same shape behind #161).
+ */
+describe('humanOutput', () => {
+  it('drops pnpm progress chatter', () => {
+    const raw = [
+      'Progress: resolved 1, reused 0',
+      '{"time":1786951840209,"name":"pnpm:fetching-progress","downloaded":45573678,"status":"in_progress"}',
+      '{"time":1786951840710,"name":"pnpm:fetching-progress","downloaded":45596968,"status":"in_progress"}',
+      'ERR_PNPM_SOMETHING  the thing that actually went wrong',
+    ].join('\n')
+    expect(humanOutput(raw)).toBe('Progress: resolved 1, reused 0\nERR_PNPM_SOMETHING  the thing that actually went wrong')
+  })
+
+  it('keeps JSON that carries a diagnosis', () => {
+    // An unrecognized failure is exactly when discarding information costs
+    // the most, so only pure progress objects are dropped.
+    const raw = [
+      '{"name":"pnpm:fetching-progress","downloaded":1}',
+      '{"name":"pnpm:error","err":{"code":"ERR_PNPM_FETCH_404"}}',
+      '{"level":"error","message":"tarball not found"}',
+    ].join('\n')
+    const out = humanOutput(raw)
+    expect(out).toContain('ERR_PNPM_FETCH_404')
+    expect(out).toContain('tarball not found')
+    expect(out).not.toContain('fetching-progress')
+  })
+
+  it('leaves ordinary output and malformed lines alone', () => {
+    expect(humanOutput('plain error\n{not json\n')).toBe('plain error\n{not json')
+    expect(humanOutput('')).toBe('')
   })
 })
