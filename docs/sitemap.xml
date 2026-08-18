@@ -29,4 +29,22 @@
     <xhtml:link rel="alternate" hreflang="zh" href="https://dshmarket.com/zh/"/>
     <xhtml:link rel="alternate" hreflang="x-default" href="https://dshmarket.com/"/>
   </url>
+  <url>
+    <loc>https://dshmarket.com/privacy/</loc>
+    <lastmod>2026-08-18</lastmod>
+    <changefreq>yearly</changefreq>
+    <priority>0.3</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://dshmarket.com/privacy/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://dshmarket.com/zh/privacy/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://dshmarket.com/privacy/"/>
+  </url>
+  <url>
+    <loc>https://dshmarket.com/zh/privacy/</loc>
+    <lastmod>2026-08-18</lastmod>
+    <changefreq>yearly</changefreq>
+    <priority>0.3</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://dshmarket.com/privacy/"/>
+    <xhtml:link rel="alternate" hreflang="zh" href="https://dshmarket.com/zh/privacy/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://dshmarket.com/privacy/"/>
+  </url>
 </urlset>
