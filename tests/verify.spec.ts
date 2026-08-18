@@ -199,3 +199,71 @@ describe('loader inventory beats manifest inference (#135)', () => {
     expect(verifyActivation('web', 'half-built', new Set())).toMatchObject({ state: 'broken' })
   })
 })
+
+describe('activationAfterReplace (post-update verdict)', () => {
+  const live = { state: 'live' as const, reasons: ['已热加载 / live'], bundle: true, hot: true }
+
+  it('downgrades a plugin that was already running to "restart"', async () => {
+    // Measured on a real host: updating the market 1.11.3 → 1.12.2 left the
+    // process reporting 1.11.3 with an unchanged boot id, while the update
+    // route answered "live / 已热加载" in the same response. The loader
+    // inventory cannot tell the two apart — the name was in it before the
+    // update and is in it after, because replacing files on disk does not
+    // unload an imported module.
+    const { activationAfterReplace } = await import('../src/verify.ts')
+    const result = activationAfterReplace(live, true)
+    expect(result.state).toBe('restart')
+    expect(result.hot).toBe(false)
+    expect(result.reasons.join(' ')).toContain('重启后生效')
+  })
+
+  it('leaves a plugin that was NOT running alone', async () => {
+    // Nothing was loaded to shadow the new build, so the fresh mount really
+    // does run the new code. Downgrading this case too would tell users to
+    // restart for a change that already took effect — the mistake #156 was.
+    const { activationAfterReplace } = await import('../src/verify.ts')
+    expect(activationAfterReplace(live, false)).toBe(live)
+  })
+
+  it('does not promote a non-live verdict', async () => {
+    // Only "live" is the wrong answer here. A missing or broken package must
+    // keep saying so; turning it into "restart" would hide a failed update
+    // behind an instruction that cannot fix it.
+    const { activationAfterReplace } = await import('../src/verify.ts')
+    for (const state of ['missing', 'restart', 'disabled', 'broken'] as const) {
+      const other = { ...live, state }
+      expect(activationAfterReplace(other, true)).toBe(other)
+    }
+  })
+})
+
+describe('hasHostHalf (client-only updates need a refresh, not a restart)', () => {
+  it('is false for a dsh.client package with no dsh.bundle', async () => {
+    // Themes and skins. The market shim-mounts them so the loader has a live
+    // row, but no server code runs — the browser re-fetches their bundle from
+    // disk on the next page load. Asking these users to restart would repeat
+    // #156 in a narrower place.
+    const { hasHostHalf } = await import('../src/verify.ts')
+    const dir = mkdtempSync(join(tmpdir(), 'dshm-hosthalf-'))
+    const pkg = join(dir, 'node_modules', 'theme-only')
+    mkdirSync(pkg, { recursive: true })
+    writeFileSync(join(pkg, 'package.json'), JSON.stringify({ name: 'theme-only', dsh: { client: 'client/client.js' } }))
+    expect(hasHostHalf('web', 'theme-only', dir)).toBe(false)
+
+    const both = join(dir, 'node_modules', 'has-host')
+    mkdirSync(both, { recursive: true })
+    writeFileSync(join(both, 'package.json'), JSON.stringify({ name: 'has-host', dsh: { bundle: 'lib/index.js', client: 'client/client.js' } }))
+    expect(hasHostHalf('web', 'has-host', dir)).toBe(true)
+
+    // A package declaring NEITHER key still loads through the bundle layer,
+    // so it has a host half. Reading `dsh.bundle` alone would call this one
+    // client-only and silently switch the correction off for it.
+    const neither = join(dir, 'node_modules', 'bare')
+    mkdirSync(neither, { recursive: true })
+    writeFileSync(join(neither, 'package.json'), JSON.stringify({ name: 'bare', dsh: {} }))
+    expect(hasHostHalf('web', 'bare', dir)).toBe(true)
+
+    // A package that is not installed cannot have a stale host half either.
+    expect(hasHostHalf('web', 'absent', dir)).toBe(false)
+  })
+})
