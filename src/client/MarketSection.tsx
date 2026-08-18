@@ -1952,7 +1952,15 @@ export function MarketSection(props: MarketSectionProps) {
                     </div>
                     <div className={css.cats}>
                       <div className={css.catsRow}>
-                      <div ref={catsWrapRef} className={catsOpen || visibleCats === null ? `${css.catsWrap} ${css.catsCollapsed}` : css.catsWrap}>
+                      {/* The height cap belongs to the MEASURING pass only: that pass
+                          renders every chip so their offsets can be counted, and
+                          clipping hides the tall row from the user for the frame it
+                          exists. Applying it while OPEN clipped the very rows the
+                          user had just asked to see — with 20 categories, expanding
+                          revealed two rows out of six and read as "nothing
+                          happened". Collapsed after measuring needs no cap: the list
+                          is already sliced to what fits. */}
+                      <div ref={catsWrapRef} className={visibleCats === null ? `${css.catsWrap} ${css.catsCollapsed}` : css.catsWrap}>
                         {(() => {
                           // Collapsed, the selected category is pulled to the front so it never hides.
                           const ordered = orderedCategories(categories, cat, catsOpen)

@@ -1311,3 +1311,53 @@ describe('a failed install releases the UI and says why', () => {
     expect(screen.getAllByRole('button', { name: en.install }).length).toBeGreaterThan(0)
   })
 })
+
+/**
+ * The category row's height cap belongs to the MEASURING pass and nowhere
+ * else. That pass renders every chip so their offsets can be counted, and
+ * clipping hides the tall row for the frame it exists; keeping the cap while
+ * the user has the row OPEN clips the rows they just asked to see. With the
+ * catalog at 20 categories that showed two rows out of six and read as
+ * "expanding does nothing" / "the categories were never updated".
+ */
+describe('category row expansion', () => {
+  const CATS = {
+    ui: { en: 'UI', zh: 'UI' }, usage: { en: 'Usage', zh: '用量' },
+    theme: { en: 'Theme', zh: '主题' }, model: { en: 'Model', zh: '模型' },
+    session: { en: 'Session', zh: '会话' }, memory: { en: 'Memory', zh: '记忆' },
+    tools: { en: 'Tools', zh: '工具' }, browser: { en: 'Browser', zh: '浏览器' },
+    vision: { en: 'Vision', zh: '视觉' }, voice: { en: 'Voice', zh: '语音' },
+  }
+
+  it('drops the height cap once the row is open', async () => {
+    stubFetch({ '/dsh-market/registry': { source: 'snapshot', registry: { ...REGISTRY, categories: CATS } } })
+    const { container } = render(<MarketSection {...props()} />)
+    await screen.findByText('dsh-loop')
+
+    const wrap = () => container.querySelector('[class*="catsWrap"]')
+    // jsdom reports zero layout, so measurement never resolves and the row
+    // stays in its measuring state — which is exactly the state that must
+    // still clip. The assertion that matters is what OPEN does to it.
+    fireEvent.click(screen.getByLabelText(re(en.catsMore)))
+    await waitFor(() => expect(screen.getByLabelText(re(en.catsLess))).toBeTruthy())
+    expect(wrap()?.className, 'open must not carry the measuring clip').not.toMatch(/catsCollapsed/)
+
+    fireEvent.click(screen.getByLabelText(re(en.catsLess)))
+    await waitFor(() => expect(screen.getByLabelText(re(en.catsMore))).toBeTruthy())
+  })
+
+  it('renders every category once open', async () => {
+    stubFetch({ '/dsh-market/registry': { source: 'snapshot', registry: { ...REGISTRY, categories: CATS } } })
+    const { container } = render(<MarketSection {...props()} />)
+    await screen.findByText('dsh-loop')
+
+    fireEvent.click(screen.getByLabelText(re(en.catsMore)))
+    await waitFor(() => expect(screen.getByLabelText(re(en.catsLess))).toBeTruthy())
+    // Scoped to the chips: names like "Theme" also label a tab, and a
+    // document-wide lookup would pass on the wrong element.
+    const chipLabels = [...container.querySelectorAll('[data-chip="1"]')].map(el => el.textContent?.trim())
+    for (const label of ['UI', 'Usage', 'Theme', 'Model', 'Session', 'Memory', 'Tools', 'Browser', 'Vision', 'Voice']) {
+      expect(chipLabels, `${label} missing from: ${chipLabels.join(', ')}`).toContain(label)
+    }
+  })
+})
