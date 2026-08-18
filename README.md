@@ -25,9 +25,15 @@ dsh plugin --profile web add dshmarket
 
 Restart `dsh web`, then open **Settings → Plugin Market**.
 
+**Requires dsh web 0.1.0-rc.6 or newer.** On an older host the market
+disables itself and says so in the browser console rather than rendering
+against primitives that are not there — if the Plugin Market entry never
+appears, that is usually why. Worth checking when a desktop build bundles
+its own dsh: it may be older than the one `npm` would give you (#139).
+
 ## What you get
 
-- **Browse & search** the full community catalog (1200+ plugins, growing daily) — category filters, star counts, top/new sorting, bilingual descriptions that follow your UI language
+- **Browse & search** the full community catalog (1250+ plugins, growing daily) — category filters, star counts, top/new sorting, bilingual descriptions that follow your UI language
 - **Screenshots** — AppStore-style screenshots in the install dialog: author-curated via the registry, with automatic README extraction as fallback; images load from GitHub hosting only, and only after you open the dialog
 - **Themes** — a dedicated tab for community themes and skins: install → active immediately, switch with one click (themes are mutually exclusive, your choice survives restarts), uninstall to revert
 - **One-click install** — confirm the source, watch live progress; most plugins go live after a page refresh, no restart
@@ -38,6 +44,7 @@ Restart `dsh web`, then open **Settings → Plugin Market**.
 - **Restart when needed** — changes that cannot hot-load show a one-click restart beside the pending-change banner; the action is restricted to same-origin loopback requests
 - **Zero jargon** — if a component is missing (pnpm), the market detects it and offers a one-click automatic setup
 - **Log export** — one click produces a sanitized plain-text log for bug reports (home paths and credential shapes are masked; nothing is ever sent anywhere). The market's version sits next to the page heading, so a screenshot of a problem already carries it
+- **Settings card** — on dsh 0.1.0-rc.7 and newer the market puts its own option (whether one-click restart is allowed) on **Settings → Plugins → Plugin configuration**, so a host owned by systemd, launchd or pm2 is a switch rather than a hand-edited YAML line
 - **Diagnostics** — the plugin load order and conflict surface, one page: bundle stack with official/community badges, duplicate loader entries, dependency version mismatches, multi-version core packages, overrides and invalid config entries. Plain-language terms, problem blocks highlighted, everything collapsible
 
 - **Load order** — drag community bundles into the order you want, or take the suggested one derived from the plugins' own before/after rules. Nothing is written until a trial composition passes, and the panel tells you what the new order would change (overrides, invalid or duplicate entries) before you apply it
