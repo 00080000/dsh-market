@@ -72,8 +72,9 @@ Installs prefer npm tarballs over full-repo GitHub downloads whenever a plugin p
 
 ## Roadmap & feedback
 
-- Planned features live on the [Roadmap](https://github.com/orgs/dsh-market/projects/1) — every item welcomes community PRs (drop a note in the linked issue before starting)
-- File bugs and ideas as [issues](https://github.com/dsh-market/dsh-market/issues); attaching the market's "Export log" makes diagnosis 10x faster
+- **Bugs** go in [issues](https://github.com/dsh-market/dsh-market/issues) — attaching the market's "Export log" makes diagnosis roughly ten times faster
+- **Feature ideas** go on the [Roadmap](https://github.com/orgs/dsh-market/projects/1). Issues are kept for things that are broken, so a proposal filed as an issue gets moved there and closed; the discussion stays where you wrote it either way
+- Every roadmap item welcomes community PRs — say so on the item before starting, so two people don't build it twice
 
 ## Data source
 

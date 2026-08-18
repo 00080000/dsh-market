@@ -69,8 +69,9 @@ dsh plugin --profile web add dshmarket
 
 ## 路线图与反馈
 
-- 功能规划见 [Roadmap](https://github.com/orgs/dsh-market/projects/1)，每一项都欢迎社区 PR（动手前在对应 issue 里说一声）
-- Bug 与建议请提 [issue](https://github.com/dsh-market/dsh-market/issues)，附上市场页面的「导出日志」能让排查快十倍
+- **Bug** 提 [issue](https://github.com/dsh-market/dsh-market/issues)，附上市场页面的「导出日志」能让排查快十倍
+- **功能建议**放 [Roadmap](https://github.com/orgs/dsh-market/projects/1)。issues 只留「坏掉的东西」，所以提成 issue 的建议会被移到那边并关闭；讨论仍留在你写的地方
+- 路线图上的每一项都欢迎社区 PR——动手前在对应条目里说一声，免得两个人重复造
 
 ## 数据源
 
