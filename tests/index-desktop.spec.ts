@@ -67,7 +67,13 @@ describe('host adaptation', () => {
     const ctx = new FakeContext({ webServer: {}, loader: {} })
     apply(ctx as never, { profile: 'team', allowRestart: true })
 
-    expect(ctx.injectCalls).toEqual([['webServer', 'loader']])
+    // The host pair is what the routes wait on; `settings` is the optional
+    // wiring behind the settings card, which no-ops on a host that never
+    // provides it. What this guards is the absence of the Desktop services:
+    // the ordinary path must not wait on a shell that is not there.
+    expect(ctx.injectCalls[0]).toEqual(['webServer', 'loader'])
+    expect(ctx.injectCalls.flat()).not.toContain('desktopPnpm')
+    expect(ctx.injectCalls.flat()).not.toContain('desktopProfiles')
     expect(state.factoryArgs).toEqual([])
     expect(state.mounts).toHaveLength(1)
     expect(state.mounts[0]).toMatchObject({

@@ -2,6 +2,10 @@
 
 export const zh = {
   nav: '插件市场',
+  setCardDesc: '控制市场能否重启宿主进程。',
+  setAllowRestart: '允许一键重启',
+  setAllowRestartHint: '关掉之后市场不再重启宿主，只提示有待生效的变更。如果 DSH 由 systemd / launchd / pm2 托管，应该关掉——重启该由它们负责。',
+  setRevert: '恢复默认',
   versionHint: '插件市场版本 — 反馈问题时请把它一起截图',
   subtitle: '发现社区为 DeepSeek Harness 打造的能力',
   searchPh: '搜索插件，比如：通知、终端、记忆…',
@@ -288,6 +292,10 @@ export type MarketKey = keyof typeof zh
 
 export const en: Record<MarketKey, string> = {
   nav: 'Plugin Market',
+  setCardDesc: 'Whether the market may relaunch the host process.',
+  setAllowRestart: 'Allow one-click restart',
+  setAllowRestartHint: 'With this off the market never relaunches the host; it only reports that changes are pending. Turn it off when systemd, launchd or pm2 owns the process — restarting is theirs to do.',
+  setRevert: 'Revert to default',
   versionHint: 'Plugin market version — include it when reporting an issue',
   subtitle: 'Discover community plugins for DeepSeek Harness',
   searchPh: 'Search plugins: notify, terminal, memory…',

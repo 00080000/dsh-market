@@ -184,3 +184,17 @@
    text block, so the user can still copy it by hand. */
 .fixFallback{display:flex;flex-direction:column;gap:6px;margin:8px 0}
 .fixFallbackText{width:100%;box-sizing:border-box;font-family:ui-monospace,Menlo,monospace;font-size:11px;line-height:16px;color:var(--dsw-alias-label-primary,#1f2328);background:var(--dsw-alias-bg-layer-2,#f3f4f6);border:1px solid var(--dsw-alias-border-l2,#e5e7eb);border-radius:6px;padding:8px 10px;resize:vertical;white-space:pre-wrap;word-break:break-all}
+/* Plugin-configuration card (dsh >= rc.7). Drawn here rather than imported:
+   the section's own cards live in a package whose value import would fail
+   the client bundle-purity gate, so a card owns its appearance. Matches the
+   chrome of the built-in cards beside it. */
+.setCard{border:1px solid var(--dsw-alias-border-l2,#e5e7eb);border-radius:12px;padding:16px 18px;display:flex;flex-direction:column;gap:14px}
+.setHead{display:flex;flex-direction:column;gap:4px}
+.setTitle{font-size:15px;font-weight:600;line-height:22px}
+.setDesc{font-size:13px;line-height:20px;color:var(--dsw-alias-label-tertiary,#8b93a1)}
+.setRow{display:flex;align-items:flex-start;gap:12px}
+.setLabelBox{display:flex;flex-direction:column;gap:3px;flex:1;min-width:0}
+.setLabel{font-size:13px;line-height:20px}
+.setHint{font-size:12px;line-height:18px;color:var(--dsw-alias-label-tertiary,#8b93a1)}
+.setRevert{border:none;background:none;font:inherit;font-size:12px;color:var(--dsw-alias-brand-primary,#4f6ef7);cursor:pointer;padding:0;flex-shrink:0}
+.setRevert:disabled{color:var(--dsw-alias-label-tertiary,#8b93a1);cursor:default}

@@ -10,6 +10,7 @@ import * as primitives from '@deepseek-ai/dsh-client-ui-primitives'
 import { en, zh } from './locales.ts'
 import { InstallToast } from './InstallToast.tsx'
 import { MarketSection } from './MarketSection.tsx'
+import { SettingsCard, type CardScope } from './SettingsCard.tsx'
 import type { ThemeSnapshot, Translate } from './market-data.ts'
 
 const NS = 'dsh-market'
@@ -25,6 +26,15 @@ export const REQUIRED_PRIMITIVES = ['Menu', 'DisclosureRow', 'Tooltip', 'Toast']
 
 export function missingPrimitives(mod: Record<string, unknown>, required: readonly string[] = REQUIRED_PRIMITIVES): string[] {
   return required.filter(name => mod[name] === undefined)
+}
+
+/** The host surface the settings card needs, present only on rc.7+. */
+interface SettingsScopeHost {
+  settingsScope: { bind(spec: { namespace: string }): CardScope }
+  slots: {
+    inject(name: string, register: () => unknown): void
+    register(options: Record<string, unknown>, render: () => unknown): unknown
+  }
 }
 
 /** The subset of the theme service this plugin touches. */
@@ -92,6 +102,24 @@ export function apply(ctx: MarketClientContext): void {
       getSnapshot: () => ctx.theme.getTheme(),
     },
   })))
+
+  // The settings card (dsh >= 0.1.0-rc.7). Registered through a NESTED
+  // inject on purpose: naming settingsScope in the module-level `inject`
+  // would keep this whole plugin unmounted on any host without that
+  // service — the market's own page would vanish on rc.6 to gain a card
+  // rc.6 cannot render. Nested, the card simply never appears there.
+  const settingsCtx = ctx as unknown as {
+    inject(services: string[], callback: (scoped: SettingsScopeHost) => void): void
+  }
+  settingsCtx.inject(['settingsScope'], (scoped) => {
+    const scope = scoped.settingsScope.bind({ namespace: NS })
+    scoped.slots.inject('settings.plugin.item', () => scoped.slots.register({
+      name: 'settings.plugin.item',
+      key: NS,
+      locale: NS,
+      inject: () => ({ t }),
+    }, () => h(SettingsCard, { scope, t })))
+  })
 
   const Toast = () => h(InstallToast, { t })
   ctx.slots.inject('shell.overlay', () => ctx.slots.register({

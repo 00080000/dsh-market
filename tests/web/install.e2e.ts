@@ -136,6 +136,31 @@ describe.skipIf(!HAS_DSH).sequential('web e2e: the real install chain', () => {
     expect(reallyLive(A)).toBe(true)
   }, 600_000)
 
+  it('registers its own settings namespace on a host that has settings', async () => {
+    // The other half of the settings card: the browser side keys itself to
+    // this namespace, and the configuration tab pairs the two. Asserted
+    // against a REAL host because the pairing is the host's to do — a
+    // hand-written stand-in of the settings service would only echo my
+    // reading of a contract I did not write.
+    //
+    // A host without the service (every dsh before 0.1.0-rc.7) serves no
+    // namespaces at all, so this reads as skipped rather than failed there.
+    const response = await fetch(`${base}/api/settings.describe`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ type: 'client-request', rpcId: '1', method: 'settings.describe', payload: { args: {} } }),
+    })
+    const body = (await response.json()) as { result?: { ok?: boolean; value?: { namespaces?: { ns: string }[] } } }
+    // Assert the list arrived at all: an early return on a missing field
+    // would let this pass while proving nothing, which is how the first
+    // draft of this spec stayed green against a build that never shipped
+    // the settings module.
+    const served = body.result?.value?.namespaces
+    expect(served, `settings.describe returned: ${JSON.stringify(body).slice(0, 300)}`).toBeDefined()
+    const names = (served ?? []).map(entry => entry.ns)
+    expect(names, `served namespaces: ${names.join(', ')}`).toContain('dsh-market')
+  }, 120_000)
+
   it('refuses a source that is not in the curated registry', async () => {
     const response = await post('/dsh-market/install', { url: 'https://github.com/attacker/not-listed' })
     expect(response.status).toBe(400)
