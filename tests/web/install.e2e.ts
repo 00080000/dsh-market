@@ -238,6 +238,35 @@ describe.skipIf(!HAS_DSH).sequential('web e2e: the real install chain', () => {
     expect(reallyLive(B)).toBe(true)
   }, 600_000)
 
+  it('a client that vanishes mid-uninstall still gets a clean removal (#163)', async () => {
+    // Reported as: leave the market page while "uninstalling…" is showing,
+    // come back to a package deleted from disk but still listed in the
+    // manifest. The server owns the mutation and does not follow the
+    // request's lifetime, so abandoning the response must change nothing —
+    // asserted here rather than argued, because the report was specific
+    // enough to deserve a real attempt at reproducing it.
+    // CARRIER is already installed by an earlier spec and nothing after this
+    // asserts it, so it can be the one abandoned mid-removal.
+    expect(Object.keys((await state()).installed)).toContain(CARRIER)
+
+    const abort = new AbortController()
+    const abandoned = fetch(`${base}/dsh-market/uninstall`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', origin: base },
+      body: JSON.stringify({ name: CARRIER }),
+      signal: abort.signal,
+    }).then(() => 'completed').catch((error: Error) => error.name)
+    setTimeout(() => { abort.abort() }, 120)
+    expect(await abandoned).toBe('AbortError')
+
+    await settle()
+    const current = await state()
+    expect(Object.keys(current.installed)).not.toContain(CARRIER)
+    expect(current.bundles).not.toContain(CARRIER)
+    // The neighbours are untouched by a removal nobody waited for.
+    expect(reallyLive(B)).toBe(true)
+  }, 600_000)
+
   it('uninstalls cleanly — dependency and bundle registration both gone', async () => {
     const response = await post('/dsh-market/uninstall', { name: A })
     expect(response.status).toBe(200)
