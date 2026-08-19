@@ -4,6 +4,7 @@
  * pending-restart bookkeeping in sessionStorage.
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react'
+import { createPortal } from 'react-dom'
 import {
   Button,
   DisclosureRow,
@@ -36,7 +37,7 @@ import css from './Market.module.css'
 import { Diagnostics } from './Diagnostics.tsx'
 import {
   avatarColor, entryForDep, groupSwitchState, humanOutput, isInstalled, looksTerminal, matchInstalledName, orderedCategories,
-  formatCount, pageItems, pluginName, pluginScreenshots, readSession, themePlugins as themePluginsOf, themeSwatch, TIME_RANGE_DAYS, visiblePlugins,
+  formatCount, pageItems, pluginName, pluginScreenshots, readSession, safeScreenshots, themePlugins as themePluginsOf, themeSwatch, TIME_RANGE_DAYS, visiblePlugins,
 } from './market-data.ts'
 import type {
 ActivationInfo, ActivationState, GistExportResult, InstalledMap, InstalledRepoHints, InstalledRepoIdentities, MarketStatus, Registry, RegistryPlugin,
@@ -136,7 +137,7 @@ function OwnerAvatar({ name, owner }: { name: string; owner: string }) {
  * repo README. Requests start only once the dialog opens; failures — no
  * README, no images, broken links — degrade to rendering nothing at all.
  */
-function ScreenshotStrip({ plugin }: { plugin: RegistryPlugin }) {
+function ScreenshotStrip({ plugin, onOpen }: { plugin: RegistryPlugin; onOpen: (shots: string[], index: number) => void }) {
   const [shots, setShots] = useState<string[]>([])
   const [broken, setBroken] = useState<string[]>([])
   useEffect(() => {
@@ -150,7 +151,7 @@ function ScreenshotStrip({ plugin }: { plugin: RegistryPlugin }) {
   if (visible.length === 0) return null
   return (
     <div className={css.shots}>
-      {visible.map(src => (
+      {visible.map((src, i) => (
         <img
           key={src}
           className={css.shot}
@@ -159,10 +160,138 @@ function ScreenshotStrip({ plugin }: { plugin: RegistryPlugin }) {
           loading="lazy"
           decoding="async"
           referrerPolicy="no-referrer"
+          onClick={() => onOpen(visible, i)}
           onError={() => setBroken(prev => prev.includes(src) ? prev : prev.concat(src))}
         />
       ))}
     </div>
+  )
+}
+
+/**
+ * Advances an index every `intervalMs` while `count > 1` — the shared clock
+ * behind both a card's auto-cycling thumbnail and the lightbox. A manual
+ * jump (clicking a dot, an arrow, opening on a specific shot) restarts the
+ * clock instead of letting it fire again moments later: without that, a
+ * deliberate "go back one" reads as broken when it auto-advances right past
+ * where the user just navigated to.
+ */
+function useAutoCarousel(count: number, initial: number, intervalMs = 3500): [number, (i: number) => void] {
+  const [index, setIndexState] = useState(initial)
+  const [resetTick, setResetTick] = useState(0)
+  useEffect(() => {
+    if (count <= 1) return
+    const timer = setInterval(() => { setIndexState(i => (i + 1) % count) }, intervalMs)
+    return () => clearInterval(timer)
+  }, [count, intervalMs, resetTick])
+  const setIndex = (i: number): void => {
+    if (count <= 0) return
+    setIndexState(((i % count) + count) % count)
+    setResetTick(t => t + 1)
+  }
+  return [index, setIndex]
+}
+
+/**
+ * A card's own thumbnail strip — curated screenshots only (#61 supplement):
+ * this data already rode along with the catalog fetch that drew the grid,
+ * so showing it costs nothing extra. README-scraped fallback images stay
+ * dialog-only, where fetching one repo's README on click is a single
+ * request instead of one per visible card.
+ *
+ * Horizontal scroll at each image's own aspect ratio, not an auto-cycling
+ * single crop: cropping every shot into one fixed box hid most of a tall
+ * screenshot, and cycling on a timer meant the card you were looking at
+ * kept changing under you. Scrolling is a gesture the user drives.
+ */
+function CardShot({ plugin, onOpen }: { plugin: RegistryPlugin; onOpen: (shots: string[], index: number) => void }) {
+  const shots = safeScreenshots(plugin.screenshots)
+  const [broken, setBroken] = useState<string[]>([])
+  const visible = shots.filter(src => !broken.includes(src))
+  if (visible.length === 0) return null
+  return (
+    <div className={css.cardShots}>
+      {visible.map((src, i) => (
+        <img
+          key={src}
+          className={css.cardShot}
+          src={src}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          referrerPolicy="no-referrer"
+          onClick={(e) => { e.stopPropagation(); onOpen(visible, i) }}
+          onError={() => setBroken(prev => prev.includes(src) ? prev : prev.concat(src))}
+        />
+      ))}
+    </div>
+  )
+}
+
+/**
+ * Full-bleed image preview, opened from a card thumbnail or a dialog's
+ * screenshot strip. Not the shared Modal primitive: Modal is chrome for a
+ * decision (title, description, footer actions); this is just the same
+ * already-downloaded image shown bigger — there is no separate "thumbnail"
+ * vs "full size" asset to fetch.
+ */
+function ScreenshotLightbox({ shots, startIndex, onClose, t }: { shots: string[]; startIndex: number; onClose: () => void; t: Translate }) {
+  const [index, setIndex] = useAutoCarousel(shots.length, startIndex, 4000)
+  useEffect(() => {
+    // Capture phase + stopPropagation: the Settings dialog underneath is a
+    // Modal with its own Escape-to-close handling, also on window/document.
+    // Without this, one Escape press closed both layers at once — verified
+    // on a real host — because the modal's bubble-phase listener still fired
+    // after this one. Capture runs first and this stops it from reaching
+    // bubble phase at all, so only the top layer responds to one press.
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { e.stopPropagation(); onClose() }
+      else if (e.key === 'ArrowLeft') { e.stopPropagation(); setIndex(index - 1) }
+      else if (e.key === 'ArrowRight') { e.stopPropagation(); setIndex(index + 1) }
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [index])
+  // The primitives' own Modal (the confirm/settings dialog underneath)
+  // portals itself to document.body too, so plain in-tree rendering here
+  // put the lightbox BEHIND it regardless of z-index — a portal only wins a
+  // stacking tie against another portal by mounting later, not by CSS alone.
+  // Reported on a real host: "大的预览图层级不对，现在在弹窗的后面".
+  return createPortal(
+    <div className={css.lightbox} onClick={onClose}>
+      {/* A literal "×" rather than IconCloseOutline16: the primitives
+          package's own Modal uses that icon at runtime, but this package
+          version's public type surface doesn't resolve it — `tsc` reports
+          "no exported member" even though icons/index.d.ts declares it.
+          Not worth a type-check suppression for one close glyph. */}
+      <button className={css.lightboxClose} aria-label={t('lightboxClose')} onClick={onClose}>×</button>
+      <img className={css.lightboxImg} src={shots[index]} alt="" onClick={e => e.stopPropagation()} />
+      {shots.length > 1 && (
+        <>
+          <button
+            className={`${css.lightboxNav} ${css.lightboxPrev}`}
+            aria-label={t('lightboxPrev')}
+            onClick={(e) => { e.stopPropagation(); setIndex(index - 1) }}
+          ><IconChevronLeftOutline14 size={18} /></button>
+          <button
+            className={`${css.lightboxNav} ${css.lightboxNext}`}
+            aria-label={t('lightboxNext')}
+            onClick={(e) => { e.stopPropagation(); setIndex(index + 1) }}
+          ><IconChevronRightOutline14 size={18} /></button>
+          <div className={css.lightboxDots} onClick={e => e.stopPropagation()}>
+            {shots.map((src, i) => (
+              <span
+                key={src}
+                className={i === index ? `${css.lightboxDot} ${css.lightboxDotOn}` : css.lightboxDot}
+                onClick={() => setIndex(i)}
+              />
+            ))}
+          </div>
+        </>
+      )}
+    </div>,
+    document.body,
   )
 }
 
@@ -348,6 +477,9 @@ export function MarketSection(props: MarketSectionProps) {
   const [qInstalled, setQInstalled] = useState('')
   const [cat, setCat] = useState('all')
   const [confirming, setConfirming] = useState<RegistryPlugin | null>(null)
+  /** Shared by every screenshot source (card thumbnail, dialog strip). */
+  const [lightbox, setLightbox] = useState<{ shots: string[]; index: number } | null>(null)
+  const openLightbox = (shots: string[], index: number): void => setLightbox({ shots, index })
   const [busyUrl, setBusyUrl] = useState<string | null>(null)
   /** Consecutive idle polls with a pending install that never landed (#32). */
   const idleStrikes = useRef(0)
@@ -538,7 +670,18 @@ export function MarketSection(props: MarketSectionProps) {
   // the settings panel width is fixed); null = measuring render with all
   // pills clamped, then slice so the chevron flows inline after the last one.
   const [visibleCats, setVisibleCats] = useState<number | null>(null)
+  /** Same idea as `visibleCats`, but how many fit in a single row — used to
+   *  shrink an expanded (2+ row) category list while the sticky header is
+   *  pinned during scroll, distinct from the two-row collapsed default. */
+  const [visibleCatsOneRow, setVisibleCatsOneRow] = useState<number | null>(null)
   const catsWrapRef = useRef<HTMLDivElement | null>(null)
+  // Whether the sticky header is currently pinned to the top of the scroll
+  // area. Tracked via a sentinel just above it rather than a scrollTop
+  // threshold: the threshold would have to hard-code the header's offset
+  // (padding, sticky `top`), which drifts silently whenever that CSS
+  // changes. The sentinel just reports what's actually true on screen.
+  const [catsStuck, setCatsStuck] = useState(false)
+  const [catsSentinel, setCatsSentinel] = useState<HTMLDivElement | null>(null)
 
   const refreshInstalled = useCallback((force?: boolean) => {
     fetch('/dsh-market/installed', { cache: 'no-store' })
@@ -577,8 +720,9 @@ export function MarketSection(props: MarketSectionProps) {
     [disabledNames, patchDisabledNames],
   )
 
-  useEffect(() => {
-    fetch('/dsh-market/registry', { cache: 'no-store' })
+  const loadCatalog = useCallback(() => {
+    setLoadError(null)
+    return fetch('/dsh-market/registry', { cache: 'no-store' })
       .then(async (res) => {
         const body = (await res.json().catch(() => ({}))) as { registry?: Registry; error?: string }
         if (!res.ok) throw new Error(typeof body.error === 'string' ? body.error : `HTTP ${String(res.status)}`)
@@ -595,6 +739,10 @@ export function MarketSection(props: MarketSectionProps) {
       // smaller today" looked identical on screen — and the second reading
       // is the one users reached.
       .catch((error: unknown) => { setLoadError(error instanceof Error ? error.message : String(error)) })
+  }, [])
+
+  useEffect(() => {
+    void loadCatalog()
     fetch('/dsh-market/status', { cache: 'no-store' })
       .then(res => res.json())
       .then(status => {
@@ -613,7 +761,7 @@ export function MarketSection(props: MarketSectionProps) {
       })
       .catch(() => {})
     refreshInstalled()
-  }, [refreshInstalled])
+  }, [refreshInstalled, loadCatalog])
 
   // Pending-restart flags survive tab switches and page reloads, scoped to
   // one host process: a different boot id means the restart happened and the
@@ -1244,6 +1392,10 @@ export function MarketSection(props: MarketSectionProps) {
   const updatableNames = Object.keys(installed).filter(
     name => name !== selfName && !updatedNames.includes(name) && updates[name] && updates[name].updateAvailable,
   )
+  // The market manages itself from its own settings card (Settings → Plugins
+  // → Plugin configuration), not as a row here — listing it in both places
+  // read as two different controls for the same thing.
+  const installedOtherCount = Object.keys(installed).filter(name => name !== selfName).length
 
   const doUpdateAll = useCallback(() => {
     const names = updatableNames.slice()
@@ -1472,8 +1624,11 @@ export function MarketSection(props: MarketSectionProps) {
   const pendingRestart = sessionPendingRestart > 0 ? sessionPendingRestart : (showHostPending ? hostPendingNames.length : 0)
   const displayedInstalled = pendingBackup === null ? installed : { ...pendingDependencies, ...installed }
   const missingRestoreCount = Object.keys(pendingDependencies).filter(name => !installedFiles.includes(name)).length
+  // Self-update lives in the header button and the settings card, not this
+  // tab's row list (the market itself is filtered out below) — so a pending
+  // self-update alone must not light up a dot pointing at an empty-looking tab.
   const hasUpdates = Object.keys(installed).some(
-    name => !updatedNames.includes(name) && updates[name] && updates[name].updateAvailable,
+    name => name !== selfName && !updatedNames.includes(name) && updates[name] && updates[name].updateAvailable,
   )
 
   /** Live status line: structured phase, or the human-line fallback. */
@@ -1554,6 +1709,7 @@ export function MarketSection(props: MarketSectionProps) {
           </div>
         </div>
         <div className={css.desc}>{desc}</div>
+        <CardShot plugin={p} onOpen={openLightbox} />
         {p.deprecated === true && (
           <div className={css.deprecate}>
             <div className={css.depLine}>
@@ -1652,6 +1808,7 @@ export function MarketSection(props: MarketSectionProps) {
           </div>
         </div>
         <div className={css.desc}>{desc}</div>
+        <CardShot plugin={p} onOpen={openLightbox} />
         {p.deprecated === true && (
           <div className={css.deprecate}>
             <div className={css.depLine}>
@@ -1715,7 +1872,7 @@ export function MarketSection(props: MarketSectionProps) {
 
   const categories = data === null ? [] : Object.keys(data.categories)
 
-  useLayoutEffect(() => { setVisibleCats(null) }, [lang, categories.length])
+  useLayoutEffect(() => { setVisibleCats(null); setVisibleCatsOneRow(null) }, [lang, categories.length])
   useLayoutEffect(() => {
     if (catsOpen || visibleCats !== null) return
     const el = catsWrapRef.current
@@ -1728,7 +1885,58 @@ export function MarketSection(props: MarketSectionProps) {
     for (const chip of chips) { if (chip.offsetTop < rowThreeTop) fits += 1 }
     // Reserve the tail slot of row two for the chevron itself.
     setVisibleCats(fits >= chips.length ? fits : Math.max(1, fits - 1))
+    // Same measuring pass, one row's worth instead of two — used only while
+    // the sticky header is pinned during scroll (#188-adjacent request), to
+    // shrink an OPEN multi-row category list down to its first row without
+    // touching the user's actual open/closed choice.
+    const rowTwoTop = first.offsetTop + first.offsetHeight + 6 - 3
+    let fitsOneRow = 0
+    for (const chip of chips) { if (chip.offsetTop < rowTwoTop) fitsOneRow += 1 }
+    setVisibleCatsOneRow(fitsOneRow >= chips.length ? fitsOneRow : Math.max(1, fitsOneRow - 1))
   }, [catsOpen, visibleCats, data])
+
+  useEffect(() => {
+    if (catsSentinel === null || typeof IntersectionObserver === 'undefined') return
+    const observer = new IntersectionObserver(
+      ([entry]) => setCatsStuck(entry !== undefined && !entry.isIntersecting),
+      { root: bodyRef.current, threshold: 0 },
+    )
+    observer.observe(catsSentinel)
+    return () => observer.disconnect()
+  }, [catsSentinel])
+  /**
+   * Becoming stuck auto-collapses an open row — a REAL `catsOpen` flip, not
+   * a display-only override. An earlier version faked this by computing a
+   * separate "effectively open" value for rendering while leaving `catsOpen`
+   * itself true; the chevron's own click handler only ever toggled the real
+   * `catsOpen`, so while stuck it flipped a value the render path had
+   * already stopped consulting — clicking "expand" did nothing visible
+   * (reported: "吸顶滚动了之后，展开没反应了"). Driving the same state the
+   * chevron drives means the chevron always works, stuck or not.
+   */
+  const catsAutoCollapsedRef = useRef(false)
+  useLayoutEffect(() => {
+    if (catsStuck) {
+      if (catsOpen) { setCatsOpen(false); catsAutoCollapsedRef.current = true }
+    } else if (catsAutoCollapsedRef.current) {
+      setCatsOpen(true)
+      catsAutoCollapsedRef.current = false
+    }
+  }, [catsStuck])
+
+  /**
+   * A fresh install (hotUrls/hotNames) and a toggle/group action
+   * (refreshNames) both end in the same place — "reload the page" — and
+   * used to render as two near-identical banners stacked on top of each
+   * other when both happened in one session (reported as "为啥有三个状态横幅
+   * 啊，太奇怪了"). They're merged into one count and one banner; only the
+   * restart banner (a full host restart, a different action entirely) stays
+   * separate.
+   */
+  const pendingRefreshNames = useMemo(
+    () => [...new Set([...hotNames, ...refreshNames])],
+    [hotNames, refreshNames],
+  )
 
   /** Installed plugins the market itself cannot group (#60). */
   const groupableNames = Object.keys(installed).filter(name => name !== 'dsh-market' && name !== 'dshmarket')
@@ -1781,6 +1989,7 @@ export function MarketSection(props: MarketSectionProps) {
         </div>
         <div className={css.sub}>
           <span>{t('subtitle')}</span>
+          <a className={css.submitLink} href="https://github.com/awesome-dsh-plugin/awesome-dsh-plugin/blob/main/contributing.md" target="_blank" rel="noreferrer">{t('submitPlugin')}</a>
           <span className={css.grow} />
           <Button
             variant="outline"
@@ -1794,13 +2003,25 @@ export function MarketSection(props: MarketSectionProps) {
           <button className={tab === 'discover' ? `${css.tab} ${css.on}` : css.tab} onClick={() => setTab('discover')}>{t('tabDiscover')}</button>
           {themeSnap !== null && <button className={tab === 'themes' ? `${css.tab} ${css.on}` : css.tab} onClick={() => setTab('themes')}>{t('tabThemes')}</button>}
           <button className={tab === 'installed' ? `${css.tab} ${css.on}` : css.tab} onClick={() => { setTab('installed'); refreshInstalled(true) }}>
-            {t('tabInstalled') + (Object.keys(installed).length > 0 ? ' (' + Object.keys(installed).length + ')' : '')}
+            {t('tabInstalled') + (installedOtherCount > 0 ? ' (' + installedOtherCount + ')' : '')}
             {hasUpdates && <StateDot state="error" size={7} className={css.dot} />}
           </button>
-          <button className={tab === 'backup' ? `${css.tab} ${css.on}` : css.tab} onClick={() => setTab('backup')}>{t('tabBackup')}</button>
-          <button className={tab === 'diagnostics' ? `${css.tab} ${css.on}` : css.tab} onClick={() => setTab('diagnostics')}>{t('tabDiagnostics')}</button>
+          <button
+            className={(tab === 'backup' || tab === 'diagnostics') ? `${css.tab} ${css.on}` : css.tab}
+            onClick={() => { if (tab !== 'backup' && tab !== 'diagnostics') setTab('backup') }}
+          >{t('tabAdvanced')}</button>
           <span className={css.grow} />
         </div>
+        {/* Backup & Restore and Diagnostics sit under Advanced rather than as
+            their own top-level tabs — most users never need either, and having
+            five peers up top buried the ones people actually reach for. */}
+        {(tab === 'backup' || tab === 'diagnostics') && (
+          <div className={css.subTabs}>
+            <button className={tab === 'backup' ? `${css.tab} ${css.on}` : css.tab} onClick={() => setTab('backup')}>{t('tabBackup')}</button>
+            <button className={tab === 'diagnostics' ? `${css.tab} ${css.on}` : css.tab} onClick={() => setTab('diagnostics')}>{t('tabDiagnostics')}</button>
+            <span className={css.grow} />
+          </div>
+        )}
         {!envReady && (
           <div className={css.banner}>
             <IconCordisPluginOutline14 size={14} className={css.bannerIcon} />
@@ -1831,29 +2052,15 @@ export function MarketSection(props: MarketSectionProps) {
             </Button>
           </div>
         )}
-        {hotUrls.length > 0 && (
+        {pendingRefreshNames.length > 0 && (
           <div className={css.banner}>
             <IconSparkle16 size={14} className={css.bannerIcon} />
-            <span className={css.grow}><b>{hotUrls.length}</b> {t('hotBanner')}</span>
+            <span className={css.grow}><b>{pendingRefreshNames.length}</b> {t('refreshBanner')}</span>
             <Button
               variant="primary"
               size="sm"
               onClick={() => {
-                sessionStorage.setItem('dshm-toast', JSON.stringify(hotNames))
-                sessionStorage.setItem('dshm-tab', 'installed')
-                location.reload()
-              }}
-            >{t('refresh')}</Button>
-          </div>
-        )}
-        {refreshNames.length > 0 && (
-          <div className={css.banner}>
-            <IconRefreshOutline14 size={14} className={css.bannerIcon} />
-            <span className={css.grow}><b>{refreshNames.length}</b> {t('refreshBanner')}</span>
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => {
+                if (hotNames.length > 0) sessionStorage.setItem('dshm-toast', JSON.stringify(hotNames))
                 sessionStorage.setItem('dshm-tab', 'installed')
                 location.reload()
               }}
@@ -2096,11 +2303,15 @@ export function MarketSection(props: MarketSectionProps) {
             ? <div className={css.empty}>
                 <div>{t('loadFail')}</div>
                 <div className={css.err}>{loadError}</div>
+                <Button variant="outline" size="sm" className={css.retryBtn} onClick={() => { void loadCatalog() }}>
+                  {t('loadRetry')}
+                </Button>
               </div>
             : data === null
               ? <div className={css.loading}><span className={css.logoMark}><MarketLogo size={26} animated /></span>{t('loading')}</div>
               : (
                   <>
+                    <div ref={setCatsSentinel} />
                     <div className={css.stickyHead}>
                     <div className={css.tabSearchRow}>
                       <Input className={css.tabSearch} icon={<IconSearchOutline16 size={14} />} placeholder={t('searchPh')} value={q} onChange={e => setQ(e.target.value)} />
@@ -2118,8 +2329,13 @@ export function MarketSection(props: MarketSectionProps) {
                       <div ref={catsWrapRef} className={visibleCats === null ? `${css.catsWrap} ${css.catsCollapsed}` : css.catsWrap}>
                         {(() => {
                           // Collapsed, the selected category is pulled to the front so it never hides.
-                          const ordered = orderedCategories(categories, cat, catsOpen, visibleCats)
-                          const shown = catsOpen || visibleCats === null ? ordered : ordered.slice(0, Math.max(0, visibleCats - 1))
+                          // Whenever collapsed (default, or auto-collapsed by the sticky
+                          // header going stuck — see catsAutoCollapsedRef above), a stuck
+                          // header uses the one-row budget instead of the two-row one so an
+                          // already-open list that just got pinned shrinks further.
+                          const budget = catsStuck ? visibleCatsOneRow : visibleCats
+                          const ordered = orderedCategories(categories, cat, catsOpen, budget)
+                          const shown = catsOpen || budget === null ? ordered : ordered.slice(0, Math.max(0, budget - 1))
                           return (
                             <>
                               <Pill data-chip="1" active={cat === 'all'} onClick={() => setCat('all')}>{t('all') + ' (' + formatCount(data!.count) + ')'}</Pill>
@@ -2137,7 +2353,12 @@ export function MarketSection(props: MarketSectionProps) {
                                 className={css.catsToggle}
                                 icon={catsOpen ? <IconChevronUpOutline14 size={14} /> : <IconChevronDownOutline14 size={14} />}
                                 aria-label={catsOpen ? t('catsLess') : t('catsMore')}
-                                onClick={() => setCatsOpen(o => !o)}
+                                onClick={() => {
+                                  // An explicit click always wins — don't let the next
+                                  // stuck/unstuck transition second-guess it.
+                                  catsAutoCollapsedRef.current = false
+                                  setCatsOpen(o => !o)
+                                }}
                               />
                             </>
                           )
@@ -2417,10 +2638,13 @@ export function MarketSection(props: MarketSectionProps) {
                                 })}
                           </>
                         )
-                      : Object.keys(displayedInstalled).length === 0
+                      : Object.keys(displayedInstalled).filter(name => name !== selfName).length === 0
                         ? <div className={css.empty}>{t('installedEmpty')}</div>
                         : Object.entries(displayedInstalled)
                             .filter(([name, spec]) => {
+                              // The market manages itself from its own settings
+                              // card, not as a row in this list (#188-adjacent).
+                              if (name === selfName) return false
                               const needle = qInstalled.trim().toLowerCase()
                               if (needle === '') return true
                               if (name.toLowerCase().includes(needle)) return true
@@ -2491,6 +2715,7 @@ export function MarketSection(props: MarketSectionProps) {
                                               title={t('actWhy')}
                                               open={whyOpen === name}
                                               expandable
+                                              expandOnRowClick
                                               onToggle={() => setWhyOpen(whyOpen === name ? null : name)}
                                               className={css.actWhy}
                                             >
@@ -2527,39 +2752,22 @@ export function MarketSection(props: MarketSectionProps) {
                                   )}
                                 </div>
                                 <span className={css.grow} />
-                                {toggleable && (name === 'dsh-market' || name === 'dshmarket'
-                                  ? (
-                                      // The market itself never toggles: show a
-                                      // disabled switch with an explanation instead
-                                      // of bouncing a rejected request off the API.
-                                      <Tooltip label={t('marketNoToggle')} side="top">
-                                        <span>
-                                          <button
-                                            type="button"
-                                            role="switch"
-                                            aria-checked={true}
-                                            aria-label={t('marketNoToggle')}
-                                            className={`${css.switch} ${css.switchOn}`}
-                                            disabled
-                                          >
-                                            <span className={css.switchKnob} />
-                                          </button>
-                                        </span>
-                                      </Tooltip>
-                                    )
-                                  : (
-                                      <button
-                                        type="button"
-                                        role="switch"
-                                        aria-checked={!off}
-                                        aria-label={(off ? t('enable') : t('disable')) + ' ' + name}
-                                        className={off ? css.switch : `${css.switch} ${css.switchOn}`}
-                                        disabled={togglingName !== null || busyUrl !== null || updatingName !== null || removingName !== null}
-                                        onClick={() => doToggle(name, off)}
-                                      >
-                                        <span className={css.switchKnob} />
-                                      </button>
-                                    ))}
+                                {/* The market itself never reaches this row (filtered
+                                    out above — it manages itself from its own settings
+                                    card), so no self-toggle special case is needed here. */}
+                                {toggleable && (
+                                  <button
+                                    type="button"
+                                    role="switch"
+                                    aria-checked={!off}
+                                    aria-label={(off ? t('enable') : t('disable')) + ' ' + name}
+                                    className={off ? css.switch : `${css.switch} ${css.switchOn}`}
+                                    disabled={togglingName !== null || busyUrl !== null || updatingName !== null || removingName !== null}
+                                    onClick={() => doToggle(name, off)}
+                                  >
+                                    <span className={css.switchKnob} />
+                                  </button>
+                                )}
                                 {repoUrl !== null && <a className={css.src} href={repoUrl + '#readme'} target="_blank" rel="noreferrer">{t('readme')}</a>}
                                 {entry !== undefined && entry.deprecated === true && entry.replacement !== undefined && (() => {
                                   const replacement = data?.plugins.find(r => r.name === entry.replacement)
@@ -2636,19 +2844,37 @@ export function MarketSection(props: MarketSectionProps) {
             </>
           )}
         >
-          <ScreenshotStrip plugin={confirming} />
+          {/* The detail dialog has to show at LEAST what the card already
+              does — owner, downloads, stars, published date, category — a
+              "detail" view that shows less than the summary it opened from
+              is backwards. */}
+          <div className={css.byline}>
+            <OwnerAvatar name={confirming.name} owner={confirming.owner || ''} />
+            <span className={css.owner}>
+              {confirming.owner}
+              {typeof confirming.downloads === 'number' && <span className={css.star} title={String(confirming.downloads)}>{' · ↓ ' + formatCount(confirming.downloads)}</span>}
+              {typeof confirming.stars === 'number' && <span className={css.star} title={String(confirming.stars)}>{' · ★ ' + formatCount(confirming.stars)}</span>}
+            </span>
+            <span className={css.grow} />
+            <span className={css.tag}>
+              {(data!.categories[confirming.category] && (data!.categories[confirming.category]![lang] || data!.categories[confirming.category]!.en)) || confirming.category}
+            </span>
+          </div>
+          {confirming.added && <div className={css.metaInline}>{t('published') + ' ' + confirming.added}</div>}
+          <ScreenshotStrip plugin={confirming} onOpen={openLightbox} />
           <DisclosureRow
             icon={<IconCodeOutline16 size={16} />}
             title={t('cmdDetails')}
             open={cmdOpen}
             expandable
+            expandOnRowClick
             onToggle={() => setCmdOpen(o => !o)}
           >
             <div className={css.cmd}>{confirming.install}</div>
           </DisclosureRow>
           {looksTerminal(confirming, lang) && (
             <p className={css.warnLine}>
-              <IconCodeOutline16 size={14} className={css.bannerIcon} />
+              <IconWarningOutline16 size={14} className={css.bannerIcon} />
               {' ' + t('terminalWarn') + ' '}
               <a className={css.src} href={confirming.url + '#readme'} target="_blank" rel="noreferrer">{t('readme')}</a>
             </p>
@@ -2670,6 +2896,14 @@ export function MarketSection(props: MarketSectionProps) {
           })()}
           <p className={css.modalNote}><IconWarningOutline16 size={14} className={css.bannerIcon} />{' ' + t('confirmWarn')}</p>
         </Modal>
+      )}
+      {lightbox !== null && (
+        <ScreenshotLightbox
+          shots={lightbox.shots}
+          startIndex={lightbox.index}
+          onClose={() => setLightbox(null)}
+          t={t}
+        />
       )}
       {removeConfirm !== null && (
         <Modal

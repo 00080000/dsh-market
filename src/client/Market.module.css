@@ -9,9 +9,16 @@
 .head{display:flex;flex-direction:column;gap:12px;padding:4px 4px 12px}
 .title{font-size:16px;line-height:24px;font-weight:500;margin:0}
 .sub{display:flex;align-items:center;gap:8px;font-size:12px;line-height:18px;color:var(--dsw-alias-label-tertiary,#8b93a1);margin:0}
+.submitLink{font-size:11px;line-height:18px;color:var(--dsw-alias-label-tertiary,#8b93a1);text-decoration:none;white-space:nowrap}
+.submitLink:hover{color:var(--dsw-alias-brand-primary,#4f6ef7);text-decoration:underline}
 .tabs{display:flex;gap:2px;border-bottom:1px solid var(--dsw-alias-border-l2,#e5e7eb);align-items:flex-end}
 .tab{border:none;background:none;font:inherit;font-size:13px;color:var(--dsw-alias-label-secondary,#6b7280);padding:7px 12px;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap}
 .tab.on{color:var(--dsw-alias-brand-primary,#4f6ef7);border-bottom-color:var(--dsw-alias-brand-primary,#4f6ef7);font-weight:600}
+/* Second-level tabs under "Advanced" — same button styling as .tabs so the
+   two read as one family, but no full-width bottom border of its own: that
+   border is what visually says "top-level tab row", and having two of them
+   stacked read as two unrelated tab bars rather than a parent/child pair. */
+.subTabs{display:flex;gap:2px;align-items:flex-end;margin:-4px 0 4px}
 .banner{display:flex;align-items:center;gap:8px;background:var(--dsw-alias-bg-layer-2,#fdf3e3);border:1px solid var(--dsw-alias-border-l2,#f3e3c3);border-radius:8px;padding:8px 12px;font-size:12px;margin:0}
 .bannerIcon{flex-shrink:0;color:var(--dsw-alias-label-secondary,#6b7280)}
 .bannerHint{display:inline-flex;color:var(--dsw-alias-label-tertiary,#8b93a1);cursor:help}
@@ -50,9 +57,43 @@
 .catsCollapsed{max-height:62px;overflow:hidden}
 .catsToggle.catsToggle{height:26px;min-height:26px;padding:0 6px;color:var(--dsw-alias-label-secondary,#6b7280)}
 .shots{display:flex;gap:8px;overflow-x:auto;padding:2px 0 6px;margin:0 0 8px;-webkit-overflow-scrolling:touch;scrollbar-width:thin}
-.shot{height:150px;max-width:260px;flex:0 0 auto;object-fit:cover;border-radius:8px;border:1px solid var(--dsw-alias-border-default,#e5e7eb);background:var(--dsw-alias-bg-layer-2,#f3f4f6)}
+/* width, not just max-width — a slot with only a height reservation still
+   collapses to zero width until the image loads, so the strip snaps wider
+   the instant each one arrives instead of holding its place from the start. */
+.shot{width:220px;height:150px;flex:0 0 auto;object-fit:cover;border-radius:8px;border:1px solid var(--dsw-alias-border-default,#e5e7eb);background:var(--dsw-alias-bg-layer-2,#f3f4f6);cursor:pointer}
+.cardShots{display:flex;gap:6px;overflow-x:auto;padding:0 0 2px;margin:0 0 6px;-webkit-overflow-scrolling:touch;scrollbar-width:thin}
+/* min-width, not a fixed width: before the image loads the browser has no
+   intrinsic size to lay out from, so an unconstrained box renders as a
+   sliver just wide enough for its own border — this floors it at something
+   legible while still letting a loaded image settle at its real aspect
+   ratio (which is the whole point of dropping the forced object-fit:cover
+   crop this replaced). */
+.cardShot{height:100px;min-width:80px;width:auto;flex:0 0 auto;border-radius:8px;border:1px solid var(--dsw-alias-border-default,#e5e7eb);background:var(--dsw-alias-bg-layer-2,#f3f4f6);cursor:pointer;display:block}
+/* Full-bleed overlay, not the Modal primitive — Modal is sized chrome
+   (title/description/footer) for making a decision, this is just an image
+   the user came to look at, no decision to make. */
+/* Above the Settings Modal it opens on top of — that Modal's own z-index
+   isn't defined in this package (its CSS module ships with the host app),
+   so this has to out-rank any plausible dialog layer, not just tie and win
+   on DOM order. */
+.lightbox{position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.85);display:flex;align-items:center;justify-content:center;cursor:zoom-out}
+.lightboxImg{max-width:90vw;max-height:85vh;object-fit:contain;border-radius:4px;cursor:default}
+.lightboxClose{position:absolute;top:16px;right:16px;width:36px;height:36px;border-radius:99px;border:none;background:rgba(255,255,255,.12);color:#fff;font-size:22px;line-height:1;display:grid;place-items:center;cursor:pointer}
+.lightboxClose:hover{background:rgba(255,255,255,.22)}
+.lightboxNav{position:absolute;top:50%;transform:translateY(-50%);width:44px;height:44px;border-radius:99px;border:none;background:rgba(255,255,255,.12);color:#fff;display:grid;place-items:center;cursor:pointer}
+.lightboxNav:hover{background:rgba(255,255,255,.22)}
+.lightboxPrev{left:16px}
+.lightboxNext{right:16px}
+.lightboxDots{position:absolute;bottom:20px;left:50%;transform:translateX(-50%);display:flex;gap:8px}
+.lightboxDot{width:7px;height:7px;border-radius:99px;background:rgba(255,255,255,.4);cursor:pointer}
+.lightboxDotOn{background:#fff}
 .cmd{font-size:11px;line-height:18px;background:var(--dsw-alias-bg-layer-2,#f3f4f6);border-radius:6px;padding:8px 10px;font-family:ui-monospace,Menlo,monospace;margin:8px 0 0;word-break:break-all}
-.warnLine{color:var(--dsw-alias-state-warn-primary,#b45309);font-weight:600;font-size:12px;line-height:18px;margin:0;display:flex;align-items:center;gap:4px}
+/* flex-wrap so a long warning + trailing link wraps like normal text — the
+   deprecated-plugin warning below (.depLine) is the same icon+text+link
+   shape and already gets this right; without it the trailing link is the
+   one flex item left with no room once the paragraph text wraps, and gets
+   squeezed into a vertical stack instead of dropping to its own line. */
+.warnLine{color:var(--dsw-alias-state-warn-primary,#b45309);font-weight:600;font-size:12px;line-height:18px;margin:0;display:flex;align-items:center;gap:4px;flex-wrap:wrap}
 .modalNote{font-size:12px;color:var(--dsw-alias-label-tertiary,#8b93a1);line-height:18px;margin:12px 0 0;display:flex;align-items:center;gap:4px}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px}
 .swatches{display:flex;gap:0;height:34px;border-radius:8px;overflow:hidden;border:1px solid var(--dsw-alias-border-l2,#e5e7eb)}
@@ -133,12 +174,13 @@
 .progress code{font-family:ui-monospace,Menlo,monospace;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .empty{color:var(--dsw-alias-label-secondary,#9ca3af);font-size:13px;padding:32px;text-align:center}
 .err{color:var(--dsw-alias-state-error-primary,#dc2626);font-size:12px;margin:8px 0;white-space:pre-wrap;word-break:break-all}
+.retryBtn{margin-top:4px}
 .irow{background:var(--dsw-alias-bg-layer-1,#fff);border:1px solid var(--dsw-alias-border-l2,#e5e7eb);border-radius:12px;padding:12px 14px;display:flex;align-items:center;gap:10px;margin-bottom:8px}
 .irowMissing{filter:grayscale(1);opacity:.5}
 .irow>.src,.irow>.owner{white-space:nowrap;flex-shrink:0}
 .irow button{white-space:nowrap;flex-shrink:0}
 .tabSearchRow{display:flex;padding:0 4px 10px}
-.tabSearch{width:260px}
+.tabSearch{width:100%}
 /* Buttons sharing the row with a description must keep one line (#26, thanks @yanshuai2002) */
 .spec{font-size:11px;color:var(--dsw-alias-label-secondary,#9ca3af);font-family:ui-monospace,Menlo,monospace;overflow-wrap:anywhere;min-width:0}
 .specTag{display:inline-flex;align-items:center;height:16px;padding:0 5px;border-radius:4px;font-size:10px;font-weight:600;white-space:nowrap;flex-shrink:0}
