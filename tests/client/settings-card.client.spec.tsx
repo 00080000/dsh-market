@@ -96,6 +96,21 @@ describe('SettingsCard', () => {
     expect(screen.getByRole('button', { name: t('setSelfUpdate') })).toBeTruthy()
   })
 
+  it('does not explain what the Update button does when there is no Update button', async () => {
+    // "Updating downloads a new version, restart to apply" makes sense next
+    // to an Update button. Already up to date, it read as an instruction for
+    // an action that was not on screen (reported from a real host).
+    stubFetch({ latest: null })
+    await open()
+    await waitFor(() => { expect(screen.getByText(t('setSelfUpToDate'))).toBeTruthy() })
+    expect(screen.queryByText(t('setSelfUpdateHint'))).toBeNull()
+
+    cleanup()
+    stubFetch({ latest: '1.13.0' })
+    await open()
+    await waitFor(() => { expect(screen.getByText(t('setSelfUpdateHint'))).toBeTruthy() })
+  })
+
   it('never removes anything on the first click', async () => {
     await open()
     fireEvent.click(screen.getByRole('button', { name: t('setSelfRemove') }))

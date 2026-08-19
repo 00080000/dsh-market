@@ -271,7 +271,12 @@ export function SettingsCard({ t, onRemoved }: SettingsCardProps): ReactElement 
               : t('setSelfUpToDate'),
           phase === 'updated'
             ? t('setSelfUpdatedHint')
-            : update?.channelSwitch != null ? t('setChannelSwitchHint') : t('setSelfUpdateHint'),
+            : update?.channelSwitch != null
+              ? t('setChannelSwitchHint')
+              // Explains what the Update button does — only worth saying
+              // when that button is actually on screen. Already up to date,
+              // it read as an instruction for an action that wasn't there.
+              : update?.updateAvailable === true ? t('setSelfUpdateHint') : t('setSelfUpToDateHint'),
           phase === 'updated'
             ? null
             : update?.updateAvailable === true
