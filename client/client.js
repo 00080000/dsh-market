@@ -132,6 +132,7 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 			filterSort: "排序字段",
 			filterDir: "排序方向",
 			filterTime: "发布时间范围",
+			sortDownloads: "npm 下载量(近 30 天)",
 			sortStars: "Star 数",
 			sortAdded: "发布时间",
 			sortDesc: "降序",
@@ -444,6 +445,7 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 			filterSort: "Sort field",
 			filterDir: "Order",
 			filterTime: "Released within",
+			sortDownloads: "npm downloads (30d)",
 			sortStars: "Stars",
 			sortAdded: "Release date",
 			sortDesc: "Descending",
@@ -701,6 +703,15 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 			return age >= 0 && age <= days * 864e5;
 		}
 		/**
+		* Whether a catalog entry IS the market itself. The catalog still carries
+		* it — nothing about the data changes, and the Installed tab still shows it
+		* — this is purely "a store has no reason to sell itself to someone already
+		* standing in it."
+		*/
+		function isMarketItself(plugin) {
+			return plugin.name === "dsh-market" || plugin.npm === "dshmarket";
+		}
+		/**
 		* The discover list: category filter, then the published-within window, then
 		* search across name / owner / localized description, then the selected sort.
 		* Pure — the section renders exactly this.
@@ -708,11 +719,25 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 		function visiblePlugins(plugins, options) {
 			const query = options.query.trim().toLowerCase();
 			const list = plugins.filter((p) => {
+				if (isMarketItself(p)) return false;
 				if (options.category !== "all" && p.category !== options.category) return false;
 				if (options.sinceDays !== void 0 && !withinDays(p.added, options.sinceDays)) return false;
 				if (query === "") return true;
 				const desc = p.description && (p.description[options.lang] || p.description.en) || "";
 				return p.name.toLowerCase().includes(query) || p.owner.toLowerCase().includes(query) || desc.toLowerCase().includes(query);
+			});
+			const hasDownloads = (p) => typeof p.downloads === "number";
+			if (options.sort === "downloads-desc") return [...list].sort((a, b) => {
+				if (hasDownloads(a) && hasDownloads(b)) return b.downloads - a.downloads;
+				if (hasDownloads(a)) return -1;
+				if (hasDownloads(b)) return 1;
+				return (b.stars ?? -1) - (a.stars ?? -1);
+			});
+			if (options.sort === "downloads-asc") return [...list].sort((a, b) => {
+				if (hasDownloads(a) && hasDownloads(b)) return a.downloads - b.downloads;
+				if (hasDownloads(a)) return -1;
+				if (hasDownloads(b)) return 1;
+				return (a.stars ?? -1) - (b.stars ?? -1);
 			});
 			if (options.sort === "stars-desc") return [...list].sort((a, b) => (b.stars ?? -1) - (a.stars ?? -1));
 			if (options.sort === "stars-asc") return [...list].sort((a, b) => (a.stars ?? -1) - (b.stars ?? -1));
@@ -1068,6 +1093,20 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 			const leaf = sub.slice(sub.lastIndexOf("/") + 1);
 			return leaf === "" ? name.slice(0, hash) : leaf;
 		}
+		/**
+		* Compact display for a count that can run into the tens of thousands
+		* (npm downloads, star counts): "11.9k" instead of "11862". Reported —
+		* the raw number made the card byline visibly cramped once downloads was
+		* added alongside stars.
+		*
+		* Below 1000 the exact number is shown; a small count is exactly the case
+		* where the precision matters and abbreviating it buys nothing.
+		*/
+		function formatCount(n) {
+			if (!Number.isFinite(n) || n < 1e3) return String(n);
+			const k = Math.round(n / 100) / 10;
+			return `${Number.isInteger(k) ? k.toFixed(0) : k.toFixed(1)}k`;
+		}
 		//#endregion
 		//#region src/client/InstallToast.tsx
 		/**
@@ -1096,7 +1135,7 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 		}
 		//#endregion
 		//#region \0dsh-css:src/client/Market.module.css.mjs
-		const css = ".NUvjna_root{min-width:0;height:100%;color:var(--dsw-alias-label-primary,#1f2328);flex-direction:column;display:flex;position:relative}.NUvjna_head{flex-direction:column;gap:12px;padding:4px 4px 12px;display:flex}.NUvjna_title{margin:0;font-size:16px;font-weight:500;line-height:24px}.NUvjna_sub{color:var(--dsw-alias-label-tertiary,#8b93a1);align-items:center;gap:8px;margin:0;font-size:14px;line-height:22px;display:flex}.NUvjna_tabs{border-bottom:1px solid var(--dsw-alias-border-l2,#e5e7eb);align-items:flex-end;gap:2px;display:flex}.NUvjna_tab{font:inherit;color:var(--dsw-alias-label-secondary,#6b7280);cursor:pointer;white-space:nowrap;background:0 0;border:none;border-bottom:2px solid #0000;padding:7px 12px;font-size:13px}.NUvjna_tab.NUvjna_on{color:var(--dsw-alias-brand-primary,#4f6ef7);border-bottom-color:var(--dsw-alias-brand-primary,#4f6ef7);font-weight:600}.NUvjna_banner{background:var(--dsw-alias-bg-layer-2,#fdf3e3);border:1px solid var(--dsw-alias-border-l2,#f3e3c3);border-radius:8px;align-items:center;gap:8px;margin:0;padding:8px 12px;font-size:12px;display:flex}.NUvjna_bannerIcon{color:var(--dsw-alias-label-secondary,#6b7280);flex-shrink:0}.NUvjna_bannerHint{color:var(--dsw-alias-label-tertiary,#8b93a1);cursor:help;display:inline-flex}.NUvjna_body{flex:1;padding:12px 4px 24px;overflow-x:hidden;overflow-y:auto}.NUvjna_cats{z-index:5;background:var(--dsw-alias-bg-layer-2,#f7f8fa);margin:0 -4px 2px;padding:12px 4px 4px;position:sticky;top:-1px}.NUvjna_cats:before{content:\"\";background:inherit;pointer-events:none;height:14px;position:absolute;bottom:100%;left:0;right:0}.NUvjna_catsRow{align-items:flex-start;gap:8px;display:flex;position:relative}.NUvjna_star{color:var(--dsw-alias-label-secondary,#9ca3af);font-size:11px}.NUvjna_top{z-index:20;display:inline-flex;position:absolute;bottom:18px;right:18px}.NUvjna_topBtn{border-radius:99px;width:38px;height:38px;padding:0}.NUvjna_tag{border:1px solid var(--dsw-alias-border-l3,#d9dde3);color:var(--dsw-alias-label-secondary,#6b7280);border-radius:4px;flex-shrink:0;padding:1px 6px;font-size:11px;line-height:16px}.NUvjna_okState{color:var(--dsw-alias-state-success-primary,#16a34a);white-space:nowrap;font-size:12px;font-weight:600}.NUvjna_catsWrap{flex-wrap:wrap;flex:1;align-items:center;gap:6px;min-width:0;display:flex}.NUvjna_catsCollapsed{max-height:62px;overflow:hidden}.NUvjna_catsToggle.NUvjna_catsToggle{height:26px;min-height:26px;color:var(--dsw-alias-label-secondary,#6b7280);padding:0 6px}.NUvjna_shots{-webkit-overflow-scrolling:touch;scrollbar-width:thin;gap:8px;margin:0 0 8px;padding:2px 0 6px;display:flex;overflow-x:auto}.NUvjna_shot{object-fit:cover;border:1px solid var(--dsw-alias-border-default,#e5e7eb);background:var(--dsw-alias-bg-layer-2,#f3f4f6);border-radius:8px;flex:none;max-width:260px;height:150px}.NUvjna_cmd{background:var(--dsw-alias-bg-layer-2,#f3f4f6);word-break:break-all;border-radius:6px;margin:8px 0 0;padding:8px 10px;font-family:ui-monospace,Menlo,monospace;font-size:11px;line-height:18px}.NUvjna_warnLine{color:var(--dsw-alias-state-warn-primary,#b45309);align-items:center;gap:4px;margin:0;font-size:12px;font-weight:600;line-height:18px;display:flex}.NUvjna_modalNote{color:var(--dsw-alias-label-tertiary,#8b93a1);align-items:center;gap:4px;margin:12px 0 0;font-size:12px;line-height:18px;display:flex}.NUvjna_grid{grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;display:grid}.NUvjna_swatches{border:1px solid var(--dsw-alias-border-l2,#e5e7eb);border-radius:8px;gap:0;height:34px;display:flex;overflow:hidden}.NUvjna_themesGrid{margin-bottom:12px}.NUvjna_swatches i{flex:1}.NUvjna_card{background:var(--dsw-alias-bg-layer-1,#fff);border:1px solid var(--dsw-alias-border-l2,#e5e7eb);border-radius:12px;flex-direction:column;gap:12px;padding:12px 14px;display:flex}.NUvjna_row1{align-items:center;gap:10px;min-width:0;display:flex}.NUvjna_srcBtn.NUvjna_srcBtn{color:var(--dsw-alias-label-secondary,#9ca3af);flex-shrink:0;align-self:flex-start;font-weight:400}.NUvjna_av{color:#fff;object-fit:cover;background:var(--dsw-alias-bg-layer-2,#f3f4f6);border-radius:50%;flex-shrink:0;place-items:center;width:16px;height:16px;font-size:9px;font-weight:700;display:grid}.NUvjna_nm{text-overflow:ellipsis;white-space:nowrap;font-size:15px;font-weight:600;line-height:22px;overflow:hidden}.NUvjna_byline{align-items:center;gap:6px;min-width:0;margin-top:2px;display:flex}.NUvjna_owner{color:var(--dsw-alias-label-secondary,#9ca3af);font-size:11px}.NUvjna_desc{color:var(--dsw-alias-label-tertiary,#8b93a1);min-height:36px;margin:0;font-size:12px;line-height:18px}.NUvjna_foot{align-items:center;gap:8px;margin-top:auto;display:flex}.NUvjna_grow{flex:1}.NUvjna_titleRow{align-items:center;gap:10px;display:flex}.NUvjna_version{color:var(--dsw-alias-label-tertiary,#8b93a1);font-variant-numeric:tabular-nums;flex-shrink:0;font-size:12px;line-height:20px}.NUvjna_descTight{min-height:0}.NUvjna_src{color:var(--dsw-alias-label-secondary,#9ca3af);font-size:11px;text-decoration:none}.NUvjna_src:hover{color:var(--dsw-alias-brand-primary,#4f6ef7)}.NUvjna_dot{vertical-align:2px;margin-left:5px}.NUvjna_act{flex-wrap:wrap;align-items:center;gap:6px;margin-top:6px;font-size:11px;display:flex}.NUvjna_actLive{color:var(--dsw-alias-state-success-primary,#16a34a);align-items:center;gap:4px;font-weight:600;display:inline-flex}.NUvjna_actWarn{color:var(--dsw-alias-state-warn-primary,#b45309);align-items:center;gap:4px;font-weight:600;display:inline-flex}.NUvjna_actBroken{color:var(--dsw-alias-state-error-primary,#dc2626);align-items:center;gap:4px;font-weight:600;display:inline-flex}.NUvjna_actWhy{color:var(--dsw-alias-label-secondary,#6b7280);margin-top:2px}.NUvjna_loading{color:var(--dsw-alias-label-secondary,#9ca3af);flex-direction:column;align-items:center;gap:12px;padding:48px;font-size:13px;display:flex}.NUvjna_spin{color:var(--dsw-alias-brand-primary,#4f6ef7);flex-shrink:0;animation:.8s linear infinite NUvjna_sp;display:inline-flex}.NUvjna_logoMark{color:var(--dsw-alias-brand-primary,#4f6ef7);flex-shrink:0;display:inline-flex}.NUvjna_logoPlug{transform-box:fill-box;transform-origin:50%;animation:1.5s cubic-bezier(.4,0,.2,1) infinite NUvjna_dshmPlug}@keyframes NUvjna_dshmPlug{0%,12%{transform:rotate(9deg)}45%,62%{transform:translate(-1.28px,1.27px)rotate(0)}95%,to{transform:rotate(9deg)}}@media (prefers-reduced-motion:reduce){.NUvjna_logoPlug,.NUvjna_spin{animation:1.5s ease-in-out infinite NUvjna_dshmPlugFade}}@keyframes NUvjna_dshmPlugFade{0%,to{opacity:1}50%{opacity:.35}}@keyframes NUvjna_sp{to{transform:rotate(360deg)}}.NUvjna_progress{background:var(--dsw-alias-bg-layer-2,#f3f4f6);border:1px solid var(--dsw-alias-border-l2,#e5e7eb);color:var(--dsw-alias-label-secondary,#6b7280);border-radius:8px;flex-wrap:wrap;align-items:center;gap:9px;margin:0;padding:8px 12px;font-size:12px;display:flex}.NUvjna_bar{background:var(--dsw-alias-border-l1,#e5e7eb);border-radius:99px;width:100%;height:4px;overflow:hidden}.NUvjna_barFill{background:var(--dsw-alias-brand-primary,#4f6ef7);border-radius:99px;height:100%;transition:width .6s}.NUvjna_barWave{width:30%;animation:1.2s ease-in-out infinite NUvjna_dshmSlide}@keyframes NUvjna_dshmSlide{0%{margin-left:-30%}to{margin-left:100%}}.NUvjna_irow .NUvjna_progress{margin-top:8px}.NUvjna_progress code{text-overflow:ellipsis;white-space:nowrap;font-family:ui-monospace,Menlo,monospace;font-size:11px;overflow:hidden}.NUvjna_empty{color:var(--dsw-alias-label-secondary,#9ca3af);text-align:center;padding:32px;font-size:13px}.NUvjna_err{color:var(--dsw-alias-state-error-primary,#dc2626);white-space:pre-wrap;word-break:break-all;margin:8px 0;font-size:12px}.NUvjna_irow{background:var(--dsw-alias-bg-layer-1,#fff);border:1px solid var(--dsw-alias-border-l2,#e5e7eb);border-radius:12px;align-items:center;gap:10px;margin-bottom:8px;padding:12px 14px;display:flex}.NUvjna_irowMissing{filter:grayscale();opacity:.5}.NUvjna_irow>.NUvjna_src,.NUvjna_irow>.NUvjna_owner,.NUvjna_irow button{white-space:nowrap;flex-shrink:0}.NUvjna_tabSearchRow{padding:0 4px 10px;display:flex}.NUvjna_tabSearch{width:260px}.NUvjna_spec{color:var(--dsw-alias-label-secondary,#9ca3af);overflow-wrap:anywhere;min-width:0;font-family:ui-monospace,Menlo,monospace;font-size:11px}.NUvjna_specTag{white-space:nowrap;border-radius:4px;flex-shrink:0;align-items:center;height:16px;padding:0 5px;font-size:10px;font-weight:600;display:inline-flex}.NUvjna_specTagGit{color:#0b7285;background:#12a3c41f}.NUvjna_specTagFile{color:#b07d1b;background:#f0b42924}.NUvjna_backupCheckList .NUvjna_grow{white-space:nowrap;text-overflow:ellipsis;flex:70%;min-width:0;overflow:hidden}.NUvjna_backupCheckList .NUvjna_spec{text-align:right;white-space:nowrap;text-overflow:ellipsis;flex:0 30%;max-width:30%;overflow:hidden}.NUvjna_staleAction{margin-top:8px}.NUvjna_pct{color:var(--dsw-alias-label-secondary,#6b7280);flex-shrink:0;font-size:11px;font-weight:600}.NUvjna_pager{flex-wrap:wrap;justify-content:space-between;align-items:center;gap:12px;margin:16px 0 4px;display:flex}.NUvjna_pagerPages{flex-wrap:wrap;flex:1;justify-content:center;align-items:center;gap:6px;min-width:0;display:flex}.NUvjna_pageEllipsis{color:var(--dsw-alias-label-secondary,#9ca3af);padding:0 2px;font-size:12px}.NUvjna_pageInfo{color:var(--dsw-alias-label-secondary,#6b7280);white-space:nowrap;font-size:12px}.NUvjna_depBadge{border:1px solid var(--dsw-alias-state-warn-primary,#b45309);color:var(--dsw-alias-state-warn-primary,#b45309);white-space:nowrap;border-radius:4px;flex-shrink:0;margin-left:6px;padding:1px 6px;font-size:11px;font-weight:600;line-height:16px}.NUvjna_deprecate{color:var(--dsw-alias-state-warn-primary,#b45309);background:var(--dsw-alias-bg-layer-2,#fdf3e3);border:1px solid var(--dsw-alias-border-l2,#f3e3c3);border-radius:8px;margin:0;padding:8px 10px;font-size:12px;line-height:18px}.NUvjna_deprecate a{color:var(--dsw-alias-state-warn-primary,#b45309);text-decoration:underline}.NUvjna_deprecate .NUvjna_src{margin-left:8px}.NUvjna_depLine{flex-wrap:wrap;align-items:center;gap:8px;display:flex}.NUvjna_switch{border:1px solid var(--dsw-alias-border-l2,#d9dde3);background:var(--dsw-alias-bg-layer-2,#e5e7eb);cursor:pointer;border-radius:99px;flex-shrink:0;width:38px;height:22px;padding:0;transition:background .15s,border-color .15s;position:relative}.NUvjna_switchOn{background:var(--dsw-alias-state-success-primary,#16a34a);border-color:var(--dsw-alias-state-success-primary,#16a34a)}.NUvjna_switchMixed{background:var(--dsw-alias-state-warn-primary,#b45309);border-color:var(--dsw-alias-state-warn-primary,#b45309)}.NUvjna_switchKnob{background:#fff;border-radius:99px;width:16px;height:16px;transition:left .15s;position:absolute;top:2px;left:2px;box-shadow:0 1px 2px #00000040}.NUvjna_switchOn .NUvjna_switchKnob,.NUvjna_switchMixed .NUvjna_switchKnob{left:18px}.NUvjna_switch:disabled{opacity:.5;cursor:default}.NUvjna_viewBar{border:1px solid var(--dsw-alias-border-l2,#e5e7eb);border-radius:8px;align-items:center;gap:2px;width:fit-content;margin-bottom:12px;padding:2px;display:flex}.NUvjna_viewBtn{font:inherit;color:var(--dsw-alias-label-secondary,#6b7280);cursor:pointer;white-space:nowrap;background:0 0;border:none;border-radius:6px;padding:4px 10px;font-size:12px;line-height:18px}.NUvjna_viewBtn:hover{color:var(--dsw-alias-brand-primary,#4f6ef7)}.NUvjna_viewOn{background:var(--dsw-alias-bg-layer-2,#eef0f4);color:var(--dsw-alias-label-primary,#1f2328);font-weight:600}.NUvjna_groupRow{background:var(--dsw-alias-bg-layer-1,#fff);border:1px solid var(--dsw-alias-border-l2,#e5e7eb);border-radius:12px;margin-bottom:10px;padding:12px 14px}.NUvjna_groupHead{align-items:center;gap:10px;min-width:0;display:flex}.NUvjna_groupName{text-overflow:ellipsis;white-space:nowrap;font-size:13px;font-weight:600;line-height:20px;overflow:hidden}.NUvjna_groupActions{flex-shrink:0;align-items:center;gap:6px;display:flex}.NUvjna_groupMembers{flex-direction:column;gap:6px;margin-top:10px;display:flex}.NUvjna_groupMember{background:var(--dsw-alias-bg-layer-2,#f7f8fa);border-radius:8px;align-items:center;gap:8px;padding:6px 8px;font-size:12px;line-height:18px;display:flex}.NUvjna_groupMember .NUvjna_nm{flex:1;min-width:0;font-size:12px}.NUvjna_groupAddPanel{border-top:1px dashed var(--dsw-alias-border-l2,#e5e7eb);flex-direction:column;gap:6px;margin-top:10px;padding-top:10px;display:flex}.NUvjna_groupCreate{align-items:center;gap:8px;margin-bottom:10px;display:flex}.NUvjna_inlineInput{flex:1;min-width:120px}.NUvjna_assignRow{flex-wrap:wrap;align-items:center;gap:8px;display:flex}.NUvjna_assignSelect{border:1px solid var(--dsw-alias-border-l2,#e5e7eb);background:var(--dsw-alias-bg-layer-1,#fff);color:var(--dsw-alias-label-primary,#1f2328);font:inherit;border-radius:6px;padding:3px 6px;font-size:12px;line-height:18px}.NUvjna_groupHint{color:var(--dsw-alias-label-tertiary,#8b93a1);font-size:11px}.NUvjna_sectAction{color:var(--dsw-alias-label-secondary,#6b7280);align-items:center;gap:8px;margin:14px 2px 8px;font-size:12px;font-weight:600;display:flex}.NUvjna_backupGrid{grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;display:grid}.NUvjna_backupCard{background:var(--dsw-alias-bg-layer-1,#fff);border:1px solid var(--dsw-alias-border-l2,#e5e7eb);border-radius:12px;flex-direction:column;gap:10px;padding:16px;display:flex}.NUvjna_backupCard h3{margin:0;font-size:14px}.NUvjna_backupCard p{color:var(--dsw-alias-label-secondary,#6b7280);margin:0;font-size:12px;line-height:18px}.NUvjna_backupActions{flex-wrap:wrap;gap:8px;display:flex;position:relative}.NUvjna_hiddenFile{opacity:0;pointer-events:none;width:1px;height:1px;position:absolute}.NUvjna_backupInput{box-sizing:border-box;width:100%}.NUvjna_backupCheck{cursor:pointer;align-items:center;gap:6px;font-size:12px;display:flex}.NUvjna_backupWarn{margin:0;font-size:12px;line-height:18px;color:var(--dsw-alias-state-warn-primary,#b45309)!important}.NUvjna_backupMessage{color:var(--dsw-alias-label-secondary,#6b7280);grid-column:1/-1;font-size:12px}.NUvjna_backupCheckList{flex-direction:column;gap:6px;max-height:260px;margin:10px 0 4px;padding-right:4px;display:flex;overflow-y:auto}.NUvjna_backupCheckList .NUvjna_backupCheck{justify-content:space-between;gap:8px}.NUvjna_diagPage{flex-direction:column;gap:12px;height:100%;min-height:0;display:flex;overflow-y:auto}.NUvjna_diagSummary{background:var(--dsw-alias-bg-layer-1,#fff);border:1px solid var(--dsw-alias-border-l2,#e5e7eb);border-radius:12px;flex-wrap:wrap;align-items:center;gap:12px;padding:10px 14px;font-size:12px;display:flex}.NUvjna_diagSummaryItem{color:var(--dsw-alias-label-secondary,#6b7280);white-space:nowrap;align-items:center;gap:6px;display:inline-flex}.NUvjna_diagSummaryMeta{color:var(--dsw-alias-label-tertiary,#9ca3af);text-overflow:ellipsis;white-space:nowrap;max-width:320px;font-family:ui-monospace,Menlo,monospace;font-size:11px;overflow:hidden}.NUvjna_diagSection{background:var(--dsw-alias-bg-layer-1,#fff);border:1px solid var(--dsw-alias-border-l2,#e5e7eb);border-radius:12px;flex-direction:column;gap:8px;padding:12px 14px;display:flex}.NUvjna_diagSection h3{color:var(--dsw-alias-label-primary,#1f2328);margin:0;font-size:13px;font-weight:600}.NUvjna_diagCount{color:var(--dsw-alias-label-tertiary,#9ca3af);font-size:11px;font-weight:400}.NUvjna_diagEmpty{color:var(--dsw-alias-label-secondary,#9ca3af);padding:8px 0;font-size:12px}.NUvjna_diagBundle{border-top:1px solid var(--dsw-alias-border-l2,#f0f1f3);flex-direction:column;gap:6px;padding-top:8px;display:flex}.NUvjna_diagBundle:first-of-type{border-top:none;padding-top:0}.NUvjna_diagRow{flex-wrap:wrap;align-items:center;gap:8px;min-width:0;font-size:12px;line-height:18px;display:flex}.NUvjna_diagMeta{align-items:baseline;gap:8px;min-width:0;font-size:12px;display:flex}.NUvjna_diagKey{color:var(--dsw-alias-label-tertiary,#9ca3af);flex-shrink:0;min-width:64px;font-size:11px}.NUvjna_diagVal{color:var(--dsw-alias-label-primary,#1f2328);overflow-wrap:anywhere;min-width:0;font-family:ui-monospace,Menlo,monospace;font-size:12px;font-weight:500}.NUvjna_diagIndex{background:var(--dsw-alias-bg-layer-2,#f3f4f6);min-width:18px;height:18px;color:var(--dsw-alias-label-secondary,#6b7280);border-radius:9px;flex-shrink:0;justify-content:center;align-items:center;font-size:11px;font-weight:600;display:inline-flex}.NUvjna_diagArrow{color:var(--dsw-alias-label-tertiary,#9ca3af);flex-shrink:0;font-size:12px}.NUvjna_diagBadgeOfficial{background:var(--dsw-alias-brand-primary,#4f6ef7);color:#fff;border-radius:9px;flex-shrink:0;align-items:center;height:18px;padding:0 8px;font-size:11px;font-weight:600;display:inline-flex}.NUvjna_diagBadgeCommunity{background:var(--dsw-alias-bg-layer-2,#f3f4f6);height:18px;color:var(--dsw-alias-label-secondary,#6b7280);border-radius:9px;flex-shrink:0;align-items:center;padding:0 8px;font-size:11px;display:inline-flex}.NUvjna_diagBadgeShadow{background:var(--dsw-alias-state-error-primary,#dc2626);color:#fff;border-radius:9px;flex-shrink:0;align-items:center;height:18px;padding:0 8px;font-size:11px;font-weight:600;display:inline-flex}.NUvjna_diagList{flex-direction:column;gap:6px;display:flex}.NUvjna_sectionOverview{color:var(--dsw-alias-label-tertiary,#8b93a1);text-overflow:ellipsis;white-space:nowrap;max-width:100%;padding:2px 0 6px;font-size:12px;line-height:18px;overflow:hidden}.NUvjna_diagAlert{color:var(--dsw-alias-state-warn-primary,#b45309)}.NUvjna_ovRow{background:var(--dsw-alias-bg-layer-2,#f7f8fa);border-radius:8px;flex-wrap:wrap;align-items:center;gap:8px;min-width:0;padding:6px 10px;font-size:12px;line-height:18px;display:flex}.NUvjna_ovArrow{color:var(--dsw-alias-label-tertiary,#9ca3af);flex-shrink:0;font-size:12px}.NUvjna_ovByTag{background:var(--dsw-alias-brand-primary,#4f6ef7);color:#fff;text-overflow:ellipsis;white-space:nowrap;border-radius:9px;flex-shrink:0;align-items:center;max-width:260px;height:18px;padding:0 8px;font-size:11px;font-weight:600;display:inline-flex;overflow:hidden}.NUvjna_ovFrom{color:var(--dsw-alias-label-secondary,#6b7280);text-overflow:ellipsis;white-space:nowrap;min-width:0;font-size:12px;overflow:hidden}.NUvjna_orphRow{background:var(--dsw-alias-bg-layer-2,#f7f8fa);border-radius:8px;flex-wrap:wrap;align-items:center;gap:8px;min-width:0;padding:6px 10px;font-size:12px;line-height:18px;display:flex}.NUvjna_orphBadge{background:var(--dsw-alias-state-warn-primary,#b45309);color:#fff;white-space:nowrap;border-radius:9px;flex-shrink:0;align-items:center;height:18px;padding:0 8px;font-size:11px;font-weight:600;display:inline-flex}.NUvjna_dragHandle{width:20px;height:20px;color:var(--dsw-alias-label-tertiary,#9ca3af);cursor:grab;-webkit-user-select:none;user-select:none;flex-shrink:0;justify-content:center;align-items:center;font-size:12px;line-height:20px;display:inline-flex}.NUvjna_dragOver{outline:2px dashed var(--dsw-alias-brand-primary,#4f6ef7);outline-offset:2px;background:var(--dsw-alias-bg-layer-2,#f0f2f8);border-radius:8px}.NUvjna_dragging{opacity:.45;background:var(--dsw-alias-bg-layer-2,#f3f4f6)}.NUvjna_collapseHead{font:inherit;color:var(--dsw-alias-label-primary,#1f2328);cursor:pointer;text-align:left;background:0 0;border:none;align-items:center;gap:8px;width:100%;padding:0;font-size:13px;font-weight:600;display:flex}.NUvjna_collapseIcon{color:var(--dsw-alias-label-secondary,#6b7280);flex-shrink:0;display:inline-flex}.NUvjna_collapseTitle{flex:1;min-width:0}.NUvjna_collapseBody{border-top:1px solid var(--dsw-alias-border-l2,#f0f1f3);overflow-wrap:anywhere;flex-direction:column;gap:10px;min-width:0;margin-top:8px;padding-top:10px;display:flex}.NUvjna_panelNote{color:var(--dsw-alias-label-secondary,#6b7280);margin:0;font-size:12px;line-height:18px}.NUvjna_fixFallback{flex-direction:column;gap:6px;margin:8px 0;display:flex}.NUvjna_fixFallbackText{box-sizing:border-box;width:100%;color:var(--dsw-alias-label-primary,#1f2328);background:var(--dsw-alias-bg-layer-2,#f3f4f6);border:1px solid var(--dsw-alias-border-l2,#e5e7eb);resize:vertical;white-space:pre-wrap;word-break:break-all;border-radius:6px;padding:8px 10px;font-family:ui-monospace,Menlo,monospace;font-size:11px;line-height:16px}.NUvjna_setCard{border:1px solid var(--dsw-alias-border-l2,#e5e7eb);background:var(--dsw-alias-bg-layer-3,#fff);border-radius:12px;list-style:none;transition:border-color .16s,background .16s}.NUvjna_setCard:hover{border-color:var(--dsw-alias-label-dimmed,#c8ccd4)}.NUvjna_setCardOpen{background:var(--dsw-alias-bg-layer-2,#f7f8fa);border-color:var(--dsw-alias-label-dimmed,#c8ccd4)}.NUvjna_setHeader{-webkit-appearance:none;appearance:none;width:100%;font:inherit;color:inherit;text-align:left;cursor:pointer;background:0 0;border:0;border-radius:12px;align-items:center;gap:12px;padding:14px 16px;display:flex}.NUvjna_setHeader:focus-visible{outline:2px solid var(--dsw-alias-brand-primary,#4f6ef7);outline-offset:-2px}.NUvjna_setHeadText{flex-direction:column;flex:1;gap:4px;min-width:0;display:flex}.NUvjna_setName{color:var(--dsw-alias-label-primary,#1f2328);font-size:15px;font-weight:600;line-height:1.4}.NUvjna_setDesc{color:var(--dsw-alias-label-tertiary,#8b93a1);font-size:13px;line-height:1.5}.NUvjna_setChevron{color:var(--dsw-alias-label-tertiary,#8b93a1);flex:none;transition:transform .16s;display:inline-flex}.NUvjna_setChevronOpen{transform:rotate(180deg)}.NUvjna_setBody{border-top:1px solid var(--dsw-alias-border-l2,#e5e7eb);margin:0 16px;padding-bottom:8px}.NUvjna_setRow{align-items:center;gap:12px;padding:12px 0;display:flex}.NUvjna_setRow+.NUvjna_setRow{border-top:1px solid var(--dsw-alias-border-l2,#e5e7eb)}.NUvjna_setLabelBox{flex-direction:column;flex:1;gap:3px;min-width:0;display:flex}.NUvjna_setLabel{font-size:13px;line-height:20px}.NUvjna_setHint{color:var(--dsw-alias-label-tertiary,#8b93a1);font-size:12px;line-height:18px}.NUvjna_setConfirm{border-top:1px solid var(--dsw-alias-border-l2,#e5e7eb);flex-direction:column;gap:8px;padding:12px 0 4px;display:flex}.NUvjna_setCheck{cursor:pointer;align-items:center;gap:8px;font-size:12px;line-height:18px;display:flex}.NUvjna_setActions{border-top:1px solid var(--dsw-alias-border-l2,#e5e7eb);justify-content:flex-end;align-items:center;gap:8px;padding:12px 0 4px;display:flex}.NUvjna_setDanger{color:var(--dsw-alias-state-error-primary,#dc2626)}.NUvjna_setSeg{border:1px solid var(--dsw-alias-border-l2,#e5e7eb);border-radius:8px;flex-shrink:0;gap:2px;padding:2px;display:inline-flex}.NUvjna_setSegBtn{font:inherit;color:var(--dsw-alias-label-secondary,#6b7280);cursor:pointer;background:0 0;border:none;border-radius:6px;padding:3px 10px;font-size:12px;line-height:18px}.NUvjna_setSegBtn:disabled{cursor:default;opacity:.5}.NUvjna_setSegOn{background:var(--dsw-alias-bg-layer-2,#eef0f4);color:var(--dsw-alias-label-primary,#1f2328);font-weight:600}.NUvjna_setBetaTag{background:var(--dsw-alias-bg-module-platform,#eef0f4);color:var(--dsw-alias-label-secondary,#6b7280);border-radius:9px;margin-left:6px;padding:0 6px;font-size:11px;font-weight:600;line-height:17px}";
+		const css = ".SOz1_a_root{min-width:0;height:100%;color:var(--dsw-alias-label-primary,#1f2328);flex-direction:column;display:flex;position:relative}.SOz1_a_head{flex-direction:column;gap:12px;padding:4px 4px 12px;display:flex}.SOz1_a_title{margin:0;font-size:16px;font-weight:500;line-height:24px}.SOz1_a_sub{color:var(--dsw-alias-label-tertiary,#8b93a1);align-items:center;gap:8px;margin:0;font-size:12px;line-height:18px;display:flex}.SOz1_a_tabs{border-bottom:1px solid var(--dsw-alias-border-l2,#e5e7eb);align-items:flex-end;gap:2px;display:flex}.SOz1_a_tab{font:inherit;color:var(--dsw-alias-label-secondary,#6b7280);cursor:pointer;white-space:nowrap;background:0 0;border:none;border-bottom:2px solid #0000;padding:7px 12px;font-size:13px}.SOz1_a_tab.SOz1_a_on{color:var(--dsw-alias-brand-primary,#4f6ef7);border-bottom-color:var(--dsw-alias-brand-primary,#4f6ef7);font-weight:600}.SOz1_a_banner{background:var(--dsw-alias-bg-layer-2,#fdf3e3);border:1px solid var(--dsw-alias-border-l2,#f3e3c3);border-radius:8px;align-items:center;gap:8px;margin:0;padding:8px 12px;font-size:12px;display:flex}.SOz1_a_bannerIcon{color:var(--dsw-alias-label-secondary,#6b7280);flex-shrink:0}.SOz1_a_bannerHint{color:var(--dsw-alias-label-tertiary,#8b93a1);cursor:help;display:inline-flex}.SOz1_a_body{flex:1;padding:12px 4px 24px;overflow-x:hidden;overflow-y:auto}.SOz1_a_stickyHead{z-index:5;background:var(--dsw-alias-bg-layer-2,#f7f8fa);position:sticky;top:-1px}.SOz1_a_stickyHead:before{content:\"\";background:inherit;pointer-events:none;height:14px;position:absolute;bottom:100%;left:0;right:0}.SOz1_a_cats{margin:0 -4px 2px;padding:12px 4px 4px}.SOz1_a_catsRow{align-items:flex-start;gap:8px;display:flex;position:relative}.SOz1_a_star{color:var(--dsw-alias-label-secondary,#9ca3af);font-size:11px}.SOz1_a_top{z-index:20;display:inline-flex;position:absolute;bottom:18px;right:18px}.SOz1_a_topBtn{border-radius:99px;width:38px;height:38px;padding:0}.SOz1_a_tag{border:1px solid var(--dsw-alias-border-l3,#d9dde3);color:var(--dsw-alias-label-secondary,#6b7280);border-radius:4px;flex-shrink:0;padding:1px 6px;font-size:11px;line-height:16px}.SOz1_a_okState{color:var(--dsw-alias-state-success-primary,#16a34a);white-space:nowrap;font-size:12px;font-weight:600}.SOz1_a_catsWrap{flex-wrap:wrap;flex:1;align-items:center;gap:6px;min-width:0;display:flex}.SOz1_a_catsCollapsed{max-height:62px;overflow:hidden}.SOz1_a_catsToggle.SOz1_a_catsToggle{height:26px;min-height:26px;color:var(--dsw-alias-label-secondary,#6b7280);padding:0 6px}.SOz1_a_shots{-webkit-overflow-scrolling:touch;scrollbar-width:thin;gap:8px;margin:0 0 8px;padding:2px 0 6px;display:flex;overflow-x:auto}.SOz1_a_shot{object-fit:cover;border:1px solid var(--dsw-alias-border-default,#e5e7eb);background:var(--dsw-alias-bg-layer-2,#f3f4f6);border-radius:8px;flex:none;max-width:260px;height:150px}.SOz1_a_cmd{background:var(--dsw-alias-bg-layer-2,#f3f4f6);word-break:break-all;border-radius:6px;margin:8px 0 0;padding:8px 10px;font-family:ui-monospace,Menlo,monospace;font-size:11px;line-height:18px}.SOz1_a_warnLine{color:var(--dsw-alias-state-warn-primary,#b45309);align-items:center;gap:4px;margin:0;font-size:12px;font-weight:600;line-height:18px;display:flex}.SOz1_a_modalNote{color:var(--dsw-alias-label-tertiary,#8b93a1);align-items:center;gap:4px;margin:12px 0 0;font-size:12px;line-height:18px;display:flex}.SOz1_a_grid{grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;display:grid}.SOz1_a_swatches{border:1px solid var(--dsw-alias-border-l2,#e5e7eb);border-radius:8px;gap:0;height:34px;display:flex;overflow:hidden}.SOz1_a_themesGrid{margin-bottom:12px}.SOz1_a_swatches i{flex:1}.SOz1_a_card{background:var(--dsw-alias-bg-layer-1,#fff);border:1px solid var(--dsw-alias-border-l2,#e5e7eb);border-radius:12px;flex-direction:column;align-self:start;gap:12px;padding:12px 14px;display:flex}.SOz1_a_row1{align-items:center;gap:10px;min-width:0;display:flex}.SOz1_a_installBtn.SOz1_a_installBtn{min-width:92px}.SOz1_a_av{color:#fff;object-fit:cover;background:var(--dsw-alias-bg-layer-2,#f3f4f6);border-radius:50%;flex-shrink:0;place-items:center;width:16px;height:16px;font-size:9px;font-weight:700;display:grid}.SOz1_a_nm{text-overflow:ellipsis;white-space:nowrap;font-size:15px;font-weight:600;line-height:22px;overflow:hidden}.SOz1_a_byline{align-items:center;gap:6px;min-width:0;margin-top:2px;display:flex}.SOz1_a_meta{color:var(--dsw-alias-label-secondary,#9ca3af);margin-top:2px;font-size:11px}.SOz1_a_metaInline,.SOz1_a_owner{color:var(--dsw-alias-label-secondary,#9ca3af);font-size:11px}.SOz1_a_desc{color:var(--dsw-alias-label-tertiary,#8b93a1);min-height:36px;margin:0;font-size:12px;line-height:18px}.SOz1_a_foot{align-items:center;gap:8px;display:flex}.SOz1_a_grow{flex:1}.SOz1_a_titleRow{align-items:center;gap:10px;display:flex}.SOz1_a_version{color:var(--dsw-alias-label-tertiary,#8b93a1);font-variant-numeric:tabular-nums;flex-shrink:0;font-size:12px;line-height:20px}.SOz1_a_repoLink{color:var(--dsw-alias-label-tertiary,#8b93a1);flex-shrink:0;font-size:12px;line-height:20px;text-decoration:none}.SOz1_a_repoLink:hover{color:var(--dsw-alias-brand-primary,#4f6ef7)}.SOz1_a_descTight{min-height:0}.SOz1_a_src{color:var(--dsw-alias-label-secondary,#9ca3af);font-size:11px;text-decoration:none}.SOz1_a_src:hover{color:var(--dsw-alias-brand-primary,#4f6ef7)}.SOz1_a_dot{vertical-align:2px;margin-left:5px}.SOz1_a_act{flex-wrap:wrap;align-items:center;gap:6px;margin-top:6px;font-size:11px;display:flex}.SOz1_a_actLive{color:var(--dsw-alias-state-success-primary,#16a34a);align-items:center;gap:4px;font-weight:600;display:inline-flex}.SOz1_a_actWarn{color:var(--dsw-alias-state-warn-primary,#b45309);align-items:center;gap:4px;font-weight:600;display:inline-flex}.SOz1_a_actBroken{color:var(--dsw-alias-state-error-primary,#dc2626);align-items:center;gap:4px;font-weight:600;display:inline-flex}.SOz1_a_actWhy{color:var(--dsw-alias-label-secondary,#6b7280);margin-top:2px}.SOz1_a_loading{color:var(--dsw-alias-label-secondary,#9ca3af);flex-direction:column;align-items:center;gap:12px;padding:48px;font-size:13px;display:flex}.SOz1_a_spin{color:var(--dsw-alias-brand-primary,#4f6ef7);flex-shrink:0;animation:.8s linear infinite SOz1_a_sp;display:inline-flex}.SOz1_a_logoMark{color:var(--dsw-alias-brand-primary,#4f6ef7);flex-shrink:0;display:inline-flex}.SOz1_a_logoPlug{transform-box:fill-box;transform-origin:50%;animation:1.5s cubic-bezier(.4,0,.2,1) infinite SOz1_a_dshmPlug}@keyframes SOz1_a_dshmPlug{0%,12%{transform:rotate(9deg)}45%,62%{transform:translate(-1.28px,1.27px)rotate(0)}95%,to{transform:rotate(9deg)}}@media (prefers-reduced-motion:reduce){.SOz1_a_logoPlug,.SOz1_a_spin{animation:1.5s ease-in-out infinite SOz1_a_dshmPlugFade}}@keyframes SOz1_a_dshmPlugFade{0%,to{opacity:1}50%{opacity:.35}}@keyframes SOz1_a_sp{to{transform:rotate(360deg)}}.SOz1_a_progress{background:var(--dsw-alias-bg-layer-2,#f3f4f6);border:1px solid var(--dsw-alias-border-l2,#e5e7eb);color:var(--dsw-alias-label-secondary,#6b7280);border-radius:8px;flex-wrap:wrap;align-items:center;gap:9px;margin:0;padding:8px 12px;font-size:12px;display:flex}.SOz1_a_bar{background:var(--dsw-alias-border-l1,#e5e7eb);border-radius:99px;width:100%;height:4px;overflow:hidden}.SOz1_a_barFill{background:var(--dsw-alias-brand-primary,#4f6ef7);border-radius:99px;height:100%;transition:width .6s}.SOz1_a_barWave{width:30%;animation:1.2s ease-in-out infinite SOz1_a_dshmSlide}@keyframes SOz1_a_dshmSlide{0%{margin-left:-30%}to{margin-left:100%}}.SOz1_a_irow .SOz1_a_progress{margin-top:8px}.SOz1_a_progress code{text-overflow:ellipsis;white-space:nowrap;font-family:ui-monospace,Menlo,monospace;font-size:11px;overflow:hidden}.SOz1_a_empty{color:var(--dsw-alias-label-secondary,#9ca3af);text-align:center;padding:32px;font-size:13px}.SOz1_a_err{color:var(--dsw-alias-state-error-primary,#dc2626);white-space:pre-wrap;word-break:break-all;margin:8px 0;font-size:12px}.SOz1_a_irow{background:var(--dsw-alias-bg-layer-1,#fff);border:1px solid var(--dsw-alias-border-l2,#e5e7eb);border-radius:12px;align-items:center;gap:10px;margin-bottom:8px;padding:12px 14px;display:flex}.SOz1_a_irowMissing{filter:grayscale();opacity:.5}.SOz1_a_irow>.SOz1_a_src,.SOz1_a_irow>.SOz1_a_owner,.SOz1_a_irow button{white-space:nowrap;flex-shrink:0}.SOz1_a_tabSearchRow{padding:0 4px 10px;display:flex}.SOz1_a_tabSearch{width:260px}.SOz1_a_spec{color:var(--dsw-alias-label-secondary,#9ca3af);overflow-wrap:anywhere;min-width:0;font-family:ui-monospace,Menlo,monospace;font-size:11px}.SOz1_a_specTag{white-space:nowrap;border-radius:4px;flex-shrink:0;align-items:center;height:16px;padding:0 5px;font-size:10px;font-weight:600;display:inline-flex}.SOz1_a_specTagGit{color:#0b7285;background:#12a3c41f}.SOz1_a_specTagFile{color:#b07d1b;background:#f0b42924}.SOz1_a_backupCheckList .SOz1_a_grow{white-space:nowrap;text-overflow:ellipsis;flex:70%;min-width:0;overflow:hidden}.SOz1_a_backupCheckList .SOz1_a_spec{text-align:right;white-space:nowrap;text-overflow:ellipsis;flex:0 30%;max-width:30%;overflow:hidden}.SOz1_a_staleAction{margin-top:8px}.SOz1_a_pct{color:var(--dsw-alias-label-secondary,#6b7280);flex-shrink:0;font-size:11px;font-weight:600}.SOz1_a_pager{flex-wrap:wrap;justify-content:space-between;align-items:center;gap:12px;margin:16px 0 4px;display:flex}.SOz1_a_pagerPages{flex-wrap:wrap;flex:1;justify-content:center;align-items:center;gap:6px;min-width:0;display:flex}.SOz1_a_pageEllipsis{color:var(--dsw-alias-label-secondary,#9ca3af);padding:0 2px;font-size:12px}.SOz1_a_pageInfo{color:var(--dsw-alias-label-secondary,#6b7280);white-space:nowrap;font-size:12px}.SOz1_a_depBadge{border:1px solid var(--dsw-alias-state-warn-primary,#b45309);color:var(--dsw-alias-state-warn-primary,#b45309);white-space:nowrap;border-radius:4px;flex-shrink:0;margin-left:6px;padding:1px 6px;font-size:11px;font-weight:600;line-height:16px}.SOz1_a_deprecate{color:var(--dsw-alias-state-warn-primary,#b45309);background:var(--dsw-alias-bg-layer-2,#fdf3e3);border:1px solid var(--dsw-alias-border-l2,#f3e3c3);border-radius:8px;margin:0;padding:8px 10px;font-size:12px;line-height:18px}.SOz1_a_deprecate a{color:var(--dsw-alias-state-warn-primary,#b45309);text-decoration:underline}.SOz1_a_deprecate .SOz1_a_src{margin-left:8px}.SOz1_a_depLine{flex-wrap:wrap;align-items:center;gap:8px;display:flex}.SOz1_a_switch{border:1px solid var(--dsw-alias-border-l2,#d9dde3);background:var(--dsw-alias-bg-layer-2,#e5e7eb);cursor:pointer;border-radius:99px;flex-shrink:0;width:38px;height:22px;padding:0;transition:background .15s,border-color .15s;position:relative}.SOz1_a_switchOn{background:var(--dsw-alias-state-success-primary,#16a34a);border-color:var(--dsw-alias-state-success-primary,#16a34a)}.SOz1_a_switchMixed{background:var(--dsw-alias-state-warn-primary,#b45309);border-color:var(--dsw-alias-state-warn-primary,#b45309)}.SOz1_a_switchKnob{background:#fff;border-radius:99px;width:16px;height:16px;transition:left .15s;position:absolute;top:2px;left:2px;box-shadow:0 1px 2px #00000040}.SOz1_a_switchOn .SOz1_a_switchKnob,.SOz1_a_switchMixed .SOz1_a_switchKnob{left:18px}.SOz1_a_switch:disabled{opacity:.5;cursor:default}.SOz1_a_viewBar{border:1px solid var(--dsw-alias-border-l2,#e5e7eb);border-radius:8px;align-items:center;gap:2px;width:fit-content;margin-bottom:12px;padding:2px;display:flex}.SOz1_a_viewBtn{font:inherit;color:var(--dsw-alias-label-secondary,#6b7280);cursor:pointer;white-space:nowrap;background:0 0;border:none;border-radius:6px;padding:4px 10px;font-size:12px;line-height:18px}.SOz1_a_viewBtn:hover{color:var(--dsw-alias-brand-primary,#4f6ef7)}.SOz1_a_viewOn{background:var(--dsw-alias-bg-layer-2,#eef0f4);color:var(--dsw-alias-label-primary,#1f2328);font-weight:600}.SOz1_a_groupRow{background:var(--dsw-alias-bg-layer-1,#fff);border:1px solid var(--dsw-alias-border-l2,#e5e7eb);border-radius:12px;margin-bottom:10px;padding:12px 14px}.SOz1_a_groupHead{align-items:center;gap:10px;min-width:0;display:flex}.SOz1_a_groupName{text-overflow:ellipsis;white-space:nowrap;font-size:13px;font-weight:600;line-height:20px;overflow:hidden}.SOz1_a_groupActions{flex-shrink:0;align-items:center;gap:6px;display:flex}.SOz1_a_groupMembers{flex-direction:column;gap:6px;margin-top:10px;display:flex}.SOz1_a_groupMember{background:var(--dsw-alias-bg-layer-2,#f7f8fa);border-radius:8px;align-items:center;gap:8px;padding:6px 8px;font-size:12px;line-height:18px;display:flex}.SOz1_a_groupMember .SOz1_a_nm{flex:1;min-width:0;font-size:12px}.SOz1_a_groupAddPanel{border-top:1px dashed var(--dsw-alias-border-l2,#e5e7eb);flex-direction:column;gap:6px;margin-top:10px;padding-top:10px;display:flex}.SOz1_a_groupCreate{align-items:center;gap:8px;margin-bottom:10px;display:flex}.SOz1_a_inlineInput{flex:1;min-width:120px}.SOz1_a_assignRow{flex-wrap:wrap;align-items:center;gap:8px;display:flex}.SOz1_a_assignSelect{border:1px solid var(--dsw-alias-border-l2,#e5e7eb);background:var(--dsw-alias-bg-layer-1,#fff);color:var(--dsw-alias-label-primary,#1f2328);font:inherit;border-radius:6px;padding:3px 6px;font-size:12px;line-height:18px}.SOz1_a_groupHint{color:var(--dsw-alias-label-tertiary,#8b93a1);font-size:11px}.SOz1_a_sectAction{color:var(--dsw-alias-label-secondary,#6b7280);align-items:center;gap:8px;margin:14px 2px 8px;font-size:12px;font-weight:600;display:flex}.SOz1_a_backupGrid{grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;display:grid}.SOz1_a_backupCard{background:var(--dsw-alias-bg-layer-1,#fff);border:1px solid var(--dsw-alias-border-l2,#e5e7eb);border-radius:12px;flex-direction:column;gap:10px;padding:16px;display:flex}.SOz1_a_backupCard h3{margin:0;font-size:14px}.SOz1_a_backupCard p{color:var(--dsw-alias-label-secondary,#6b7280);margin:0;font-size:12px;line-height:18px}.SOz1_a_backupActions{flex-wrap:wrap;gap:8px;display:flex;position:relative}.SOz1_a_hiddenFile{opacity:0;pointer-events:none;width:1px;height:1px;position:absolute}.SOz1_a_backupInput{box-sizing:border-box;width:100%}.SOz1_a_backupCheck{cursor:pointer;align-items:center;gap:6px;font-size:12px;display:flex}.SOz1_a_backupWarn{margin:0;font-size:12px;line-height:18px;color:var(--dsw-alias-state-warn-primary,#b45309)!important}.SOz1_a_backupMessage{color:var(--dsw-alias-label-secondary,#6b7280);grid-column:1/-1;font-size:12px}.SOz1_a_backupCheckList{flex-direction:column;gap:6px;max-height:260px;margin:10px 0 4px;padding-right:4px;display:flex;overflow-y:auto}.SOz1_a_backupCheckList .SOz1_a_backupCheck{justify-content:space-between;gap:8px}.SOz1_a_diagPage{flex-direction:column;gap:12px;height:100%;min-height:0;display:flex;overflow-y:auto}.SOz1_a_diagSummary{background:var(--dsw-alias-bg-layer-1,#fff);border:1px solid var(--dsw-alias-border-l2,#e5e7eb);border-radius:12px;flex-wrap:wrap;align-items:center;gap:12px;padding:10px 14px;font-size:12px;display:flex}.SOz1_a_diagSummaryItem{color:var(--dsw-alias-label-secondary,#6b7280);white-space:nowrap;align-items:center;gap:6px;display:inline-flex}.SOz1_a_diagSummaryMeta{color:var(--dsw-alias-label-tertiary,#9ca3af);text-overflow:ellipsis;white-space:nowrap;max-width:320px;font-family:ui-monospace,Menlo,monospace;font-size:11px;overflow:hidden}.SOz1_a_diagSection{background:var(--dsw-alias-bg-layer-1,#fff);border:1px solid var(--dsw-alias-border-l2,#e5e7eb);border-radius:12px;flex-direction:column;gap:8px;padding:12px 14px;display:flex}.SOz1_a_diagSection h3{color:var(--dsw-alias-label-primary,#1f2328);margin:0;font-size:13px;font-weight:600}.SOz1_a_diagCount{color:var(--dsw-alias-label-tertiary,#9ca3af);font-size:11px;font-weight:400}.SOz1_a_diagEmpty{color:var(--dsw-alias-label-secondary,#9ca3af);padding:8px 0;font-size:12px}.SOz1_a_diagBundle{border-top:1px solid var(--dsw-alias-border-l2,#f0f1f3);flex-direction:column;gap:6px;padding-top:8px;display:flex}.SOz1_a_diagBundle:first-of-type{border-top:none;padding-top:0}.SOz1_a_diagRow{flex-wrap:wrap;align-items:center;gap:8px;min-width:0;font-size:12px;line-height:18px;display:flex}.SOz1_a_diagMeta{align-items:baseline;gap:8px;min-width:0;font-size:12px;display:flex}.SOz1_a_diagKey{color:var(--dsw-alias-label-tertiary,#9ca3af);flex-shrink:0;min-width:64px;font-size:11px}.SOz1_a_diagVal{color:var(--dsw-alias-label-primary,#1f2328);overflow-wrap:anywhere;min-width:0;font-family:ui-monospace,Menlo,monospace;font-size:12px;font-weight:500}.SOz1_a_diagIndex{background:var(--dsw-alias-bg-layer-2,#f3f4f6);min-width:18px;height:18px;color:var(--dsw-alias-label-secondary,#6b7280);border-radius:9px;flex-shrink:0;justify-content:center;align-items:center;font-size:11px;font-weight:600;display:inline-flex}.SOz1_a_diagArrow{color:var(--dsw-alias-label-tertiary,#9ca3af);flex-shrink:0;font-size:12px}.SOz1_a_diagBadgeOfficial{background:var(--dsw-alias-brand-primary,#4f6ef7);color:#fff;border-radius:9px;flex-shrink:0;align-items:center;height:18px;padding:0 8px;font-size:11px;font-weight:600;display:inline-flex}.SOz1_a_diagBadgeCommunity{background:var(--dsw-alias-bg-layer-2,#f3f4f6);height:18px;color:var(--dsw-alias-label-secondary,#6b7280);border-radius:9px;flex-shrink:0;align-items:center;padding:0 8px;font-size:11px;display:inline-flex}.SOz1_a_diagBadgeShadow{background:var(--dsw-alias-state-error-primary,#dc2626);color:#fff;border-radius:9px;flex-shrink:0;align-items:center;height:18px;padding:0 8px;font-size:11px;font-weight:600;display:inline-flex}.SOz1_a_diagList{flex-direction:column;gap:6px;display:flex}.SOz1_a_sectionOverview{color:var(--dsw-alias-label-tertiary,#8b93a1);text-overflow:ellipsis;white-space:nowrap;max-width:100%;padding:2px 0 6px;font-size:12px;line-height:18px;overflow:hidden}.SOz1_a_diagAlert{color:var(--dsw-alias-state-warn-primary,#b45309)}.SOz1_a_ovRow{background:var(--dsw-alias-bg-layer-2,#f7f8fa);border-radius:8px;flex-wrap:wrap;align-items:center;gap:8px;min-width:0;padding:6px 10px;font-size:12px;line-height:18px;display:flex}.SOz1_a_ovArrow{color:var(--dsw-alias-label-tertiary,#9ca3af);flex-shrink:0;font-size:12px}.SOz1_a_ovByTag{background:var(--dsw-alias-brand-primary,#4f6ef7);color:#fff;text-overflow:ellipsis;white-space:nowrap;border-radius:9px;flex-shrink:0;align-items:center;max-width:260px;height:18px;padding:0 8px;font-size:11px;font-weight:600;display:inline-flex;overflow:hidden}.SOz1_a_ovFrom{color:var(--dsw-alias-label-secondary,#6b7280);text-overflow:ellipsis;white-space:nowrap;min-width:0;font-size:12px;overflow:hidden}.SOz1_a_orphRow{background:var(--dsw-alias-bg-layer-2,#f7f8fa);border-radius:8px;flex-wrap:wrap;align-items:center;gap:8px;min-width:0;padding:6px 10px;font-size:12px;line-height:18px;display:flex}.SOz1_a_orphBadge{background:var(--dsw-alias-state-warn-primary,#b45309);color:#fff;white-space:nowrap;border-radius:9px;flex-shrink:0;align-items:center;height:18px;padding:0 8px;font-size:11px;font-weight:600;display:inline-flex}.SOz1_a_dragHandle{width:20px;height:20px;color:var(--dsw-alias-label-tertiary,#9ca3af);cursor:grab;-webkit-user-select:none;user-select:none;flex-shrink:0;justify-content:center;align-items:center;font-size:12px;line-height:20px;display:inline-flex}.SOz1_a_dragOver{outline:2px dashed var(--dsw-alias-brand-primary,#4f6ef7);outline-offset:2px;background:var(--dsw-alias-bg-layer-2,#f0f2f8);border-radius:8px}.SOz1_a_dragging{opacity:.45;background:var(--dsw-alias-bg-layer-2,#f3f4f6)}.SOz1_a_collapseHead{font:inherit;color:var(--dsw-alias-label-primary,#1f2328);cursor:pointer;text-align:left;background:0 0;border:none;align-items:center;gap:8px;width:100%;padding:0;font-size:13px;font-weight:600;display:flex}.SOz1_a_collapseIcon{color:var(--dsw-alias-label-secondary,#6b7280);flex-shrink:0;display:inline-flex}.SOz1_a_collapseTitle{flex:1;min-width:0}.SOz1_a_collapseBody{border-top:1px solid var(--dsw-alias-border-l2,#f0f1f3);overflow-wrap:anywhere;flex-direction:column;gap:10px;min-width:0;margin-top:8px;padding-top:10px;display:flex}.SOz1_a_panelNote{color:var(--dsw-alias-label-secondary,#6b7280);margin:0;font-size:12px;line-height:18px}.SOz1_a_fixFallback{flex-direction:column;gap:6px;margin:8px 0;display:flex}.SOz1_a_fixFallbackText{box-sizing:border-box;width:100%;color:var(--dsw-alias-label-primary,#1f2328);background:var(--dsw-alias-bg-layer-2,#f3f4f6);border:1px solid var(--dsw-alias-border-l2,#e5e7eb);resize:vertical;white-space:pre-wrap;word-break:break-all;border-radius:6px;padding:8px 10px;font-family:ui-monospace,Menlo,monospace;font-size:11px;line-height:16px}.SOz1_a_setCard{border:1px solid var(--dsw-alias-border-l2,#e5e7eb);background:var(--dsw-alias-bg-layer-3,#fff);border-radius:12px;list-style:none;transition:border-color .16s,background .16s}.SOz1_a_setCard:hover{border-color:var(--dsw-alias-label-dimmed,#c8ccd4)}.SOz1_a_setCardOpen{background:var(--dsw-alias-bg-layer-2,#f7f8fa);border-color:var(--dsw-alias-label-dimmed,#c8ccd4)}.SOz1_a_setHeader{-webkit-appearance:none;appearance:none;width:100%;font:inherit;color:inherit;text-align:left;cursor:pointer;background:0 0;border:0;border-radius:12px;align-items:center;gap:12px;padding:14px 16px;display:flex}.SOz1_a_setHeader:focus-visible{outline:2px solid var(--dsw-alias-brand-primary,#4f6ef7);outline-offset:-2px}.SOz1_a_setHeadText{flex-direction:column;flex:1;gap:4px;min-width:0;display:flex}.SOz1_a_setName{color:var(--dsw-alias-label-primary,#1f2328);font-size:15px;font-weight:600;line-height:1.4}.SOz1_a_setDesc{color:var(--dsw-alias-label-tertiary,#8b93a1);font-size:13px;line-height:1.5}.SOz1_a_setChevron{color:var(--dsw-alias-label-tertiary,#8b93a1);flex:none;transition:transform .16s;display:inline-flex}.SOz1_a_setChevronOpen{transform:rotate(180deg)}.SOz1_a_setBody{border-top:1px solid var(--dsw-alias-border-l2,#e5e7eb);margin:0 16px;padding-bottom:8px}.SOz1_a_setRow{align-items:center;gap:12px;padding:12px 0;display:flex}.SOz1_a_setRow+.SOz1_a_setRow{border-top:1px solid var(--dsw-alias-border-l2,#e5e7eb)}.SOz1_a_setLabelBox{flex-direction:column;flex:1;gap:3px;min-width:0;display:flex}.SOz1_a_setLabel{font-size:13px;line-height:20px}.SOz1_a_setHint{color:var(--dsw-alias-label-tertiary,#8b93a1);font-size:12px;line-height:18px}.SOz1_a_setConfirm{border-top:1px solid var(--dsw-alias-border-l2,#e5e7eb);flex-direction:column;gap:8px;padding:12px 0 4px;display:flex}.SOz1_a_setCheck{cursor:pointer;align-items:center;gap:8px;font-size:12px;line-height:18px;display:flex}.SOz1_a_setActions{border-top:1px solid var(--dsw-alias-border-l2,#e5e7eb);justify-content:flex-end;align-items:center;gap:8px;padding:12px 0 4px;display:flex}.SOz1_a_setDanger{color:var(--dsw-alias-state-error-primary,#dc2626)}.SOz1_a_setSeg{border:1px solid var(--dsw-alias-border-l2,#e5e7eb);border-radius:8px;flex-shrink:0;gap:2px;padding:2px;display:inline-flex}.SOz1_a_setSegBtn{font:inherit;color:var(--dsw-alias-label-secondary,#6b7280);cursor:pointer;background:0 0;border:none;border-radius:6px;padding:3px 10px;font-size:12px;line-height:18px}.SOz1_a_setSegBtn:disabled{cursor:default;opacity:.5}.SOz1_a_setSegOn{background:var(--dsw-alias-bg-layer-2,#eef0f4);color:var(--dsw-alias-label-primary,#1f2328);font-weight:600}.SOz1_a_setBetaTag{background:var(--dsw-alias-bg-module-platform,#eef0f4);color:var(--dsw-alias-label-secondary,#6b7280);border-radius:9px;margin-left:6px;padding:0 6px;font-size:11px;font-weight:600;line-height:17px}";
 		const tagId = "dshmarket/Market.module.css";
 		if (typeof document !== "undefined" && document.querySelector("style[data-plugin-css=" + JSON.stringify(tagId) + "]") === null) {
 			const tag = document.createElement("style");
@@ -1106,172 +1145,176 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 			document.head.appendChild(tag);
 		}
 		var Market_module_css_default = {
-			"act": "NUvjna_act",
-			"actBroken": "NUvjna_actBroken",
-			"actLive": "NUvjna_actLive",
-			"actWarn": "NUvjna_actWarn",
-			"actWhy": "NUvjna_actWhy",
-			"assignRow": "NUvjna_assignRow",
-			"assignSelect": "NUvjna_assignSelect",
-			"av": "NUvjna_av",
-			"backupActions": "NUvjna_backupActions",
-			"backupCard": "NUvjna_backupCard",
-			"backupCheck": "NUvjna_backupCheck",
-			"backupCheckList": "NUvjna_backupCheckList",
-			"backupGrid": "NUvjna_backupGrid",
-			"backupInput": "NUvjna_backupInput",
-			"backupMessage": "NUvjna_backupMessage",
-			"backupWarn": "NUvjna_backupWarn",
-			"banner": "NUvjna_banner",
-			"bannerHint": "NUvjna_bannerHint",
-			"bannerIcon": "NUvjna_bannerIcon",
-			"bar": "NUvjna_bar",
-			"barFill": "NUvjna_barFill",
-			"barWave": "NUvjna_barWave",
-			"body": "NUvjna_body",
-			"byline": "NUvjna_byline",
-			"card": "NUvjna_card",
-			"cats": "NUvjna_cats",
-			"catsCollapsed": "NUvjna_catsCollapsed",
-			"catsRow": "NUvjna_catsRow",
-			"catsToggle": "NUvjna_catsToggle",
-			"catsWrap": "NUvjna_catsWrap",
-			"cmd": "NUvjna_cmd",
-			"collapseBody": "NUvjna_collapseBody",
-			"collapseHead": "NUvjna_collapseHead",
-			"collapseIcon": "NUvjna_collapseIcon",
-			"collapseTitle": "NUvjna_collapseTitle",
-			"depBadge": "NUvjna_depBadge",
-			"depLine": "NUvjna_depLine",
-			"deprecate": "NUvjna_deprecate",
-			"desc": "NUvjna_desc",
-			"descTight": "NUvjna_descTight",
-			"diagAlert": "NUvjna_diagAlert",
-			"diagArrow": "NUvjna_diagArrow",
-			"diagBadgeCommunity": "NUvjna_diagBadgeCommunity",
-			"diagBadgeOfficial": "NUvjna_diagBadgeOfficial",
-			"diagBadgeShadow": "NUvjna_diagBadgeShadow",
-			"diagBundle": "NUvjna_diagBundle",
-			"diagCount": "NUvjna_diagCount",
-			"diagEmpty": "NUvjna_diagEmpty",
-			"diagIndex": "NUvjna_diagIndex",
-			"diagKey": "NUvjna_diagKey",
-			"diagList": "NUvjna_diagList",
-			"diagMeta": "NUvjna_diagMeta",
-			"diagPage": "NUvjna_diagPage",
-			"diagRow": "NUvjna_diagRow",
-			"diagSection": "NUvjna_diagSection",
-			"diagSummary": "NUvjna_diagSummary",
-			"diagSummaryItem": "NUvjna_diagSummaryItem",
-			"diagSummaryMeta": "NUvjna_diagSummaryMeta",
-			"diagVal": "NUvjna_diagVal",
-			"dot": "NUvjna_dot",
-			"dragging": "NUvjna_dragging",
-			"dragHandle": "NUvjna_dragHandle",
-			"dragOver": "NUvjna_dragOver",
-			"dshmPlug": "NUvjna_dshmPlug",
-			"dshmPlugFade": "NUvjna_dshmPlugFade",
-			"dshmSlide": "NUvjna_dshmSlide",
-			"empty": "NUvjna_empty",
-			"err": "NUvjna_err",
-			"fixFallback": "NUvjna_fixFallback",
-			"fixFallbackText": "NUvjna_fixFallbackText",
-			"foot": "NUvjna_foot",
-			"grid": "NUvjna_grid",
-			"groupActions": "NUvjna_groupActions",
-			"groupAddPanel": "NUvjna_groupAddPanel",
-			"groupCreate": "NUvjna_groupCreate",
-			"groupHead": "NUvjna_groupHead",
-			"groupHint": "NUvjna_groupHint",
-			"groupMember": "NUvjna_groupMember",
-			"groupMembers": "NUvjna_groupMembers",
-			"groupName": "NUvjna_groupName",
-			"groupRow": "NUvjna_groupRow",
-			"grow": "NUvjna_grow",
-			"head": "NUvjna_head",
-			"hiddenFile": "NUvjna_hiddenFile",
-			"inlineInput": "NUvjna_inlineInput",
-			"irow": "NUvjna_irow",
-			"irowMissing": "NUvjna_irowMissing",
-			"loading": "NUvjna_loading",
-			"logoMark": "NUvjna_logoMark",
-			"logoPlug": "NUvjna_logoPlug",
-			"modalNote": "NUvjna_modalNote",
-			"nm": "NUvjna_nm",
-			"okState": "NUvjna_okState",
-			"on": "NUvjna_on",
-			"orphBadge": "NUvjna_orphBadge",
-			"orphRow": "NUvjna_orphRow",
-			"ovArrow": "NUvjna_ovArrow",
-			"ovByTag": "NUvjna_ovByTag",
-			"ovFrom": "NUvjna_ovFrom",
-			"ovRow": "NUvjna_ovRow",
-			"owner": "NUvjna_owner",
-			"pageEllipsis": "NUvjna_pageEllipsis",
-			"pageInfo": "NUvjna_pageInfo",
-			"pager": "NUvjna_pager",
-			"pagerPages": "NUvjna_pagerPages",
-			"panelNote": "NUvjna_panelNote",
-			"pct": "NUvjna_pct",
-			"progress": "NUvjna_progress",
-			"root": "NUvjna_root",
-			"row1": "NUvjna_row1",
-			"sectAction": "NUvjna_sectAction",
-			"sectionOverview": "NUvjna_sectionOverview",
-			"setActions": "NUvjna_setActions",
-			"setBetaTag": "NUvjna_setBetaTag",
-			"setBody": "NUvjna_setBody",
-			"setCard": "NUvjna_setCard",
-			"setCardOpen": "NUvjna_setCardOpen",
-			"setCheck": "NUvjna_setCheck",
-			"setChevron": "NUvjna_setChevron",
-			"setChevronOpen": "NUvjna_setChevronOpen",
-			"setConfirm": "NUvjna_setConfirm",
-			"setDanger": "NUvjna_setDanger",
-			"setDesc": "NUvjna_setDesc",
-			"setHeader": "NUvjna_setHeader",
-			"setHeadText": "NUvjna_setHeadText",
-			"setHint": "NUvjna_setHint",
-			"setLabel": "NUvjna_setLabel",
-			"setLabelBox": "NUvjna_setLabelBox",
-			"setName": "NUvjna_setName",
-			"setRow": "NUvjna_setRow",
-			"setSeg": "NUvjna_setSeg",
-			"setSegBtn": "NUvjna_setSegBtn",
-			"setSegOn": "NUvjna_setSegOn",
-			"shot": "NUvjna_shot",
-			"shots": "NUvjna_shots",
-			"sp": "NUvjna_sp",
-			"spec": "NUvjna_spec",
-			"specTag": "NUvjna_specTag",
-			"specTagFile": "NUvjna_specTagFile",
-			"specTagGit": "NUvjna_specTagGit",
-			"spin": "NUvjna_spin",
-			"src": "NUvjna_src",
-			"srcBtn": "NUvjna_srcBtn",
-			"staleAction": "NUvjna_staleAction",
-			"star": "NUvjna_star",
-			"sub": "NUvjna_sub",
-			"swatches": "NUvjna_swatches",
-			"switch": "NUvjna_switch",
-			"switchKnob": "NUvjna_switchKnob",
-			"switchMixed": "NUvjna_switchMixed",
-			"switchOn": "NUvjna_switchOn",
-			"tab": "NUvjna_tab",
-			"tabs": "NUvjna_tabs",
-			"tabSearch": "NUvjna_tabSearch",
-			"tabSearchRow": "NUvjna_tabSearchRow",
-			"tag": "NUvjna_tag",
-			"themesGrid": "NUvjna_themesGrid",
-			"title": "NUvjna_title",
-			"titleRow": "NUvjna_titleRow",
-			"top": "NUvjna_top",
-			"topBtn": "NUvjna_topBtn",
-			"version": "NUvjna_version",
-			"viewBar": "NUvjna_viewBar",
-			"viewBtn": "NUvjna_viewBtn",
-			"viewOn": "NUvjna_viewOn",
-			"warnLine": "NUvjna_warnLine"
+			"act": "SOz1_a_act",
+			"actBroken": "SOz1_a_actBroken",
+			"actLive": "SOz1_a_actLive",
+			"actWarn": "SOz1_a_actWarn",
+			"actWhy": "SOz1_a_actWhy",
+			"assignRow": "SOz1_a_assignRow",
+			"assignSelect": "SOz1_a_assignSelect",
+			"av": "SOz1_a_av",
+			"backupActions": "SOz1_a_backupActions",
+			"backupCard": "SOz1_a_backupCard",
+			"backupCheck": "SOz1_a_backupCheck",
+			"backupCheckList": "SOz1_a_backupCheckList",
+			"backupGrid": "SOz1_a_backupGrid",
+			"backupInput": "SOz1_a_backupInput",
+			"backupMessage": "SOz1_a_backupMessage",
+			"backupWarn": "SOz1_a_backupWarn",
+			"banner": "SOz1_a_banner",
+			"bannerHint": "SOz1_a_bannerHint",
+			"bannerIcon": "SOz1_a_bannerIcon",
+			"bar": "SOz1_a_bar",
+			"barFill": "SOz1_a_barFill",
+			"barWave": "SOz1_a_barWave",
+			"body": "SOz1_a_body",
+			"byline": "SOz1_a_byline",
+			"card": "SOz1_a_card",
+			"cats": "SOz1_a_cats",
+			"catsCollapsed": "SOz1_a_catsCollapsed",
+			"catsRow": "SOz1_a_catsRow",
+			"catsToggle": "SOz1_a_catsToggle",
+			"catsWrap": "SOz1_a_catsWrap",
+			"cmd": "SOz1_a_cmd",
+			"collapseBody": "SOz1_a_collapseBody",
+			"collapseHead": "SOz1_a_collapseHead",
+			"collapseIcon": "SOz1_a_collapseIcon",
+			"collapseTitle": "SOz1_a_collapseTitle",
+			"depBadge": "SOz1_a_depBadge",
+			"depLine": "SOz1_a_depLine",
+			"deprecate": "SOz1_a_deprecate",
+			"desc": "SOz1_a_desc",
+			"descTight": "SOz1_a_descTight",
+			"diagAlert": "SOz1_a_diagAlert",
+			"diagArrow": "SOz1_a_diagArrow",
+			"diagBadgeCommunity": "SOz1_a_diagBadgeCommunity",
+			"diagBadgeOfficial": "SOz1_a_diagBadgeOfficial",
+			"diagBadgeShadow": "SOz1_a_diagBadgeShadow",
+			"diagBundle": "SOz1_a_diagBundle",
+			"diagCount": "SOz1_a_diagCount",
+			"diagEmpty": "SOz1_a_diagEmpty",
+			"diagIndex": "SOz1_a_diagIndex",
+			"diagKey": "SOz1_a_diagKey",
+			"diagList": "SOz1_a_diagList",
+			"diagMeta": "SOz1_a_diagMeta",
+			"diagPage": "SOz1_a_diagPage",
+			"diagRow": "SOz1_a_diagRow",
+			"diagSection": "SOz1_a_diagSection",
+			"diagSummary": "SOz1_a_diagSummary",
+			"diagSummaryItem": "SOz1_a_diagSummaryItem",
+			"diagSummaryMeta": "SOz1_a_diagSummaryMeta",
+			"diagVal": "SOz1_a_diagVal",
+			"dot": "SOz1_a_dot",
+			"dragging": "SOz1_a_dragging",
+			"dragHandle": "SOz1_a_dragHandle",
+			"dragOver": "SOz1_a_dragOver",
+			"dshmPlug": "SOz1_a_dshmPlug",
+			"dshmPlugFade": "SOz1_a_dshmPlugFade",
+			"dshmSlide": "SOz1_a_dshmSlide",
+			"empty": "SOz1_a_empty",
+			"err": "SOz1_a_err",
+			"fixFallback": "SOz1_a_fixFallback",
+			"fixFallbackText": "SOz1_a_fixFallbackText",
+			"foot": "SOz1_a_foot",
+			"grid": "SOz1_a_grid",
+			"groupActions": "SOz1_a_groupActions",
+			"groupAddPanel": "SOz1_a_groupAddPanel",
+			"groupCreate": "SOz1_a_groupCreate",
+			"groupHead": "SOz1_a_groupHead",
+			"groupHint": "SOz1_a_groupHint",
+			"groupMember": "SOz1_a_groupMember",
+			"groupMembers": "SOz1_a_groupMembers",
+			"groupName": "SOz1_a_groupName",
+			"groupRow": "SOz1_a_groupRow",
+			"grow": "SOz1_a_grow",
+			"head": "SOz1_a_head",
+			"hiddenFile": "SOz1_a_hiddenFile",
+			"inlineInput": "SOz1_a_inlineInput",
+			"installBtn": "SOz1_a_installBtn",
+			"irow": "SOz1_a_irow",
+			"irowMissing": "SOz1_a_irowMissing",
+			"loading": "SOz1_a_loading",
+			"logoMark": "SOz1_a_logoMark",
+			"logoPlug": "SOz1_a_logoPlug",
+			"meta": "SOz1_a_meta",
+			"metaInline": "SOz1_a_metaInline",
+			"modalNote": "SOz1_a_modalNote",
+			"nm": "SOz1_a_nm",
+			"okState": "SOz1_a_okState",
+			"on": "SOz1_a_on",
+			"orphBadge": "SOz1_a_orphBadge",
+			"orphRow": "SOz1_a_orphRow",
+			"ovArrow": "SOz1_a_ovArrow",
+			"ovByTag": "SOz1_a_ovByTag",
+			"ovFrom": "SOz1_a_ovFrom",
+			"ovRow": "SOz1_a_ovRow",
+			"owner": "SOz1_a_owner",
+			"pageEllipsis": "SOz1_a_pageEllipsis",
+			"pageInfo": "SOz1_a_pageInfo",
+			"pager": "SOz1_a_pager",
+			"pagerPages": "SOz1_a_pagerPages",
+			"panelNote": "SOz1_a_panelNote",
+			"pct": "SOz1_a_pct",
+			"progress": "SOz1_a_progress",
+			"repoLink": "SOz1_a_repoLink",
+			"root": "SOz1_a_root",
+			"row1": "SOz1_a_row1",
+			"sectAction": "SOz1_a_sectAction",
+			"sectionOverview": "SOz1_a_sectionOverview",
+			"setActions": "SOz1_a_setActions",
+			"setBetaTag": "SOz1_a_setBetaTag",
+			"setBody": "SOz1_a_setBody",
+			"setCard": "SOz1_a_setCard",
+			"setCardOpen": "SOz1_a_setCardOpen",
+			"setCheck": "SOz1_a_setCheck",
+			"setChevron": "SOz1_a_setChevron",
+			"setChevronOpen": "SOz1_a_setChevronOpen",
+			"setConfirm": "SOz1_a_setConfirm",
+			"setDanger": "SOz1_a_setDanger",
+			"setDesc": "SOz1_a_setDesc",
+			"setHeader": "SOz1_a_setHeader",
+			"setHeadText": "SOz1_a_setHeadText",
+			"setHint": "SOz1_a_setHint",
+			"setLabel": "SOz1_a_setLabel",
+			"setLabelBox": "SOz1_a_setLabelBox",
+			"setName": "SOz1_a_setName",
+			"setRow": "SOz1_a_setRow",
+			"setSeg": "SOz1_a_setSeg",
+			"setSegBtn": "SOz1_a_setSegBtn",
+			"setSegOn": "SOz1_a_setSegOn",
+			"shot": "SOz1_a_shot",
+			"shots": "SOz1_a_shots",
+			"sp": "SOz1_a_sp",
+			"spec": "SOz1_a_spec",
+			"specTag": "SOz1_a_specTag",
+			"specTagFile": "SOz1_a_specTagFile",
+			"specTagGit": "SOz1_a_specTagGit",
+			"spin": "SOz1_a_spin",
+			"src": "SOz1_a_src",
+			"staleAction": "SOz1_a_staleAction",
+			"star": "SOz1_a_star",
+			"stickyHead": "SOz1_a_stickyHead",
+			"sub": "SOz1_a_sub",
+			"swatches": "SOz1_a_swatches",
+			"switch": "SOz1_a_switch",
+			"switchKnob": "SOz1_a_switchKnob",
+			"switchMixed": "SOz1_a_switchMixed",
+			"switchOn": "SOz1_a_switchOn",
+			"tab": "SOz1_a_tab",
+			"tabs": "SOz1_a_tabs",
+			"tabSearch": "SOz1_a_tabSearch",
+			"tabSearchRow": "SOz1_a_tabSearchRow",
+			"tag": "SOz1_a_tag",
+			"themesGrid": "SOz1_a_themesGrid",
+			"title": "SOz1_a_title",
+			"titleRow": "SOz1_a_titleRow",
+			"top": "SOz1_a_top",
+			"topBtn": "SOz1_a_topBtn",
+			"version": "SOz1_a_version",
+			"viewBar": "SOz1_a_viewBar",
+			"viewBtn": "SOz1_a_viewBtn",
+			"viewOn": "SOz1_a_viewOn",
+			"warnLine": "SOz1_a_warnLine"
 		};
 		//#endregion
 		//#region src/client/Diagnostics.tsx
@@ -2504,13 +2547,20 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 			return names.length === Object.keys(right).length && names.every((name) => left[name] === right[name]);
 		}
 		/** Sort field choices in the filter panel. */
-		const SORT_FIELD_OPTIONS = [{
-			key: "stars",
-			label: "sortStars"
-		}, {
-			key: "added",
-			label: "sortAdded"
-		}];
+		const SORT_FIELD_OPTIONS = [
+			{
+				key: "downloads",
+				label: "sortDownloads"
+			},
+			{
+				key: "stars",
+				label: "sortStars"
+			},
+			{
+				key: "added",
+				label: "sortAdded"
+			}
+		];
 		/** Sort direction choices in the filter panel (labels depend on the field). */
 		const SORT_DIR_OPTIONS = ["desc", "asc"];
 		/** Published-within choices in the filter panel. */
@@ -2737,7 +2787,7 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 			const bodyRef = (0, react.useRef)(null);
 			/** Hidden file input behind the Import button (a Button can't host an <input>). */
 			const fileInputRef = (0, react.useRef)(null);
-			const [sortField, setSortField] = (0, react.useState)("stars");
+			const [sortField, setSortField] = (0, react.useState)("downloads");
 			const [sortDir, setSortDir] = (0, react.useState)("desc");
 			/** Direction labels adapt to the field: stars → asc/desc, added → oldest/newest. */
 			const sortDirLabel = (dir) => sortField === "added" ? dir === "desc" ? "sortNewest" : "sortOldest" : dir === "desc" ? "sortDesc" : "sortAsc";
@@ -3719,49 +3769,40 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 				return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
 					className: Market_module_css_default.card,
 					children: [
-						/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+						/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
 							className: Market_module_css_default.row1,
-							children: [
-								/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-									style: { minWidth: 0 },
-									children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-										className: Market_module_css_default.nm,
-										title: p.name,
-										children: [pluginName(p.name), p.deprecated === true && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-											className: Market_module_css_default.depBadge,
-											children: t("deprecatedBadge")
-										})]
-									}), /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-										className: Market_module_css_default.byline,
-										children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)(OwnerAvatar, {
-											name: p.name,
-											owner: p.owner || ""
-										}), /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("span", {
-											className: Market_module_css_default.owner,
-											children: [
-												p.owner,
-												typeof p.stars === "number" && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-													className: Market_module_css_default.star,
-													children: " · ★ " + p.stars
-												}),
-												p.added && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-													className: Market_module_css_default.star,
-													children: " · " + t("published") + " " + p.added
-												})
-											]
-										})]
+							children: /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+								style: { minWidth: 0 },
+								children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+									className: Market_module_css_default.nm,
+									title: p.name,
+									children: [pluginName(p.name), p.deprecated === true && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+										className: Market_module_css_default.depBadge,
+										children: t("deprecatedBadge")
 									})]
-								}),
-								/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { className: Market_module_css_default.grow }),
-								/* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
-									variant: "ghost",
-									size: "sm",
-									className: Market_module_css_default.srcBtn,
-									icon: /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconCodeOutline16, { size: 14 }),
-									onClick: () => window.open(p.url, "_blank", "noopener"),
-									children: t("viewSource")
-								})
-							]
+								}), /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+									className: Market_module_css_default.byline,
+									children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)(OwnerAvatar, {
+										name: p.name,
+										owner: p.owner || ""
+									}), /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("span", {
+										className: Market_module_css_default.owner,
+										children: [
+											p.owner,
+											typeof p.downloads === "number" && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+												className: Market_module_css_default.star,
+												title: String(p.downloads),
+												children: " · ↓ " + formatCount(p.downloads)
+											}),
+											typeof p.stars === "number" && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+												className: Market_module_css_default.star,
+												title: String(p.stars),
+												children: " · ★ " + formatCount(p.stars)
+											})
+										]
+									})]
+								})]
+							})
 						}),
 						/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
 							className: Market_module_css_default.desc,
@@ -3787,6 +3828,17 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 									className: Market_module_css_default.tag,
 									children: data.categories[p.category] && (data.categories[p.category][lang] || data.categories[p.category].en) || p.category
 								}),
+								p.added && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+									className: Market_module_css_default.metaInline,
+									children: t("published") + " " + p.added
+								}),
+								/* @__PURE__ */ (0, react_jsx_runtime.jsx)("a", {
+									className: Market_module_css_default.src,
+									href: p.url,
+									target: "_blank",
+									rel: "noreferrer",
+									children: (p.added ? " · " : "") + t("viewSource")
+								}),
 								/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { className: Market_module_css_default.grow }),
 								done ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
 									className: Market_module_css_default.okState,
@@ -3797,11 +3849,13 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 								}) : busy ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
 									variant: "primary",
 									size: "sm",
+									className: Market_module_css_default.installBtn,
 									disabled: true,
 									children: t("installing")
 								}) : /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
 									variant: "primary",
 									size: "sm",
+									className: Market_module_css_default.installBtn,
 									disabled: busyUrl !== null || !envReady,
 									onClick: () => setConfirming(p),
 									children: t("install")
@@ -3853,49 +3907,40 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 				return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
 					className: Market_module_css_default.card,
 					children: [
-						/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+						/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
 							className: Market_module_css_default.row1,
-							children: [
-								/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-									style: { minWidth: 0 },
-									children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-										className: Market_module_css_default.nm,
-										title: p.name,
-										children: [pluginName(p.name), p.deprecated === true && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-											className: Market_module_css_default.depBadge,
-											children: t("deprecatedBadge")
-										})]
-									}), /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-										className: Market_module_css_default.byline,
-										children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)(OwnerAvatar, {
-											name: p.name,
-											owner: p.owner || ""
-										}), /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("span", {
-											className: Market_module_css_default.owner,
-											children: [
-												p.owner,
-												typeof p.stars === "number" && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-													className: Market_module_css_default.star,
-													children: " · ★ " + p.stars
-												}),
-												p.added && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-													className: Market_module_css_default.star,
-													children: " · " + t("published") + " " + p.added
-												})
-											]
-										})]
+							children: /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+								style: { minWidth: 0 },
+								children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+									className: Market_module_css_default.nm,
+									title: p.name,
+									children: [pluginName(p.name), p.deprecated === true && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+										className: Market_module_css_default.depBadge,
+										children: t("deprecatedBadge")
 									})]
-								}),
-								/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { className: Market_module_css_default.grow }),
-								/* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
-									variant: "ghost",
-									size: "sm",
-									className: Market_module_css_default.srcBtn,
-									icon: /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconCodeOutline16, { size: 14 }),
-									onClick: () => window.open(p.url, "_blank", "noopener"),
-									children: t("viewSource")
-								})
-							]
+								}), /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+									className: Market_module_css_default.byline,
+									children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)(OwnerAvatar, {
+										name: p.name,
+										owner: p.owner || ""
+									}), /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("span", {
+										className: Market_module_css_default.owner,
+										children: [
+											p.owner,
+											typeof p.downloads === "number" && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+												className: Market_module_css_default.star,
+												title: String(p.downloads),
+												children: " · ↓ " + formatCount(p.downloads)
+											}),
+											typeof p.stars === "number" && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+												className: Market_module_css_default.star,
+												title: String(p.stars),
+												children: " · ★ " + formatCount(p.stars)
+											})
+										]
+									})]
+								})]
+							})
 						}),
 						/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
 							className: Market_module_css_default.desc,
@@ -3917,6 +3962,17 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 						/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
 							className: Market_module_css_default.foot,
 							children: [
+								p.added && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+									className: Market_module_css_default.metaInline,
+									children: t("published") + " " + p.added
+								}),
+								/* @__PURE__ */ (0, react_jsx_runtime.jsx)("a", {
+									className: Market_module_css_default.src,
+									href: p.url,
+									target: "_blank",
+									rel: "noreferrer",
+									children: (p.added ? " · " : "") + t("viewSource")
+								}),
 								/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { className: Market_module_css_default.grow }),
 								removingName === instName ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
 									variant: "outline",
@@ -4045,6 +4101,14 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 										className: Market_module_css_default.title,
 										children: t("nav")
 									}),
+									/* @__PURE__ */ (0, react_jsx_runtime.jsx)("a", {
+										className: Market_module_css_default.repoLink,
+										href: "https://github.com/dsh-market/dsh-market",
+										target: "_blank",
+										rel: "noreferrer",
+										title: "dsh-market · GitHub",
+										children: "dsh-market"
+									}),
 									version !== null && /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("span", {
 										className: Market_module_css_default.version,
 										title: t("versionHint"),
@@ -4078,7 +4142,7 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 							/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
 								className: Market_module_css_default.sub,
 								children: [
-									/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { children: t("subtitle") + (data ? " · " + data.count : "") }),
+									/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { children: t("subtitle") }),
 									/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { className: Market_module_css_default.grow }),
 									/* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
 										variant: "outline",
@@ -4640,8 +4704,9 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 									animated: true
 								})
 							}), t("loading")]
-						}) : /* @__PURE__ */ (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [
-							/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+						}) : /* @__PURE__ */ (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+							className: Market_module_css_default.stickyHead,
+							children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
 								className: Market_module_css_default.tabSearchRow,
 								children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Input, {
 									className: Market_module_css_default.tabSearch,
@@ -4650,8 +4715,7 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 									value: q,
 									onChange: (e) => setQ(e.target.value)
 								})
-							}),
-							/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+							}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
 								className: Market_module_css_default.cats,
 								children: /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
 									className: Market_module_css_default.catsRow,
@@ -4666,7 +4730,7 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 													"data-chip": "1",
 													active: cat === "all",
 													onClick: () => setCat("all"),
-													children: t("all")
+													children: t("all") + " (" + formatCount(data.count) + ")"
 												}),
 												shown.map((id) => /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Pill, {
 													"data-chip": "1",
@@ -4701,84 +4765,83 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 										items: filterItems
 									})]
 								})
-							}),
-							plugins.length === 0 ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
-								className: Market_module_css_default.empty,
-								children: t("empty")
-							}) : /* @__PURE__ */ (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
-								className: Market_module_css_default.grid,
-								children: pagePlugins.map(pluginCard)
-							}), /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-								className: Market_module_css_default.pager,
-								children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
-									className: Market_module_css_default.pagerPages,
-									children: totalPages > 1 && /* @__PURE__ */ (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [
-										/* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
-											variant: "outline",
-											size: "sm",
-											disabled: currentPage === 1,
-											onClick: () => goToPage(1),
-											"aria-label": t("firstPage"),
-											children: "«"
-										}),
-										/* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
-											variant: "outline",
-											size: "sm",
-											icon: /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconChevronLeftOutline14, { size: 14 }),
-											disabled: currentPage === 1,
-											onClick: () => goToPage(currentPage - 1),
-											children: t("prevPage")
-										}),
-										pageItems(currentPage, totalPages).map((item, i) => item === "…" ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-											className: Market_module_css_default.pageEllipsis,
-											children: "…"
-										}, "e" + i) : /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
-											variant: item === currentPage ? "primary" : "outline",
-											size: "sm",
-											onClick: () => goToPage(item),
-											children: item
-										}, item)),
-										/* @__PURE__ */ (0, react_jsx_runtime.jsxs)(_deepseek_ai_dsh_client_ui_primitives.Button, {
-											variant: "outline",
-											size: "sm",
-											disabled: currentPage === totalPages,
-											onClick: () => goToPage(currentPage + 1),
-											children: [t("nextPage"), /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconChevronRightOutline14, { size: 14 })]
-										}),
-										/* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
-											variant: "outline",
-											size: "sm",
-											disabled: currentPage === totalPages,
-											onClick: () => goToPage(totalPages),
-											"aria-label": t("lastPage"),
-											children: "»"
-										}),
-										/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-											className: Market_module_css_default.pageInfo,
-											children: t("pageInfo").replace("{0}", String(currentPage)).replace("{1}", String(totalPages))
-										})
-									] })
-								}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Menu, {
-									open: sizeOpen,
-									onClose: () => setSizeOpen(false),
-									onSelect: (id) => changePageSize(Number(id)),
-									selectedId: String(pageSize),
-									align: "end",
-									portal: true,
-									anchor: /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
+							})]
+						}), plugins.length === 0 ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+							className: Market_module_css_default.empty,
+							children: t("empty")
+						}) : /* @__PURE__ */ (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+							className: Market_module_css_default.grid,
+							children: pagePlugins.map(pluginCard)
+						}), /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+							className: Market_module_css_default.pager,
+							children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+								className: Market_module_css_default.pagerPages,
+								children: totalPages > 1 && /* @__PURE__ */ (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [
+									/* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
 										variant: "outline",
 										size: "sm",
-										icon: /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconChevronDownOutline14, { size: 14 }),
-										onClick: () => setSizeOpen((o) => !o),
-										children: t("perPage") + " " + pageSize
+										disabled: currentPage === 1,
+										onClick: () => goToPage(1),
+										"aria-label": t("firstPage"),
+										children: "«"
 									}),
-									items: PAGE_SIZES.map((size) => ({
-										id: String(size),
-										label: String(size)
-									}))
-								})]
-							})] })
-						] }) : tab === "themes" && themeSnap !== null ? /* @__PURE__ */ (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [
+									/* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
+										variant: "outline",
+										size: "sm",
+										icon: /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconChevronLeftOutline14, { size: 14 }),
+										disabled: currentPage === 1,
+										onClick: () => goToPage(currentPage - 1),
+										children: t("prevPage")
+									}),
+									pageItems(currentPage, totalPages).map((item, i) => item === "…" ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+										className: Market_module_css_default.pageEllipsis,
+										children: "…"
+									}, "e" + i) : /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
+										variant: item === currentPage ? "primary" : "outline",
+										size: "sm",
+										onClick: () => goToPage(item),
+										children: item
+									}, item)),
+									/* @__PURE__ */ (0, react_jsx_runtime.jsxs)(_deepseek_ai_dsh_client_ui_primitives.Button, {
+										variant: "outline",
+										size: "sm",
+										disabled: currentPage === totalPages,
+										onClick: () => goToPage(currentPage + 1),
+										children: [t("nextPage"), /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconChevronRightOutline14, { size: 14 })]
+									}),
+									/* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
+										variant: "outline",
+										size: "sm",
+										disabled: currentPage === totalPages,
+										onClick: () => goToPage(totalPages),
+										"aria-label": t("lastPage"),
+										children: "»"
+									}),
+									/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+										className: Market_module_css_default.pageInfo,
+										children: t("pageInfo").replace("{0}", String(currentPage)).replace("{1}", String(totalPages))
+									})
+								] })
+							}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Menu, {
+								open: sizeOpen,
+								onClose: () => setSizeOpen(false),
+								onSelect: (id) => changePageSize(Number(id)),
+								selectedId: String(pageSize),
+								align: "end",
+								portal: true,
+								anchor: /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
+									variant: "outline",
+									size: "sm",
+									icon: /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconChevronDownOutline14, { size: 14 }),
+									onClick: () => setSizeOpen((o) => !o),
+									children: t("perPage") + " " + pageSize
+								}),
+								items: PAGE_SIZES.map((size) => ({
+									id: String(size),
+									label: String(size)
+								}))
+							})]
+						})] })] }) : tab === "themes" && themeSnap !== null ? /* @__PURE__ */ (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [
 							/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
 								className: Market_module_css_default.tabSearchRow,
 								children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Input, {

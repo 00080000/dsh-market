@@ -18,6 +18,11 @@ export interface RegistryPlugin {
   category: string
   description?: LocalizedText
   stars?: number
+  /**
+   * npm downloads in the last 30 days, when the entry has a published
+   * package. Absent means "no npm package" — a coverage gap, not a zero.
+   */
+  downloads?: number | null
   added?: string
   install?: string
   /**
@@ -177,7 +182,7 @@ export function looksTerminal(plugin: RegistryPlugin, lang: string): boolean {
 }
 
 /** Sortable field for the Discover list. */
-export type SortField = 'stars' | 'added'
+export type SortField = 'downloads' | 'stars' | 'added'
 /** Sort direction: desc = newest/most first, asc = oldest/least first. */
 export type SortDir = 'desc' | 'asc'
 /** Combined sort key sent to visiblePlugins. */
@@ -219,6 +224,16 @@ export interface ListQuery {
 }
 
 /**
+ * Whether a catalog entry IS the market itself. The catalog still carries
+ * it — nothing about the data changes, and the Installed tab still shows it
+ * — this is purely "a store has no reason to sell itself to someone already
+ * standing in it."
+ */
+export function isMarketItself(plugin: Pick<RegistryPlugin, 'name' | 'npm'>): boolean {
+  return plugin.name === 'dsh-market' || plugin.npm === 'dshmarket'
+}
+
+/**
  * The discover list: category filter, then the published-within window, then
  * search across name / owner / localized description, then the selected sort.
  * Pure — the section renders exactly this.
@@ -226,6 +241,7 @@ export interface ListQuery {
 export function visiblePlugins(plugins: RegistryPlugin[], options: ListQuery): RegistryPlugin[] {
   const query = options.query.trim().toLowerCase()
   const list = plugins.filter((p) => {
+    if (isMarketItself(p)) return false
     if (options.category !== 'all' && p.category !== options.category) return false
     if (options.sinceDays !== undefined && !withinDays(p.added, options.sinceDays)) return false
     if (query === '') return true
@@ -234,6 +250,29 @@ export function visiblePlugins(plugins: RegistryPlugin[], options: ListQuery): R
       || p.owner.toLowerCase().includes(query)
       || desc.toLowerCase().includes(query)
   })
+  // A github:-only entry has no npm package and therefore no download count
+  // at all — that is a coverage gap, not a "0 downloads" verdict, and must
+  // not be read as less popular than a package that genuinely has zero.
+  // Such entries always sort after every entry WITH a real count, in either
+  // direction, and are ordered against each other by star count — the only
+  // signal available for them — rather than left in an arbitrary tie.
+  const hasDownloads = (p: RegistryPlugin): p is RegistryPlugin & { downloads: number } => typeof p.downloads === 'number'
+  if (options.sort === 'downloads-desc') {
+    return [...list].sort((a, b) => {
+      if (hasDownloads(a) && hasDownloads(b)) return b.downloads - a.downloads
+      if (hasDownloads(a)) return -1
+      if (hasDownloads(b)) return 1
+      return (b.stars ?? -1) - (a.stars ?? -1)
+    })
+  }
+  if (options.sort === 'downloads-asc') {
+    return [...list].sort((a, b) => {
+      if (hasDownloads(a) && hasDownloads(b)) return a.downloads - b.downloads
+      if (hasDownloads(a)) return -1
+      if (hasDownloads(b)) return 1
+      return (a.stars ?? -1) - (b.stars ?? -1)
+    })
+  }
   if (options.sort === 'stars-desc') {
     return [...list].sort((a, b) => (b.stars ?? -1) - (a.stars ?? -1))
   }
@@ -659,4 +698,19 @@ export function pluginName(name: string): string {
   // A sub-path that is empty or trailing-slashed tells us nothing; the
   // repository half is a better answer than an empty title.
   return leaf === '' ? name.slice(0, hash) : leaf
+}
+
+/**
+ * Compact display for a count that can run into the tens of thousands
+ * (npm downloads, star counts): "11.9k" instead of "11862". Reported —
+ * the raw number made the card byline visibly cramped once downloads was
+ * added alongside stars.
+ *
+ * Below 1000 the exact number is shown; a small count is exactly the case
+ * where the precision matters and abbreviating it buys nothing.
+ */
+export function formatCount(n: number): string {
+  if (!Number.isFinite(n) || n < 1000) return String(n)
+  const k = Math.round(n / 100) / 10
+  return `${Number.isInteger(k) ? k.toFixed(0) : k.toFixed(1)}k`
 }

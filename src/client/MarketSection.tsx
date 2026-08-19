@@ -36,7 +36,7 @@ import css from './Market.module.css'
 import { Diagnostics } from './Diagnostics.tsx'
 import {
   avatarColor, entryForDep, groupSwitchState, humanOutput, isInstalled, looksTerminal, matchInstalledName, orderedCategories,
-  pageItems, pluginName, pluginScreenshots, readSession, themePlugins as themePluginsOf, themeSwatch, TIME_RANGE_DAYS, visiblePlugins,
+  formatCount, pageItems, pluginName, pluginScreenshots, readSession, themePlugins as themePluginsOf, themeSwatch, TIME_RANGE_DAYS, visiblePlugins,
 } from './market-data.ts'
 import type {
 ActivationInfo, ActivationState, GistExportResult, InstalledMap, InstalledRepoHints, InstalledRepoIdentities, MarketStatus, Registry, RegistryPlugin,
@@ -277,6 +277,7 @@ function sameInstalledMap(left: InstalledMap, right: InstalledMap): boolean {
 
 /** Sort field choices in the filter panel. */
 const SORT_FIELD_OPTIONS: ReadonlyArray<{ key: SortField; label: string }> = [
+  { key: 'downloads', label: 'sortDownloads' },
   { key: 'stars', label: 'sortStars' },
   { key: 'added', label: 'sortAdded' },
 ]
@@ -511,7 +512,7 @@ export function MarketSection(props: MarketSectionProps) {
   const bodyRef = useRef<HTMLDivElement | null>(null)
   /** Hidden file input behind the Import button (a Button can't host an <input>). */
   const fileInputRef = useRef<HTMLInputElement | null>(null)
-  const [sortField, setSortField] = useState<SortField>('stars')
+  const [sortField, setSortField] = useState<SortField>('downloads')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
   /** Direction labels adapt to the field: stars → asc/desc, added → oldest/newest. */
   const sortDirLabel = (dir: SortDir): string =>
@@ -1546,24 +1547,11 @@ export function MarketSection(props: MarketSectionProps) {
               <OwnerAvatar name={p.name} owner={p.owner || ''} />
               <span className={css.owner}>
                 {p.owner}
-                {typeof p.stars === 'number' && <span className={css.star}>{' · ★ ' + p.stars}</span>}
-                {p.added && <span className={css.star}>{' · ' + t('published') + ' ' + p.added}</span>}
+                {typeof p.downloads === 'number' && <span className={css.star} title={String(p.downloads)}>{' · ↓ ' + formatCount(p.downloads)}</span>}
+                {typeof p.stars === 'number' && <span className={css.star} title={String(p.stars)}>{' · ★ ' + formatCount(p.stars)}</span>}
               </span>
             </div>
           </div>
-          <span className={css.grow} />
-          {/* Ghost, not outline. A bordered button here read as the card's
-              second action and sat opposite Install at the same weight,
-              while almost nobody opens the source before installing. It
-              stays labelled and in place for the people who do — the
-              change is its claim on attention, not its availability. */}
-          <Button
-            variant="ghost"
-            size="sm"
-            className={css.srcBtn}
-            icon={<IconCodeOutline16 size={14} />}
-            onClick={() => window.open(p.url, '_blank', 'noopener')}
-          >{t('viewSource')}</Button>
         </div>
         <div className={css.desc}>{desc}</div>
         {p.deprecated === true && (
@@ -1582,17 +1570,23 @@ export function MarketSection(props: MarketSectionProps) {
           <span className={css.tag}>
             {(data!.categories[p.category] && (data!.categories[p.category]![lang] || data!.categories[p.category]!.en)) || p.category}
           </span>
+          {p.added && <span className={css.metaInline}>{t('published') + ' ' + p.added}</span>}
+          {/* De-emphasized on purpose: almost nobody opens the source
+              before installing, so it rides along with the date instead of
+              claiming a button of its own beside Install. */}
+          <a className={css.src} href={p.url} target="_blank" rel="noreferrer">{(p.added ? ' · ' : '') + t('viewSource')}</a>
           <span className={css.grow} />
           {done
             ? <span className={css.okState}>{t('installedBadge')}</span>
             : already
               ? <span className={css.okState}>{t('alreadyInstalled')}</span>
               : busy
-                ? <Button variant="primary" size="sm" disabled>{t('installing')}</Button>
+                ? <Button variant="primary" size="sm" className={css.installBtn} disabled>{t('installing')}</Button>
                 : (
                     <Button
                       variant="primary"
                       size="sm"
+                      className={css.installBtn}
                       disabled={busyUrl !== null || !envReady}
                       onClick={() => setConfirming(p)}
                     >{t('install')}</Button>
@@ -1651,24 +1645,11 @@ export function MarketSection(props: MarketSectionProps) {
               <OwnerAvatar name={p.name} owner={p.owner || ''} />
               <span className={css.owner}>
                 {p.owner}
-                {typeof p.stars === 'number' && <span className={css.star}>{' · ★ ' + p.stars}</span>}
-                {p.added && <span className={css.star}>{' · ' + t('published') + ' ' + p.added}</span>}
+                {typeof p.downloads === 'number' && <span className={css.star} title={String(p.downloads)}>{' · ↓ ' + formatCount(p.downloads)}</span>}
+                {typeof p.stars === 'number' && <span className={css.star} title={String(p.stars)}>{' · ★ ' + formatCount(p.stars)}</span>}
               </span>
             </div>
           </div>
-          <span className={css.grow} />
-          {/* Ghost, not outline. A bordered button here read as the card's
-              second action and sat opposite Install at the same weight,
-              while almost nobody opens the source before installing. It
-              stays labelled and in place for the people who do — the
-              change is its claim on attention, not its availability. */}
-          <Button
-            variant="ghost"
-            size="sm"
-            className={css.srcBtn}
-            icon={<IconCodeOutline16 size={14} />}
-            onClick={() => window.open(p.url, '_blank', 'noopener')}
-          >{t('viewSource')}</Button>
         </div>
         <div className={css.desc}>{desc}</div>
         {p.deprecated === true && (
@@ -1684,6 +1665,11 @@ export function MarketSection(props: MarketSectionProps) {
           </div>
         )}
         <div className={css.foot}>
+          {p.added && <span className={css.metaInline}>{t('published') + ' ' + p.added}</span>}
+          {/* De-emphasized on purpose: almost nobody opens the source
+              before installing, so it rides along with the date instead of
+              claiming a button of its own beside Install. */}
+          <a className={css.src} href={p.url} target="_blank" rel="noreferrer">{(p.added ? ' · ' : '') + t('viewSource')}</a>
           <span className={css.grow} />
           {removingName === instName
             ? <Button variant="outline" size="sm" disabled>{t('uninstalling')}</Button>
@@ -1767,6 +1753,10 @@ export function MarketSection(props: MarketSectionProps) {
         <div className={css.titleRow}>
           <MarketLogo size={22} style={{ flexShrink: 0 }} />
           <h2 className={css.title}>{t('nav')}</h2>
+          {/* A quiet pointer back to the project — most visitors reach the
+              market through a client that embeds it, with no other way to
+              find the repo it came from. */}
+          <a className={css.repoLink} href="https://github.com/dsh-market/dsh-market" target="_blank" rel="noreferrer" title="dsh-market · GitHub">dsh-market</a>
           {version !== null && <span className={css.version} title={t('versionHint')}>v{version}</span>}
           {(() => {
             const self = installed['dshmarket'] !== undefined ? 'dshmarket' : 'dsh-market'
@@ -1790,7 +1780,7 @@ export function MarketSection(props: MarketSectionProps) {
           )}
         </div>
         <div className={css.sub}>
-          <span>{t('subtitle') + (data ? ' · ' + data.count : '')}</span>
+          <span>{t('subtitle')}</span>
           <span className={css.grow} />
           <Button
             variant="outline"
@@ -2111,6 +2101,7 @@ export function MarketSection(props: MarketSectionProps) {
               ? <div className={css.loading}><span className={css.logoMark}><MarketLogo size={26} animated /></span>{t('loading')}</div>
               : (
                   <>
+                    <div className={css.stickyHead}>
                     <div className={css.tabSearchRow}>
                       <Input className={css.tabSearch} icon={<IconSearchOutline16 size={14} />} placeholder={t('searchPh')} value={q} onChange={e => setQ(e.target.value)} />
                     </div>
@@ -2131,7 +2122,7 @@ export function MarketSection(props: MarketSectionProps) {
                           const shown = catsOpen || visibleCats === null ? ordered : ordered.slice(0, Math.max(0, visibleCats - 1))
                           return (
                             <>
-                              <Pill data-chip="1" active={cat === 'all'} onClick={() => setCat('all')}>{t('all')}</Pill>
+                              <Pill data-chip="1" active={cat === 'all'} onClick={() => setCat('all')}>{t('all') + ' (' + formatCount(data!.count) + ')'}</Pill>
                               {shown.map(id => (
                                 <Pill
                                   key={id}
@@ -2170,6 +2161,7 @@ export function MarketSection(props: MarketSectionProps) {
                         items={filterItems}
                       />
                       </div>
+                    </div>
                     </div>
                     {plugins.length === 0
                       ? <div className={css.empty}>{t('empty')}</div>
