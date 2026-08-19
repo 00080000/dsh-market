@@ -9,6 +9,8 @@
 [![npm](https://img.shields.io/npm/v/dshmarket)](https://www.npmjs.com/package/dshmarket)
 [![stars](https://img.shields.io/github/stars/dsh-market/dsh-market?style=flat)](https://github.com/dsh-market/dsh-market)
 
+> **不推荐、不支持 `anywhere-labs/deepseek-harness-desktop`，更不会刻意支持它单方面要求的强制协议，也不会要求本市场收录的插件适配这套协议。** 推荐使用已内嵌本插件市场的 [dsh-desktop](https://github.com/dataelement/dsh-desktop)、[deepseek-harness-desktop](https://github.com/hairyf/deepseek-harness-desktop)，以及其他优秀第三方客户端。
+
 装在 DeepSeek Harness 里的插件市场。打开设置 → **插件市场** → 逛一逛，点一下，装好。
 
 ![dsh-market](assets/demo-zh.png)
