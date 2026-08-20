@@ -30,7 +30,7 @@ import { analyzeProfile } from './check.ts'
 import { applyBundleOrder, mergeOrder, readBundleRules, readBundleStack, validateOrder } from './order.ts'
 import { trialValidate } from './trial.ts'
 import { findInstalledAlias, gitAllowBuildsKey, installTargetFor } from './sources.ts'
-import { isStaleUpdate, parseIgnoredBuilds, parsePrepareNotAllowed, RELEASE_AGE_OVERRIDE, retargetCollections, validateAddedPlugins, withHoistRecovery } from './install.ts'
+import { groupConflictsByOwner, isStaleUpdate, parseIgnoredBuilds, parsePrepareNotAllowed, RELEASE_AGE_OVERRIDE, retargetCollections, validateAddedPlugins, withHoistRecovery } from './install.ts'
 import { asChannel, CHANNELS, DIST_TAG, resolveChannel, type Channel } from './channels.ts'
 import { checkUpdates, fetchNpmLatest, invalidateUpdates, isUpgrade, latestPublishedRecently, versionOnChannel } from './updates.ts'
 import { createThemeManager, type LoaderEntry } from './themes.ts'
@@ -2059,6 +2059,7 @@ export function mountMarketRoutes(
                 ok = true
               }
             }
+            const conflictGroups = groupConflictsByOwner(conflicts)
             const installed = readInstalled(config.profile, activeProfileDir)
             let hot = false
             let activation: Record<string, ReturnType<typeof verifyActivation>> | undefined
@@ -2118,8 +2119,15 @@ export function mountMarketRoutes(
               // the user with pnpm's raw stack.
               // A loader-id clash is the most actionable failure of all: the
               // plugin is fine, it just cannot coexist with this profile (#122).
-              error: conflicts.length > 0
-                ? `「${conflicts[0].name}」与已安装的「${conflicts[0].owner}」使用了相同的 loader 条目 id（${[...new Set(conflicts.map(hit => hit.id))].join(', ')}），两者无法在同一个 profile 共存——装上会导致 DSH 下次启动失败，因此已自动移除。这类插件（例如终端 TUI 插件）请装到单独的 profile。 / "${conflicts[0].name}" declares the same loader entry id(s) as the installed "${conflicts[0].owner}" (${[...new Set(conflicts.map(hit => hit.id))].join(', ')}); they cannot coexist in one profile — keeping it would stop DSH from starting, so it was removed. Install this kind of plugin (e.g. a terminal TUI bundle) into its own profile.`
+              // The UI renders `conflictGroups`; this string is the fallback
+              // for logs and non-UI callers. It attributes each id to the
+              // owner that actually declares it — a candidate can clash with
+              // several installed plugins at once, and naming only the first
+              // owner while listing every id blamed one plugin for another's
+              // ids.
+              conflictGroups: conflictGroups.length > 0 ? conflictGroups : undefined,
+              error: conflictGroups.length > 0
+                ? `「${conflicts[0].name}」与已安装的 ${conflictGroups.map(group => `「${group.owner}」（${group.ids.join('、')}）`).join('、')} 占用相同的 loader 条目 id，无法在同一环境中共存——保留会导致 DeepSeek Harness 下次启动失败，因此已自动移除。 / "${conflicts[0].name}" declares the same loader entry id(s) as the installed ${conflictGroups.map(group => `"${group.owner}" (${group.ids.join(', ')})`).join(', ')}; they cannot coexist in one environment — keeping it would stop DeepSeek Harness from starting, so it was removed.`
                 : notAPlugin
                   ? 'nothing installable: the plugin(s) need a build step (blocked by default, see allowBuilds) or ship no prebuilt artifacts / 没有可安装的内容：插件需要构建授权（allowBuilds，默认拦截）或未附带构建产物，详见导出日志'
                   : Array.isArray(ignoredBuilds) && ignoredBuilds.length > 0

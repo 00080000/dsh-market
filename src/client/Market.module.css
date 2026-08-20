@@ -174,6 +174,50 @@
 .progress code{font-family:ui-monospace,Menlo,monospace;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .empty{color:var(--dsw-alias-label-secondary,#9ca3af);font-size:13px;padding:32px;text-align:center}
 .err{color:var(--dsw-alias-state-error-primary,#dc2626);font-size:12px;margin:8px 0;white-space:pre-wrap;word-break:break-all}
+/* Loader-id clash, rendered ON the card the user pressed Install on rather
+   than in the page-level .err banner: that banner is shared by a dozen
+   unrelated operations, so a failure reported there loses its connection to
+   the card that caused it as soon as a list is longer than a screen. */
+.cardBlocked{border-color:var(--dsw-alias-state-error-primary,#dc2626)}
+.conflictHead{display:flex;align-items:flex-start;gap:8px}
+.conflictIcon{flex-shrink:0;margin-top:1px;color:var(--dsw-alias-state-error-primary,#dc2626)}
+.conflictTitle{font-size:13px;font-weight:600;line-height:18px;color:var(--dsw-alias-state-error-primary,#dc2626)}
+.conflictBody{font-size:12px;line-height:19px;margin:0}
+/* One row per OWNER, not per id: the decision the user makes is which
+   plugins to uninstall, so the plugin name leads and the ids it clashes on
+   ride along as secondary evidence. */
+.roster{display:flex;flex-direction:column;gap:1px;border-radius:8px;overflow:hidden;
+        background:var(--dsw-alias-border-l2,#e5e7eb);border:1px solid var(--dsw-alias-border-l2,#e5e7eb)}
+.rosterRow{display:flex;align-items:baseline;gap:8px;padding:7px 10px;background:var(--dsw-alias-bg-layer-1,#fff)}
+.rosterName{font-size:12px;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rosterIds{font-size:11px;color:var(--dsw-alias-label-tertiary,#8b93a1);margin-left:auto;
+           font-family:ui-monospace,Menlo,monospace;overflow-wrap:anywhere;text-align:right}
+.reassure{display:flex;align-items:center;gap:5px;font-size:11.5px;line-height:17px;
+          color:var(--dsw-alias-label-secondary,#6b7280);margin:0}
+.reassureOk{color:var(--dsw-alias-state-success-primary,#16a34a);flex-shrink:0}
+.conflictWhy{font-size:11.5px;line-height:17px;color:var(--dsw-alias-label-tertiary,#8b93a1)}
+/* The clash resolves to a choice between two outcomes, so the options carry
+   their own consequence text and the safe one is preselected. */
+.choices{display:flex;flex-direction:column;gap:7px}
+.choice{display:flex;gap:9px;text-align:left;font:inherit;cursor:pointer;
+        padding:9px 11px;border-radius:9px;background:var(--dsw-alias-bg-layer-1,#fff);
+        border:1px solid var(--dsw-alias-border-l3,#d9dde3)}
+.choice:disabled{cursor:default;opacity:.6}
+.choiceOn{border-color:var(--dsw-alias-brand-primary,#4f6ef7);
+          background:var(--dsw-alias-bg-layer-2,#f5f7ff)}
+.radio{width:14px;height:14px;border-radius:99px;flex-shrink:0;margin-top:1px;
+       border:1.5px solid var(--dsw-alias-border-l3,#d9dde3)}
+.radioOn{border-width:4px;border-color:var(--dsw-alias-brand-primary,#4f6ef7)}
+.choiceMain{display:flex;flex-direction:column;gap:3px;min-width:0}
+.choiceTitle{font-size:12px;font-weight:600;line-height:17px}
+.choiceNote{font-size:11px;line-height:16px;color:var(--dsw-alias-label-tertiary,#8b93a1)}
+.choiceSafe{color:var(--dsw-alias-state-success-primary,#16a34a)}
+/* Destructive actions — uninstall, delete group, and the conflict swap.
+   Doubled selectors so these beat the primitive's own variant rules, the
+   same way .installBtn and .catsToggle do. */
+.dangerBtn.dangerBtn{color:var(--dsw-alias-state-error-primary,#dc2626);border-color:var(--dsw-alias-state-error-primary,#dc2626)}
+.dangerBtn.dangerBtn:hover:not(:disabled){background:var(--dsw-alias-state-error-primary,#dc2626);color:#fff}
+.dangerArmed.dangerArmed{background:var(--dsw-alias-state-error-primary,#dc2626);border-color:var(--dsw-alias-state-error-primary,#dc2626);color:#fff}
 .retryBtn{margin-top:4px}
 .irow{background:var(--dsw-alias-bg-layer-1,#fff);border:1px solid var(--dsw-alias-border-l2,#e5e7eb);border-radius:12px;padding:12px 14px;display:flex;align-items:center;gap:10px;margin-bottom:8px}
 .irowMissing{filter:grayscale(1);opacity:.5}

@@ -10,8 +10,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { InstallResult } from '../src/dsh-cli.ts'
 import {
-  FETCH_TIMEOUT_OVERRIDE, isStaleUpdate, parseIgnoredBuilds, parsePrepareNotAllowed,
-  retargetCollections, validateAddedPlugins, withHoistRecovery,
+  FETCH_TIMEOUT_OVERRIDE, groupConflictsByOwner, isStaleUpdate, parseIgnoredBuilds,
+  parsePrepareNotAllowed, retargetCollections, validateAddedPlugins, withHoistRecovery,
 } from '../src/install.ts'
 import { profileDir } from '../src/profile.ts'
 
@@ -143,6 +143,26 @@ describe('validateAddedPlugins (#18 / #21)', () => {
     const { keep, conflicts } = await validateAddedPlugins(recordingRunner().run, 'web', new Set(['plug-a']))
     expect(keep).toEqual(['plug-b'])
     expect(conflicts).toEqual([])
+  })
+
+  it('groups clash hits by the installed plugin that owns them', () => {
+    // The market asks the user to uninstall PLUGINS, so the owner is the unit
+    // it renders and acts on; a candidate hitting several owners at once has
+    // to keep each id with the one that declares it.
+    expect(groupConflictsByOwner([
+      { id: 'storage', owner: 'dsh-tui-core' },
+      { id: 'panel', owner: 'dsh-panel-kit' },
+      { id: 'terminal', owner: 'dsh-tui-core' },
+    ])).toEqual([
+      { owner: 'dsh-tui-core', ids: ['storage', 'terminal'] },
+      { owner: 'dsh-panel-kit', ids: ['panel'] },
+    ])
+  })
+
+  it('groups a clean single clash into one row, and nothing into nothing', () => {
+    expect(groupConflictsByOwner([{ id: 'storage', owner: 'plug-a' }]))
+      .toEqual([{ owner: 'plug-a', ids: ['storage'] }])
+    expect(groupConflictsByOwner([])).toEqual([])
   })
 
   it('keeps a carrier bundle that mounts other installed packages (#103)', async () => {

@@ -1493,6 +1493,118 @@ describe('a failed install releases the UI and says why', () => {
 })
 
 /**
+ * A loader-id clash (#122) is the one install failure the user can act on:
+ * in a single profile the plugins cannot coexist, so the choice is which one
+ * to keep. That choice only reads if both sides are on screen together,
+ * which is why this lands on the card rather than in the shared error banner
+ * every other operation writes to.
+ */
+describe('a loader-id clash reports on the card and offers the swap', () => {
+  const clash = {
+    ok: false,
+    conflictGroups: [{ owner: 'dsh-tui-core', ids: ['storage', 'terminal'] }],
+    error: 'PROSE-FALLBACK-FOR-LOGS',
+  }
+
+  /** Drive the first card to the point where the clash is on screen. */
+  const installFirstCard = async () => {
+    render(<MarketSection {...props()} />)
+    await screen.findByText('dsh-loop')
+    fireEvent.click(screen.getAllByRole('button', { name: en.install })[0])
+    fireEvent.click(await screen.findByRole('button', { name: en.confirm }))
+    await screen.findByText(en.conflictTitle)
+  }
+
+  it('names the clashing plugin and the ids it holds', async () => {
+    stubFetch({ '/dsh-market/install': clash })
+    await installFirstCard()
+
+    expect(screen.getByText('dsh-tui-core')).toBeTruthy()
+    expect(screen.getByText('storage, terminal')).toBeTruthy()
+    // Saying the environment is untouched is what keeps this from reading as
+    // "something was removed and I do not know what".
+    expect(screen.getByText(re(en.conflictReverted))).toBeTruthy()
+    // The host still sends a prose string for logs; rendering it as well
+    // would report the same failure twice, in two different registers.
+    expect(screen.queryByText(re('PROSE-FALLBACK-FOR-LOGS'))).toBeNull()
+  })
+
+  it('lists one row per owner when a candidate clashes with several at once', async () => {
+    stubFetch({ '/dsh-market/install': { ok: false, conflictGroups: [
+      { owner: 'dsh-tui-core', ids: ['storage'] },
+      { owner: 'dsh-panel-kit', ids: ['panel'] },
+    ] } })
+    await installFirstCard()
+
+    // Both owners, each with only the id it actually declares — the whole
+    // point of grouping rather than listing every id against the first name.
+    expect(screen.getByText('dsh-tui-core')).toBeTruthy()
+    expect(screen.getByText('storage')).toBeTruthy()
+    expect(screen.getByText('dsh-panel-kit')).toBeTruthy()
+    expect(screen.getByText('panel')).toBeTruthy()
+  })
+
+  it('defaults to the outcome that changes nothing, and confirming it uninstalls nothing', async () => {
+    // The destructive option is one click away, so the default carries the
+    // whole safety of this screen: confirming without touching it must not
+    // remove a working plugin.
+    stubFetch({ '/dsh-market/install': clash, '/dsh-market/uninstall': { ok: true, installed: {} } })
+    await installFirstCard()
+
+    expect(screen.getByRole('radio', { name: re(en.conflictKeep) }).getAttribute('aria-checked')).toBe('true')
+    expect(screen.getByRole('radio', { name: re(en.conflictSwap) }).getAttribute('aria-checked')).toBe('false')
+
+    fireEvent.click(screen.getByRole('button', { name: en.confirm }))
+    await waitFor(() => expect(screen.queryByText(en.conflictTitle)).toBeNull())
+    expect(fetchCalls.filter(call => call.path === '/dsh-market/uninstall')).toEqual([])
+  })
+
+  it('swaps: uninstalls what clashed, then retries the install', async () => {
+    let installs = 0
+    stubFetch({
+      '/dsh-market/install': () => {
+        installs += 1
+        return installs === 1 ? clash : { ok: true, hot: true, activation: {}, installed: {} }
+      },
+      '/dsh-market/uninstall': { ok: true, hot: true, installed: {} },
+    })
+    await installFirstCard()
+
+    // The safe outcome is preselected, so the swap only happens once the
+    // user actively moves off it.
+    fireEvent.click(screen.getByRole('radio', { name: re(en.conflictSwap) }))
+    fireEvent.click(screen.getByRole('button', { name: en.confirm }))
+
+    await waitFor(() => expect(installs).toBe(2))
+    expect(fetchCalls.filter(call => call.path === '/dsh-market/uninstall').map(call => call.body))
+      .toEqual([{ name: 'dsh-tui-core' }])
+  })
+
+  it('names the plugins already removed when the swap dies part-way', async () => {
+    // The honest half: nothing reinstalls them, so a bare "failed" would
+    // leave the user guessing which of their plugins survived.
+    let removes = 0
+    stubFetch({
+      '/dsh-market/install': { ok: false, conflictGroups: [
+        { owner: 'a-plug', ids: ['x'] },
+        { owner: 'b-plug', ids: ['y'] },
+      ] },
+      '/dsh-market/uninstall': () => {
+        removes += 1
+        return removes === 1 ? { ok: true, installed: {} } : { ok: false, error: 'EBUSY' }
+      },
+    })
+    await installFirstCard()
+
+    fireEvent.click(screen.getByRole('radio', { name: re(en.conflictSwap) }))
+    fireEvent.click(screen.getByRole('button', { name: en.confirm }))
+
+    await waitFor(() => expect(screen.getByText(re(en.conflictReplaceFailed))).toBeTruthy())
+    expect(screen.getByText(re('a-plug'))).toBeTruthy()
+  })
+})
+
+/**
  * The category row's height cap belongs to the MEASURING pass and nowhere
  * else. That pass renders every chip so their offsets can be counted, and
  * clipping hides the tall row for the frame it exists; keeping the cap while

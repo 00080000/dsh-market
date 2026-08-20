@@ -424,6 +424,13 @@ const TIME_OPTIONS: ReadonlyArray<{ key: TimeRange; label: string }> = [
   { key: 'year', label: 'timeYear' },
 ]
 
+/** The two outcomes of a loader-id clash. `keep` is first so it is the
+ * default: it is the one that leaves the profile as the user left it. */
+const CONFLICT_CHOICES: ReadonlyArray<{ id: 'keep' | 'swap'; label: string; note: string }> = [
+  { id: 'keep', label: 'conflictKeep', note: 'conflictKeepNote' },
+  { id: 'swap', label: 'conflictSwap', note: 'conflictSwapNote' },
+]
+
 export interface MarketSectionProps {
   t: Translate
   locale: {
@@ -477,6 +484,19 @@ export function MarketSection(props: MarketSectionProps) {
   const [qInstalled, setQInstalled] = useState('')
   const [cat, setCat] = useState('all')
   const [confirming, setConfirming] = useState<RegistryPlugin | null>(null)
+  /** A rejected install and the installed plugins it clashed with, one entry
+   * per owner as grouped by the host. */
+  interface ConflictNotice {
+    plugin: RegistryPlugin
+    groups: Array<{ owner: string; ids: string[] }>
+  }
+  /** The loader-id clash reported by the last install (#122), pinned to the
+   * card that triggered it so the report stays next to its cause. */
+  const [conflict, setConflict] = useState<ConflictNotice | null>(null)
+  const [conflictWhyOpen, setConflictWhyOpen] = useState(false)
+  /** Which outcome the user has selected; starts on the one that changes nothing. */
+  const [conflictChoice, setConflictChoice] = useState<'keep' | 'swap'>('keep')
+  const [replacing, setReplacing] = useState(false)
   /** Shared by every screenshot source (card thumbnail, dialog strip). */
   const [lightbox, setLightbox] = useState<{ shots: string[]; index: number } | null>(null)
   const openLightbox = (shots: string[], index: number): void => setLightbox({ shots, index })
@@ -987,6 +1007,7 @@ export function MarketSection(props: MarketSectionProps) {
     setBuildsSkipped(null)
     setConfirming(null)
     setInstallError(null)
+    setConflict(null)
     setActivationWarnings([])
     setBusyUrl(plugin.url)
     sessionStorage.setItem('dshm-pending', JSON.stringify({ url: plugin.url }))
@@ -1046,6 +1067,14 @@ export function MarketSection(props: MarketSectionProps) {
             setInstallError(t('busyWait'))
             return
           }
+          // A loader-id clash is reported ON the card instead of in the
+          // page-level error banner: it is the one install failure with a
+          // choice attached (keep what is installed, or swap), and that
+          // choice only reads if the two sides are on screen together.
+          if (Array.isArray(body.conflictGroups) && body.conflictGroups.length > 0) {
+            setConflict({ plugin, groups: body.conflictGroups as ConflictNotice['groups'] })
+            return
+          }
           if (Array.isArray(body.ignoredBuilds) && body.ignoredBuilds.length > 0) {
             setBuildsSkipped({ plugin, names: body.ignoredBuilds.map(String) })
           }
@@ -1066,6 +1095,48 @@ export function MarketSection(props: MarketSectionProps) {
         // out genuinely dead installs (#32).
       })
   }, [refreshInstalled, t])
+
+  /**
+   * Resolve a loader-id clash the only way one profile allows: uninstall the
+   * plugins holding the ids, then retry the install. Sequential because each
+   * route takes the host's mutation lock, so a parallel burst would 409.
+   *
+   * A failure part-way leaves plugins already gone. Nothing reinstalls them
+   * automatically (a rollback would itself be an install that can fail), so
+   * the message names them — reporting only "failed" would leave the user
+   * guessing which of their plugins survived.
+   */
+  const doReplace = useCallback(async (plugin: RegistryPlugin, groups: ConflictNotice['groups']) => {
+    setInstallError(null)
+    setReplacing(true)
+    const removed: string[] = []
+    try {
+      for (const group of groups) {
+        const response = await fetch('/dsh-market/uninstall', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ name: group.owner }),
+        })
+        const body = await response.json() as { ok?: boolean; error?: unknown; stderr?: unknown }
+        if (response.status !== 200 || body.ok !== true) {
+          const text = (v: unknown) => typeof v === 'string' ? v : v == null ? '' : JSON.stringify(v)
+          const detail = (text(body.error) || humanOutput(text(body.stderr)) || 'error').trim().slice(-400)
+          setConflict(null)
+          setInstallError(removed.length === 0
+            ? `${t('installFail')}: ${group.owner} — ${detail}`
+            : `${t('conflictReplaceFailed')} ${removed.join(', ')} — ${detail}`)
+          refreshInstalled()
+          return
+        }
+        removed.push(group.owner)
+      }
+    } finally {
+      setReplacing(false)
+    }
+    setConflict(null)
+    refreshInstalled()
+    doInstall(plugin)
+  }, [doInstall, refreshInstalled, t])
 
   /**
    * Restart the host and reload once the boot id changes (#14 by @ysyyhhh).
@@ -1686,8 +1757,9 @@ export function MarketSection(props: MarketSectionProps) {
     const already = isInstalled(p, installed, repoIdentities, data?.plugins, repoHints)
     const busy = busyUrl === p.url
     const replacement = replacementOf(p)
+    const clash = conflict !== null && conflict.plugin.url === p.url ? conflict : null
     return (
-      <div key={p.url} className={css.card}>
+      <div key={p.url} className={clash !== null ? `${css.card} ${css.cardBlocked}` : css.card}>
         <div className={css.row1}>
           {/* The avatar belongs to the AUTHOR, not to the title. Beside the
               name it reads as one signature, which is what frees the title
@@ -1763,6 +1835,78 @@ export function MarketSection(props: MarketSectionProps) {
               />
             </div>
           </div>
+        )}
+        {clash !== null && (
+          <>
+            <div className={css.conflictHead}>
+              <IconWarningOutline16 size={16} className={css.conflictIcon} />
+              <span className={css.conflictTitle}>{t('conflictTitle')}</span>
+            </div>
+            <p className={css.conflictBody}>{t('conflictBody')}</p>
+            {/* One row per owner. The ids ride along as evidence; the name is
+                what the uninstall below acts on. */}
+            <div className={css.roster}>
+              {clash.groups.map(group => (
+                <div key={group.owner} className={css.rosterRow}>
+                  <span className={css.rosterName} title={group.owner}>{group.owner}</span>
+                  <span className={css.rosterIds}>{group.ids.join(', ')}</span>
+                </div>
+              ))}
+            </div>
+            <p className={css.reassure}>
+              <IconCheckOutline16 size={13} className={css.reassureOk} />
+              {t('conflictReverted')}
+            </p>
+            {/* Two outcomes, not an error plus a destructive button. In one
+                profile the plugins cannot coexist, so the real decision is
+                which to keep — and the option that changes nothing is the
+                default. Selecting the other one IS the consent step, so its
+                cost is stated here rather than in a second dialog. */}
+            <div className={css.choices} role="radiogroup">
+              {CONFLICT_CHOICES.map(({ id, label, note }) => (
+                <button
+                  key={id}
+                  type="button"
+                  role="radio"
+                  aria-checked={conflictChoice === id}
+                  disabled={replacing}
+                  className={conflictChoice === id ? `${css.choice} ${css.choiceOn}` : css.choice}
+                  onClick={() => setConflictChoice(id)}
+                >
+                  <span className={conflictChoice === id ? `${css.radio} ${css.radioOn}` : css.radio} />
+                  <span className={css.choiceMain}>
+                    <span className={css.choiceTitle}>{t(label)}</span>
+                    <span className={id === 'keep' ? `${css.choiceNote} ${css.choiceSafe}` : css.choiceNote}>
+                      {t(note)}
+                    </span>
+                  </span>
+                </button>
+              ))}
+            </div>
+            <div className={css.foot}>
+              <span className={css.grow} />
+              <Button
+                variant={conflictChoice === 'swap' ? 'outline' : 'primary'}
+                size="sm"
+                className={conflictChoice === 'swap' ? css.dangerBtn : undefined}
+                disabled={replacing || busyUrl !== null || (conflictChoice === 'swap' && !envReady)}
+                onClick={() => {
+                  if (conflictChoice === 'swap') void doReplace(clash.plugin, clash.groups)
+                  else setConflict(null)
+                }}
+              >{replacing ? t('conflictReplacing') : t('confirm')}</Button>
+            </div>
+            <DisclosureRow
+              icon={<IconCodeOutline16 size={16} />}
+              title={t('conflictDetails')}
+              open={conflictWhyOpen}
+              expandable
+              expandOnRowClick
+              onToggle={() => setConflictWhyOpen(o => !o)}
+            >
+              <div className={css.conflictWhy}>{t('conflictWhy')}</div>
+            </DisclosureRow>
+          </>
         )}
       </div>
     )
