@@ -2946,6 +2946,11 @@ export function MarketSection(props: MarketSectionProps) {
                                     <span className={css.switchKnob} />
                                   </button>
                                 )}
+                                {/* State and switch pack left, the operations
+                                    pack right: with everything in one flow the
+                                    switch's x depended on whether the update
+                                    slot rendered a button or a tag. */}
+                                <span className={css.grow} />
                                 {entry !== undefined && entry.deprecated === true && entry.replacement !== undefined && (() => {
                                   const replacement = data?.plugins.find(r => r.name === entry.replacement)
                                   if (replacement === undefined) return null
