@@ -325,9 +325,11 @@
 .retryBtn{margin-top:4px}
 .irow{background:var(--dsw-alias-bg-layer-1,#fff);border:1px solid var(--dsw-alias-border-l2,#e5e7eb);
       border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;gap:10px;min-width:0}
-/* One row, right-aligned, never wrapping mid-control: every card's controls
-   then sit on the same baseline as its neighbour's. */
-.irowActions{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap;min-width:0}
+/* State pins left, controls to the right: right-aligning the whole group made
+   the state tag's position depend on whether its neighbour rendered 更新 or
+   已是最新, so two cards' state tags never sat at the same x. */
+.irowActions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0}
+.irowActions > .stateTag{margin-right:auto}
 .irowMissing{filter:grayscale(1);opacity:.5}
 .irow>.src,.irow>.owner{white-space:nowrap;flex-shrink:0}
 .irow button{white-space:nowrap;flex-shrink:0}

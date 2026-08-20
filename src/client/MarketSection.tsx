@@ -606,7 +606,6 @@ export function MarketSection(props: MarketSectionProps) {
    * real switch state so hand-edited cordis.patch.yml toggles are visible.
    */
   const [patchDisabledNames, setPatchDisabledNames] = useState<string[]>([])
-  const [patchForcedNames, setPatchForcedNames] = useState<string[]>([])
   const [groups, setGroups] = useState<Record<string, string[]>>({})
   const [groupOrder, setGroupOrder] = useState<string[]>([])
   /** Installed-tab sub-view: flat list or groups (All-plugins was removed —
@@ -745,7 +744,6 @@ export function MarketSection(props: MarketSectionProps) {
         setSkins(body.live || [])
         if (Array.isArray(body.disabled)) setDisabledNames(body.disabled)
         if (Array.isArray(body.patchDisabled)) setPatchDisabledNames(body.patchDisabled)
-        if (Array.isArray(body.patchForced)) setPatchForcedNames(body.patchForced)
         if (body.groups && typeof body.groups === 'object') setGroups(body.groups)
         if (Array.isArray(body.groupOrder)) setGroupOrder(body.groupOrder)
         setInstalledBundles(Array.isArray(body.bundles) ? body.bundles.filter((name: unknown): name is string => typeof name === 'string') : [])
@@ -2746,7 +2744,6 @@ export function MarketSection(props: MarketSectionProps) {
                                           <div className={css.groupMember} key={member}>
                                             <span className={css.nm}>{member}</span>
                                             {effectiveDisabledSet.has(member) && <span className={css.spec}>{t('disabledState')}</span>}
-                                            {patchDisabledNames.includes(member) && <span className={css.spec}>{' · ' + t('patchDisabled')}</span>}
                                             <span className={css.grow} />
                                             <button
                                               type="button"
@@ -2778,7 +2775,6 @@ export function MarketSection(props: MarketSectionProps) {
                                         <div className={css.nm}>
                                           {name}
                                           {entry?.deprecated === true && <span className={css.depBadge}>{t('deprecatedBadge')}</span>}
-                                          {patchDisabledNames.includes(name) && <span className={css.depBadge}>{t('patchDisabled')}</span>}
                                         </div>
                                         <div className={css.act}>
                                           {off
@@ -2851,8 +2847,6 @@ export function MarketSection(props: MarketSectionProps) {
                                       ? <a className={css.nameLink} href={repoUrl + '#readme'} target="_blank" rel="noreferrer" title={t('readme')}>{name}</a>
                                       : name}
                                     {entry?.deprecated === true && <span className={css.depBadge}>{t('deprecatedBadge')}</span>}
-                                    {patchDisabledNames.includes(name) && <span className={css.depBadge}>{t('patchDisabled')}</span>}
-                                    {!effectiveDisabledSet.has(name) && patchForcedNames.includes(name) && <span className={css.depBadge}>{t('patchForced')}</span>}
                                     {version && <span className={css.owner}>{' ' + version}</span>}
                                   </div>
                                   {repoUrl !== null
