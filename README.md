@@ -15,9 +15,7 @@ The plugin market inside DeepSeek Harness. Open Settings → **Plugin Market** �
 
 ![dsh-market](assets/demo-en.png)
 
-One-click themes — install, switch live, no restart:
-
-![Themes tab](assets/themes-en.png)
+One-click themes: install, switch live, no restart.
 
 ## Install
 

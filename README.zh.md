@@ -15,9 +15,7 @@
 
 ![dsh-market](assets/demo-zh.png)
 
-主题一键换——装完即生效，点一下切换，不用重启：
-
-![主题](assets/themes-zh.png)
+主题一键换：装完即生效，点一下切换，不用重启。
 
 ## 安装
 
