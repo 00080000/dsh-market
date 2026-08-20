@@ -1495,24 +1495,26 @@ describe('a failed install releases the UI and says why', () => {
 /**
  * A loader-id clash (#122) is the one install failure the user can act on:
  * in a single profile the plugins cannot coexist, so the choice is which one
- * to keep. That choice only reads if both sides are on screen together,
- * which is why this lands on the card rather than in the shared error banner
- * every other operation writes to.
+ * to keep. The decision lives in the activity panel, which no page change can
+ * take away; the card keeps only a marker pointing at it.
  */
-describe('a loader-id clash reports on the card and offers the swap', () => {
+describe('a loader-id clash becomes a decision in the activity panel', () => {
   const clash = {
     ok: false,
     conflictGroups: [{ owner: 'dsh-tui-core', ids: ['storage', 'terminal'] }],
     error: 'PROSE-FALLBACK-FOR-LOGS',
   }
 
-  /** Drive the first card to the point where the clash is on screen. */
+  /** Install the first card, then follow its marker into the panel. */
   const installFirstCard = async () => {
     render(<MarketSection {...props()} />)
     await screen.findByText('dsh-loop')
     fireEvent.click(screen.getAllByRole('button', { name: en.install })[0])
     fireEvent.click(await screen.findByRole('button', { name: en.confirm }))
-    await screen.findByText(en.conflictTitle)
+    // The card must say something: one that looks untouched invites pressing
+    // Install again, which is how the same clash gets hit twice.
+    fireEvent.click(await screen.findByRole('button', { name: re(en.opBlockedCard) }))
+    await screen.findByText(re(en.conflictBody))
   }
 
   it('names the clashing plugin and the ids it holds', async () => {
@@ -1524,6 +1526,10 @@ describe('a loader-id clash reports on the card and offers the swap', () => {
     // Saying the environment is untouched is what keeps this from reading as
     // "something was removed and I do not know what".
     expect(screen.getByText(re(en.conflictReverted))).toBeTruthy()
+    // The record survives a page change, which is the whole reason it moved
+    // off the card.
+    fireEvent.click(screen.getByRole('button', { name: en.tabInstalled }))
+    expect(screen.getByText(re(en.conflictBody))).toBeTruthy()
     // The host still sends a prose string for logs; rendering it as well
     // would report the same failure twice, in two different registers.
     expect(screen.queryByText(re('PROSE-FALLBACK-FOR-LOGS'))).toBeNull()
@@ -1599,6 +1605,8 @@ describe('a loader-id clash reports on the card and offers the swap', () => {
     fireEvent.click(screen.getByRole('radio', { name: re(en.conflictSwap) }))
     fireEvent.click(screen.getByRole('button', { name: en.confirm }))
 
+    // Reported once, in the panel: the page banner no longer echoes an
+    // operation's outcome now that a record owns it.
     await waitFor(() => expect(screen.getByText(re(en.conflictReplaceFailed))).toBeTruthy())
     expect(screen.getByText(re('a-plug'))).toBeTruthy()
   })

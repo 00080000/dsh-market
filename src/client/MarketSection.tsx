@@ -34,6 +34,9 @@ import {
   type MenuEntry,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import css from './Market.module.css'
+import { OperationsPanel } from './OperationsPanel.tsx'
+import { clearSettled, drop, enqueue, patch as patchRecord, recordForUrl } from './operations.ts'
+import type { OperationRecord } from './operations.ts'
 import { Diagnostics } from './Diagnostics.tsx'
 import {
   avatarColor, entryForDep, groupSwitchState, humanOutput, isInstalled, looksTerminal, matchInstalledName, orderedCategories,
@@ -424,12 +427,6 @@ const TIME_OPTIONS: ReadonlyArray<{ key: TimeRange; label: string }> = [
   { key: 'year', label: 'timeYear' },
 ]
 
-/** The two outcomes of a loader-id clash. `keep` is first so it is the
- * default: it is the one that leaves the profile as the user left it. */
-const CONFLICT_CHOICES: ReadonlyArray<{ id: 'keep' | 'swap'; label: string; note: string }> = [
-  { id: 'keep', label: 'conflictKeep', note: 'conflictKeepNote' },
-  { id: 'swap', label: 'conflictSwap', note: 'conflictSwapNote' },
-]
 
 export interface MarketSectionProps {
   t: Translate
@@ -490,12 +487,21 @@ export function MarketSection(props: MarketSectionProps) {
     plugin: RegistryPlugin
     groups: Array<{ owner: string; ids: string[] }>
   }
-  /** The loader-id clash reported by the last install (#122), pinned to the
-   * card that triggered it so the report stays next to its cause. */
-  const [conflict, setConflict] = useState<ConflictNotice | null>(null)
-  const [conflictWhyOpen, setConflictWhyOpen] = useState(false)
-  /** Which outcome the user has selected; starts on the one that changes nothing. */
-  const [conflictChoice, setConflictChoice] = useState<'keep' | 'swap'>('keep')
+  /**
+   * Every mutating operation the user started. Records outlive the card that
+   * started them, so paginating or searching cannot take a pending decision
+   * off screen.
+   */
+  const [records, setRecords] = useState<OperationRecord[]>([])
+  const recordSeq = useRef(0)
+  /** Raised by the card marker, so "查看详情" lands on the record itself. */
+  const [operationsOpen, setOperationsOpen] = useState(false)
+  const openOperations = useCallback(() => setOperationsOpen(true), [])
+  /** Ids are sequential rather than random so a replayed session is stable. */
+  const nextRecordId = useCallback(() => {
+    recordSeq.current += 1
+    return `op-${String(recordSeq.current)}`
+  }, [])
   const [replacing, setReplacing] = useState(false)
   /** Shared by every screenshot source (card thumbnail, dialog strip). */
   const [lightbox, setLightbox] = useState<{ shots: string[]; index: number } | null>(null)
@@ -1007,9 +1013,14 @@ export function MarketSection(props: MarketSectionProps) {
     setBuildsSkipped(null)
     setConfirming(null)
     setInstallError(null)
-    setConflict(null)
     setActivationWarnings([])
     setBusyUrl(plugin.url)
+    // One record per attempt. A retry appends rather than reusing the old
+    // one, so the card resolves to the newest and its Install button returns.
+    const recordId = nextRecordId()
+    setRecords(list => enqueue(list, {
+      id: recordId, kind: 'install', name: plugin.name, url: plugin.url, state: 'running',
+    }))
     sessionStorage.setItem('dshm-pending', JSON.stringify({ url: plugin.url }))
     fetch('/dsh-market/install', {
       method: 'POST',
@@ -1030,6 +1041,7 @@ export function MarketSection(props: MarketSectionProps) {
         }
         if (body.cancelled === true) {
           // User-cancelled: quiet reset, nothing to report.
+          setRecords(list => drop(list, recordId))
           refreshInstalled()
           if (body.partial === true) setInstallError(t('partialNote'))
           return
@@ -1056,23 +1068,31 @@ export function MarketSection(props: MarketSectionProps) {
           if (body.compatibility?.code === 'soft-incompatible') {
             setCompatibilityNotice(body.compatibility as CompatibilityNotice)
           }
+          // `warned` keeps the ✓: the plugin IS installed, so calling a
+          // compatibility risk a failure would misreport what happened.
+          setRecords(list => patchRecord(list, recordId, body.compatibility?.code === 'soft-incompatible'
+            ? { state: 'warned', reason: t('compatRiskBanner') }
+            : { state: 'done', needsRefresh: body.hot !== true }))
           refreshInstalled()
         } else {
           if (status === 409) {
-            if (body.agentsBusy === true) {
-              const running = Array.isArray(body.runningAgents) && body.runningAgents.length > 0 ? ` (${body.runningAgents.join(', ')})` : ''
-              setInstallError(t('agentBusyInstall') + running)
-              return
-            }
-            setInstallError(t('busyWait'))
+            const busyReason = body.agentsBusy === true
+              ? t('agentBusyInstall') + (Array.isArray(body.runningAgents) && body.runningAgents.length > 0 ? ` (${body.runningAgents.join(', ')})` : '')
+              : t('busyWait')
+            setRecords(list => patchRecord(list, recordId, { state: 'failed', reason: busyReason }))
+            setOperationsOpen(true)
             return
           }
-          // A loader-id clash is reported ON the card instead of in the
-          // page-level error banner: it is the one install failure with a
-          // choice attached (keep what is installed, or swap), and that
-          // choice only reads if the two sides are on screen together.
+          // A clash is not a failure to report and forget: the host already
+          // reverted it, so what remains is a decision. `input` keeps the
+          // record in the panel until the user answers it.
           if (Array.isArray(body.conflictGroups) && body.conflictGroups.length > 0) {
-            setConflict({ plugin, groups: body.conflictGroups as ConflictNotice['groups'] })
+            setRecords(list => patchRecord(list, recordId, {
+              state: 'input', conflicts: body.conflictGroups as ConflictNotice['groups'],
+            }))
+            // Raise the panel for anything that needs an answer. A red dot on
+            // a closed panel is not a report; out of sight is out of mind.
+            setOperationsOpen(true)
             return
           }
           if (Array.isArray(body.ignoredBuilds) && body.ignoredBuilds.length > 0) {
@@ -1080,7 +1100,8 @@ export function MarketSection(props: MarketSectionProps) {
           }
           const text = (v: unknown) => typeof v === 'string' ? v : (v && typeof (v as any).text === 'string') ? (v as any).text : v == null ? '' : JSON.stringify(v)
           const detail = text(body.error) || humanOutput([text(body.stderr), text(body.stdout)].filter(Boolean).join('\n')) || ('exit ' + body.exitCode)
-          setInstallError(t('installFail') + ': ' + plugin.name + ' — ' + detail.trim().slice(-600))
+          setRecords(list => patchRecord(list, recordId, { state: 'failed', reason: detail.trim().slice(-600) }))
+          setOperationsOpen(true)
         }
       })
       .catch(() => {
@@ -1094,7 +1115,7 @@ export function MarketSection(props: MarketSectionProps) {
         // success once the plugin lands (busy-aware since #91) and strikes
         // out genuinely dead installs (#32).
       })
-  }, [refreshInstalled, t])
+  }, [nextRecordId, refreshInstalled, t])
 
   /**
    * Resolve a loader-id clash the only way one profile allows: uninstall the
@@ -1106,12 +1127,12 @@ export function MarketSection(props: MarketSectionProps) {
    * the message names them — reporting only "failed" would leave the user
    * guessing which of their plugins survived.
    */
-  const doReplace = useCallback(async (plugin: RegistryPlugin, groups: ConflictNotice['groups']) => {
+  const doReplace = useCallback(async (record: OperationRecord, plugin: RegistryPlugin) => {
     setInstallError(null)
     setReplacing(true)
     const removed: string[] = []
     try {
-      for (const group of groups) {
+      for (const group of record.conflicts ?? []) {
         const response = await fetch('/dsh-market/uninstall', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
@@ -1121,10 +1142,11 @@ export function MarketSection(props: MarketSectionProps) {
         if (response.status !== 200 || body.ok !== true) {
           const text = (v: unknown) => typeof v === 'string' ? v : v == null ? '' : JSON.stringify(v)
           const detail = (text(body.error) || humanOutput(text(body.stderr)) || 'error').trim().slice(-400)
-          setConflict(null)
-          setInstallError(removed.length === 0
+          const reason = removed.length === 0
             ? `${t('installFail')}: ${group.owner} — ${detail}`
-            : `${t('conflictReplaceFailed')} ${removed.join(', ')} — ${detail}`)
+            : `${t('conflictReplaceFailed')} ${removed.join(', ')} — ${detail}`
+          setRecords(list => patchRecord(list, record.id, { state: 'failed', conflicts: undefined, reason }))
+          setOperationsOpen(true)
           refreshInstalled()
           return
         }
@@ -1133,10 +1155,28 @@ export function MarketSection(props: MarketSectionProps) {
     } finally {
       setReplacing(false)
     }
-    setConflict(null)
+    // The clash record is done with; the retry opens its own, so the card
+    // resolves to the new attempt rather than the answered decision.
+    setRecords(list => drop(list, record.id))
     refreshInstalled()
     doInstall(plugin)
   }, [doInstall, refreshInstalled, t])
+
+  /**
+   * Answer a clash. `keep` is not a no-op to skip: it is the user declining
+   * the install, so the record retires rather than lingering as unanswered.
+   */
+  const resolveConflict = useCallback((record: OperationRecord, choice: 'keep' | 'swap') => {
+    if (choice === 'keep') {
+      setRecords(list => patchRecord(list, record.id, {
+        state: 'failed', conflicts: undefined, reason: t('conflictDeclined'),
+      }))
+      return
+    }
+    const plugin = data?.plugins.find(candidate => candidate.url === record.url)
+    if (plugin === undefined) return
+    void doReplace(record, plugin)
+  }, [data, doReplace, t])
 
   /**
    * Restart the host and reload once the boot id changes (#14 by @ysyyhhh).
@@ -1757,9 +1797,13 @@ export function MarketSection(props: MarketSectionProps) {
     const already = isInstalled(p, installed, repoIdentities, data?.plugins, repoHints)
     const busy = busyUrl === p.url
     const replacement = replacementOf(p)
-    const clash = conflict !== null && conflict.plugin.url === p.url ? conflict : null
+    // The card reflects its own latest operation. Without this a rejected
+    // install leaves the card looking untouched, and pressing Install again
+    // is the obvious next move — which is how the same clash gets hit twice.
+    const record = recordForUrl(records, p.url)
+    const blocked = record !== null && (record.state === 'input' || record.state === 'failed')
     return (
-      <div key={p.url} className={clash !== null ? `${css.card} ${css.cardBlocked}` : css.card}>
+      <div key={p.url} className={blocked ? `${css.card} ${css.cardBlocked}` : css.card}>
         <div className={css.row1}>
           {/* The avatar belongs to the AUTHOR, not to the title. Beside the
               name it reads as one signature, which is what frees the title
@@ -1810,15 +1854,24 @@ export function MarketSection(props: MarketSectionProps) {
               ? <span className={css.okState}>{t('alreadyInstalled')}</span>
               : busy
                 ? <Button variant="primary" size="sm" className={css.installBtn} disabled>{t('installing')}</Button>
-                : (
-                    <Button
-                      variant="primary"
-                      size="sm"
-                      className={css.installBtn}
-                      disabled={busyUrl !== null || !envReady}
-                      onClick={() => setConfirming(p)}
-                    >{t('install')}</Button>
-                  )}
+                : blocked
+                  // A marker, not the whole report: the report lives in the
+                  // panel, which a page change cannot take away.
+                  ? (
+                      <button type="button" className={css.cardBlockedMark} onClick={openOperations}>
+                        <IconWarningOutline16 size={13} />
+                        {t('opBlockedCard')}
+                      </button>
+                    )
+                  : (
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        className={css.installBtn}
+                        disabled={busyUrl !== null || !envReady}
+                        onClick={() => setConfirming(p)}
+                      >{t('install')}</Button>
+                    )}
         </div>
         {busy && (
           <div className={css.progress}>
@@ -1835,78 +1888,6 @@ export function MarketSection(props: MarketSectionProps) {
               />
             </div>
           </div>
-        )}
-        {clash !== null && (
-          <>
-            <div className={css.conflictHead}>
-              <IconWarningOutline16 size={16} className={css.conflictIcon} />
-              <span className={css.conflictTitle}>{t('conflictTitle')}</span>
-            </div>
-            <p className={css.conflictBody}>{t('conflictBody')}</p>
-            {/* One row per owner. The ids ride along as evidence; the name is
-                what the uninstall below acts on. */}
-            <div className={css.roster}>
-              {clash.groups.map(group => (
-                <div key={group.owner} className={css.rosterRow}>
-                  <span className={css.rosterName} title={group.owner}>{group.owner}</span>
-                  <span className={css.rosterIds}>{group.ids.join(', ')}</span>
-                </div>
-              ))}
-            </div>
-            <p className={css.reassure}>
-              <IconCheckOutline16 size={13} className={css.reassureOk} />
-              {t('conflictReverted')}
-            </p>
-            {/* Two outcomes, not an error plus a destructive button. In one
-                profile the plugins cannot coexist, so the real decision is
-                which to keep — and the option that changes nothing is the
-                default. Selecting the other one IS the consent step, so its
-                cost is stated here rather than in a second dialog. */}
-            <div className={css.choices} role="radiogroup">
-              {CONFLICT_CHOICES.map(({ id, label, note }) => (
-                <button
-                  key={id}
-                  type="button"
-                  role="radio"
-                  aria-checked={conflictChoice === id}
-                  disabled={replacing}
-                  className={conflictChoice === id ? `${css.choice} ${css.choiceOn}` : css.choice}
-                  onClick={() => setConflictChoice(id)}
-                >
-                  <span className={conflictChoice === id ? `${css.radio} ${css.radioOn}` : css.radio} />
-                  <span className={css.choiceMain}>
-                    <span className={css.choiceTitle}>{t(label)}</span>
-                    <span className={id === 'keep' ? `${css.choiceNote} ${css.choiceSafe}` : css.choiceNote}>
-                      {t(note)}
-                    </span>
-                  </span>
-                </button>
-              ))}
-            </div>
-            <div className={css.foot}>
-              <span className={css.grow} />
-              <Button
-                variant={conflictChoice === 'swap' ? 'outline' : 'primary'}
-                size="sm"
-                className={conflictChoice === 'swap' ? css.dangerBtn : undefined}
-                disabled={replacing || busyUrl !== null || (conflictChoice === 'swap' && !envReady)}
-                onClick={() => {
-                  if (conflictChoice === 'swap') void doReplace(clash.plugin, clash.groups)
-                  else setConflict(null)
-                }}
-              >{replacing ? t('conflictReplacing') : t('confirm')}</Button>
-            </div>
-            <DisclosureRow
-              icon={<IconCodeOutline16 size={16} />}
-              title={t('conflictDetails')}
-              open={conflictWhyOpen}
-              expandable
-              expandOnRowClick
-              onToggle={() => setConflictWhyOpen(o => !o)}
-            >
-              <div className={css.conflictWhy}>{t('conflictWhy')}</div>
-            </DisclosureRow>
-          </>
         )}
       </div>
     )
@@ -2155,6 +2136,21 @@ export function MarketSection(props: MarketSectionProps) {
             onClick={() => { if (tab !== 'backup' && tab !== 'diagnostics') setTab('backup') }}
           >{t('tabAdvanced')}</button>
           <span className={css.grow} />
+          {/* In the tab row, not above the grid: paginating, searching and
+              switching tab all leave it — and any pending decision — in place. */}
+          <OperationsPanel
+            t={t}
+            records={records}
+            open={operationsOpen}
+            onOpenChange={setOperationsOpen}
+            replacing={replacing}
+            envReady={envReady}
+            onClearSettled={() => setRecords(list => clearSettled(list))}
+            onCancel={() => doCancel()}
+            onDismiss={record => setRecords(list => drop(list, record.id))}
+            onRefresh={() => location.reload()}
+            onResolveConflict={resolveConflict}
+          />
         </div>
         {/* Backup & Restore and Diagnostics sit under Advanced rather than as
             their own top-level tabs — most users never need either, and having
