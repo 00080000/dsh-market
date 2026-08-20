@@ -561,6 +561,32 @@ describe('P0-2 activation states in the Installed tab', () => {
   })
 })
 
+describe('the installed row states a version once', () => {
+  it('drops a plain range beside the resolved version, keeps a source spec', async () => {
+    stubFetch({
+      '/dsh-market/installed': {
+        profile: 'web',
+        installed: { 'dsh-loop': '^1.0.0', 'dsh-notify': 'github:bob/dsh-notify' },
+        live: ['dsh-loop', 'dsh-notify'],
+        activation: {
+          'dsh-loop': { state: 'live', reasons: [], bundle: true, hot: true },
+          'dsh-notify': { state: 'live', reasons: [], bundle: true, hot: true },
+        },
+      },
+      '/dsh-market/updates': { updates: { 'dsh-loop': { version: '1.0.0', kind: 'npm', updateAvailable: false } } },
+    })
+    render(<MarketSection {...props()} />)
+    await screen.findByText('dsh-loop')
+    fireEvent.click(screen.getByRole('button', { name: /Installed/ }))
+    await screen.findByText(re('v1.0.0'))
+
+    // "^1.0.0" under "v1.0.0" is the same fact twice.
+    expect(screen.queryByText('^1.0.0')).toBeNull()
+    // A github: spec is the only place the row says where it came from.
+    expect(screen.getByText('github:bob/dsh-notify')).toBeTruthy()
+  })
+})
+
 describe('#60 enable/disable switches in the Installed tab', () => {
   function installedStub(overrides: Record<string, unknown>): void {
     stubFetch({

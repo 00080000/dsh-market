@@ -2829,6 +2829,11 @@ export function MarketSection(props: MarketSectionProps) {
                             const meta = act !== undefined ? activationMeta(act.state, t) : null
                             const version = status && status.version ? 'v' + status.version : ''
                             const specText = String(spec)
+                            // A plain range beside the resolved version says the
+                            // same thing twice. Every other spec — github:, file:,
+                            // link:, a tag — is the only place the row says where
+                            // the plugin came from, so it stays.
+                            const specRedundant = version !== '' && /^[\^~]?\d/.test(specText)
                             const ghSpec = /^github:([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+?)(?:#|$)/.exec(specText)
                             const repoUrl = entry !== undefined ? entry.url : ghSpec !== null ? 'https://github.com/' + ghSpec[1] : null
                             const off = effectiveDisabledSet.has(name)
@@ -2849,9 +2854,11 @@ export function MarketSection(props: MarketSectionProps) {
                                     {entry?.deprecated === true && <span className={css.depBadge}>{t('deprecatedBadge')}</span>}
                                     {version && <span className={css.owner}>{' ' + version}</span>}
                                   </div>
-                                  {repoUrl !== null
-                                    ? <a className={`${css.spec} ${css.src}`} href={repoUrl} target="_blank" rel="noreferrer" style={{ display: 'inline-block' }}>{specText}</a>
-                                    : <div className={css.spec}>{specText}</div>}
+                                  {specRedundant
+                                    ? null
+                                    : repoUrl !== null
+                                      ? <a className={`${css.spec} ${css.src}`} href={repoUrl} target="_blank" rel="noreferrer" style={{ display: 'inline-block' }}>{specText}</a>
+                                      : <div className={css.spec}>{specText}</div>}
                                   {entry !== undefined && (
                                     <div className={`${css.desc} ${css.descTight}`}>
                                       {(entry.description && (entry.description[lang] || entry.description.en)) || ''}

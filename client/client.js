@@ -6246,6 +6246,7 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 									const meta = act !== void 0 ? activationMeta(act.state, t) : null;
 									const version = status && status.version ? "v" + status.version : "";
 									const specText = String(spec);
+									const specRedundant = version !== "" && /^[\^~]?\d/.test(specText);
 									const ghSpec = /^github:([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+?)(?:#|$)/.exec(specText);
 									const repoUrl = entry !== void 0 ? entry.url : ghSpec !== null ? "https://github.com/" + ghSpec[1] : null;
 									const off = effectiveDisabledSet.has(name);
@@ -6276,7 +6277,7 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 														})
 													]
 												}),
-												repoUrl !== null ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("a", {
+												specRedundant ? null : repoUrl !== null ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("a", {
 													className: `${Market_module_css_default.spec} ${Market_module_css_default.src}`,
 													href: repoUrl,
 													target: "_blank",
