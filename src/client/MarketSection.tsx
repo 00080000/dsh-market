@@ -207,10 +207,18 @@ function useAutoCarousel(count: number, initial: number, intervalMs = 3500): [nu
  * screenshot, and cycling on a timer meant the card you were looking at
  * kept changing under you. Scrolling is a gesture the user drives.
  */
+/** Thumbnails per card. The dialog shows every screenshot; a grid of cards
+ * pulling six full-size PNGs each is what makes the first paint crawl. */
+const CARD_SHOT_LIMIT = 3
+
 function CardShot({ plugin, onOpen }: { plugin: RegistryPlugin; onOpen: (shots: string[], index: number) => void }) {
+  // The card and the lightbox share one asset: the allowlist is GitHub's own
+  // image hosts, none of which resize, so there is no smaller variant to ask
+  // for. What the card can do is want fewer of them and want them late — the
+  // dialog strip still offers the full set.
   const shots = safeScreenshots(plugin.screenshots)
   const [broken, setBroken] = useState<string[]>([])
-  const visible = shots.filter(src => !broken.includes(src))
+  const visible = shots.filter(src => !broken.includes(src)).slice(0, CARD_SHOT_LIMIT)
   if (visible.length === 0) return null
   return (
     <div className={css.cardShots}>
@@ -222,6 +230,7 @@ function CardShot({ plugin, onOpen }: { plugin: RegistryPlugin; onOpen: (shots: 
           alt=""
           loading="lazy"
           decoding="async"
+          fetchPriority="low"
           referrerPolicy="no-referrer"
           onClick={(e) => { e.stopPropagation(); onOpen(visible, i) }}
           onError={() => setBroken(prev => prev.includes(src) ? prev : prev.concat(src))}
@@ -497,6 +506,22 @@ export function MarketSection(props: MarketSectionProps) {
   /** Raised by the card marker, so "查看详情" lands on the record itself. */
   const [operationsOpen, setOperationsOpen] = useState(false)
   const openOperations = useCallback(() => setOperationsOpen(true), [])
+  /**
+   * Two plugins can ship under one name from different authors, so a roster
+   * row that shows only the package name cannot tell the user which of their
+   * plugins a swap would uninstall. Resolve through the catalog for the
+   * author and avatar a card would show, and fall back to the bare name for
+   * anything installed outside it.
+   */
+  const describePlugin = useCallback((name: string) => {
+    const entry = data?.plugins.find(plugin => plugin.npm === name || plugin.name === name)
+    if (entry === undefined) return { title: name }
+    return {
+      title: pluginName(entry.name),
+      author: entry.owner === '' ? undefined : entry.owner,
+      avatar: <OwnerAvatar name={entry.name} owner={entry.owner || ''} />,
+    }
+  }, [data])
   /** Ids are sequential rather than random so a replayed session is stable. */
   const nextRecordId = useCallback(() => {
     recordSeq.current += 1
@@ -1816,12 +1841,38 @@ export function MarketSection(props: MarketSectionProps) {
             </div>
             <div className={css.byline}>
               <OwnerAvatar name={p.name} owner={p.owner || ''} />
-              <span className={css.owner}>
-                {p.owner}
-                {typeof p.downloads === 'number' && <span className={css.star} title={String(p.downloads)}>{' · ↓ ' + formatCount(p.downloads)}</span>}
-                {typeof p.stars === 'number' && <span className={css.star} title={String(p.stars)}>{' · ★ ' + formatCount(p.stars)}</span>}
-              </span>
+              <span className={css.owner}>{p.owner}</span>
+              {typeof p.downloads === 'number' && <span className={css.star} title={String(p.downloads)}>{'· ↓ ' + formatCount(p.downloads)}</span>}
+              {typeof p.stars === 'number' && <span className={css.star} title={String(p.stars)}>{'· ★ ' + formatCount(p.stars)}</span>}
             </div>
+          </div>
+          {/* Top right, at its natural size: in the footer it needed a row of
+              its own once the cards went two-up, which cost every card that
+              height whether or not it had anything else to say. */}
+          <span className={css.grow} />
+          <div className={css.cardAction}>
+            {done
+              ? <span className={css.okState}>{t('installedBadge')}</span>
+              : already
+                ? <span className={css.okState}>{t('alreadyInstalled')}</span>
+                : busy
+                  ? <Button variant="primary" size="sm" className={css.installBtn} disabled>{t('installing')}</Button>
+                  : blocked
+                    ? (
+                        <button type="button" className={css.cardBlockedMark} onClick={openOperations}>
+                          <IconWarningOutline16 size={13} />
+                          {t('opBlockedCard')}
+                        </button>
+                      )
+                    : (
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          className={css.installBtn}
+                          disabled={busyUrl !== null || !envReady}
+                          onClick={() => setConfirming(p)}
+                        >{t('install')}</Button>
+                      )}
           </div>
         </div>
         <div className={css.desc}>{desc}</div>
@@ -1848,30 +1899,6 @@ export function MarketSection(props: MarketSectionProps) {
               claiming a button of its own beside Install. */}
           <a className={css.src} href={p.url} target="_blank" rel="noreferrer">{(p.added ? ' · ' : '') + t('viewSource')}</a>
           <span className={css.grow} />
-          {done
-            ? <span className={css.okState}>{t('installedBadge')}</span>
-            : already
-              ? <span className={css.okState}>{t('alreadyInstalled')}</span>
-              : busy
-                ? <Button variant="primary" size="sm" className={css.installBtn} disabled>{t('installing')}</Button>
-                : blocked
-                  // A marker, not the whole report: the report lives in the
-                  // panel, which a page change cannot take away.
-                  ? (
-                      <button type="button" className={css.cardBlockedMark} onClick={openOperations}>
-                        <IconWarningOutline16 size={13} />
-                        {t('opBlockedCard')}
-                      </button>
-                    )
-                  : (
-                      <Button
-                        variant="primary"
-                        size="sm"
-                        className={css.installBtn}
-                        disabled={busyUrl !== null || !envReady}
-                        onClick={() => setConfirming(p)}
-                      >{t('install')}</Button>
-                    )}
         </div>
         {busy && (
           <div className={css.progress}>
@@ -1924,11 +1951,9 @@ export function MarketSection(props: MarketSectionProps) {
             </div>
             <div className={css.byline}>
               <OwnerAvatar name={p.name} owner={p.owner || ''} />
-              <span className={css.owner}>
-                {p.owner}
-                {typeof p.downloads === 'number' && <span className={css.star} title={String(p.downloads)}>{' · ↓ ' + formatCount(p.downloads)}</span>}
-                {typeof p.stars === 'number' && <span className={css.star} title={String(p.stars)}>{' · ★ ' + formatCount(p.stars)}</span>}
-              </span>
+              <span className={css.owner}>{p.owner}</span>
+              {typeof p.downloads === 'number' && <span className={css.star} title={String(p.downloads)}>{'· ↓ ' + formatCount(p.downloads)}</span>}
+              {typeof p.stars === 'number' && <span className={css.star} title={String(p.stars)}>{'· ★ ' + formatCount(p.stars)}</span>}
             </div>
           </div>
         </div>
@@ -2140,6 +2165,7 @@ export function MarketSection(props: MarketSectionProps) {
               switching tab all leave it — and any pending decision — in place. */}
           <OperationsPanel
             t={t}
+            describe={describePlugin}
             records={records}
             open={operationsOpen}
             onOpenChange={setOperationsOpen}
@@ -2780,7 +2806,9 @@ export function MarketSection(props: MarketSectionProps) {
                         )
                       : Object.keys(displayedInstalled).filter(name => name !== selfName).length === 0
                         ? <div className={css.empty}>{t('installedEmpty')}</div>
-                        : Object.entries(displayedInstalled)
+                        : (
+                          <div className={css.pairGrid}>
+                          {Object.entries(displayedInstalled)
                             .filter(([name, spec]) => {
                               // The market manages itself from its own settings
                               // card, not as a row in this list (#188-adjacent).
@@ -2817,7 +2845,11 @@ export function MarketSection(props: MarketSectionProps) {
                               <div key={name} className={missing ? `${css.irow} ${css.irowMissing}` : css.irow}>
                                 <div style={{ minWidth: 0 }}>
                                   <div className={css.nm}>
-                                    {name}
+                                    {/* The name is the link to the README. A separate button
+                                        beside it pointed at the same page. */}
+                                    {repoUrl !== null
+                                      ? <a className={css.nameLink} href={repoUrl + '#readme'} target="_blank" rel="noreferrer" title={t('readme')}>{name}</a>
+                                      : name}
                                     {entry?.deprecated === true && <span className={css.depBadge}>{t('deprecatedBadge')}</span>}
                                     {patchDisabledNames.includes(name) && <span className={css.depBadge}>{t('patchDisabled')}</span>}
                                     {!effectiveDisabledSet.has(name) && patchForcedNames.includes(name) && <span className={css.depBadge}>{t('patchForced')}</span>}
@@ -2831,24 +2863,17 @@ export function MarketSection(props: MarketSectionProps) {
                                       {(entry.description && (entry.description[lang] || entry.description.en)) || ''}
                                     </div>
                                   )}
-                                  {off
-                                    ? (
+                                  {!off && act !== undefined && meta !== null && (
                                         <div className={css.act}>
-                                          <span className={css.actWarn}>
-                                            <StateDot state="warning" size={7} />
-                                            {t('disabledState')}
-                                            {patchDisabledNames.includes(name) && <span className={css.spec}>{' · ' + t('patchDisabled')}</span>}
-                                          </span>
-                                        </div>
-                                      )
-                                    : act !== undefined && meta !== null && (
-                                        <div className={css.act}>
-                                          <span
-                                            className={meta.dot === 'done' ? css.actLive : meta.dot === 'error' ? css.actBroken : css.actWarn}
-                                          >
-                                            <StateDot state={meta.dot} size={7} />
-                                            {meta.label}
-                                          </span>
+                                          {/* Only a state the switch does NOT already show earns a
+                                              line here: "installed but not active" is news, "live"
+                                              is what the switch is for. */}
+                                          {meta.dot !== 'done' && (
+                                            <span className={meta.dot === 'error' ? css.actBroken : css.actWarn}>
+                                              <StateDot state={meta.dot} size={7} />
+                                              {meta.label}
+                                            </span>
+                                          )}
                                           {act.state !== 'live' && act.reasons.length > 0 && (
                                             <DisclosureRow
                                               icon={<IconQuestionOutline14 size={14} />}
@@ -2891,10 +2916,22 @@ export function MarketSection(props: MarketSectionProps) {
                                     </div>
                                   )}
                                 </div>
-                                <span className={css.grow} />
-                                {/* The market itself never reaches this row (filtered
+                                {/* At half width the identity and the controls cannot
+                                    share a line, so the row is two stacked bands. Left
+                                    as one wrapping line, neighbouring cards broke at
+                                    different points and stopped lining up.
+                                    The market itself never reaches this row (filtered
                                     out above — it manages itself from its own settings
-                                    card), so no self-toggle special case is needed here. */}
+                                    card), so no self-toggle special case is needed. */}
+                                <div className={css.irowActions}>
+                                {/* Dot + tag, the pairing the host's own plugin
+                                    inventory uses for exactly this state. */}
+                                {!missing && (
+                                  <span className={css.stateTag} data-on={off ? 'false' : 'true'}>
+                                    <span className={css.stateDot} data-on={off ? 'false' : 'true'} />
+                                    {off ? t('disabledState') : t('switchOnLabel')}
+                                  </span>
+                                )}
                                 {toggleable && (
                                   <button
                                     type="button"
@@ -2908,7 +2945,6 @@ export function MarketSection(props: MarketSectionProps) {
                                     <span className={css.switchKnob} />
                                   </button>
                                 )}
-                                {repoUrl !== null && <a className={css.src} href={repoUrl + '#readme'} target="_blank" rel="noreferrer">{t('readme')}</a>}
                                 {entry !== undefined && entry.deprecated === true && entry.replacement !== undefined && (() => {
                                   const replacement = data?.plugins.find(r => r.name === entry.replacement)
                                   if (replacement === undefined) return null
@@ -2922,9 +2958,9 @@ export function MarketSection(props: MarketSectionProps) {
                                   )
                                 })()}
                                 {missing
-                                  ? <span className={css.owner}>{t('notInstalled')}</span>
+                                  ? <span className={css.metaTag}>{t('notInstalled')}</span>
                                   : updatedNames.includes(name)
-                                    ? <span className={css.okState}>{act?.state === 'live' ? t('updatedLive') : t('updated')}</span>
+                                    ? <span className={`${css.metaTag} ${css.metaTagOk}`}>{act?.state === 'live' ? t('updatedLive') : t('updated')}</span>
                                     : updatingName === name
                                       ? <Button variant="primary" size="sm" className={css.warnBtn} disabled>{t('updating')}</Button>
                                       : status && status.updateAvailable
@@ -2938,8 +2974,8 @@ export function MarketSection(props: MarketSectionProps) {
                                             >{t('update')}</Button>
                                           )
                                         : status && status.kind === 'linked'
-                                          ? <span className={css.owner}>{t('linkedDev')}</span>
-                                          : <span className={css.owner}>{t('upToDate')}</span>}
+                                          ? <span className={css.metaTag}>{t('linkedDev')}</span>
+                                          : <span className={css.metaTag}>{t('upToDate')}</span>}
                                 {!missing && name !== 'dsh-market' && name !== 'dshmarket' && (
                                   removingName === name
                                     ? <Button variant="outline" size="sm" className={css.dangerBtn} disabled>{t('uninstalling')}</Button>
@@ -2953,9 +2989,12 @@ export function MarketSection(props: MarketSectionProps) {
                                         >{t('uninstall')}</Button>
                                       )
                                 )}
+                                </div>
                               </div>
                             )
                           })}
+                          </div>
+                        )}
                 </>
               )}
       </div>
@@ -2990,11 +3029,9 @@ export function MarketSection(props: MarketSectionProps) {
               is backwards. */}
           <div className={css.byline}>
             <OwnerAvatar name={confirming.name} owner={confirming.owner || ''} />
-            <span className={css.owner}>
-              {confirming.owner}
-              {typeof confirming.downloads === 'number' && <span className={css.star} title={String(confirming.downloads)}>{' · ↓ ' + formatCount(confirming.downloads)}</span>}
-              {typeof confirming.stars === 'number' && <span className={css.star} title={String(confirming.stars)}>{' · ★ ' + formatCount(confirming.stars)}</span>}
-            </span>
+            <span className={css.owner}>{confirming.owner}</span>
+            {typeof confirming.downloads === 'number' && <span className={css.star} title={String(confirming.downloads)}>{'· ↓ ' + formatCount(confirming.downloads)}</span>}
+            {typeof confirming.stars === 'number' && <span className={css.star} title={String(confirming.stars)}>{'· ★ ' + formatCount(confirming.stars)}</span>}
             <span className={css.grow} />
             <span className={css.tag}>
               {(data!.categories[confirming.category] && (data!.categories[confirming.category]![lang] || data!.categories[confirming.category]!.en)) || confirming.category}

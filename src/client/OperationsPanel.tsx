@@ -11,12 +11,13 @@
 import {
   Button,
   IconCheckOutline16,
-  IconCodeOutline16,
   IconLoadingOutline16,
   IconWarningOutline16,
-  DisclosureRow,
+  IconChevronDownOutline14,
+  IconChevronUpOutline14,
 } from '@deepseek-ai/dsh-client-ui-primitives'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import type { ReactNode } from 'react'
 import css from './Market.module.css'
 import type { Translate } from './market-data.ts'
 import type { ConflictGroup, OperationRecord } from './operations.ts'
@@ -28,8 +29,20 @@ const CHOICES = [
   { id: 'swap' as const, label: 'conflictSwap', note: 'conflictSwapNote' },
 ]
 
+/**
+ * How the panel renders a plugin it only knows by package name: the catalog
+ * (or the installed list) supplies the author and avatar a card would show.
+ */
+export type DescribePlugin = (name: string) => {
+  title: string
+  author?: string | undefined
+  avatar?: ReactNode
+}
+
 export interface OperationsPanelProps {
   t: Translate
+  /** Resolves a package name to the identity a card would show for it. */
+  describe: DescribePlugin
   records: readonly OperationRecord[]
   open: boolean
   /** Owned by the parent: a card's "cannot install" marker raises the panel. */
@@ -48,16 +61,42 @@ export interface OperationsPanelProps {
   onRetry?: ((record: OperationRecord) => void) | undefined
 }
 
-/** The clash roster: one row per installed owner, its ids beside it. */
-function Roster(props: { groups: readonly ConflictGroup[] }) {
+/**
+ * What each plugin ends up as under the selected outcome.
+ *
+ * The consequence is drawn ON the plugins rather than described beside them:
+ * pick "keep what I have" and the installed rows tick while the candidate
+ * crosses out; pick the other and they swap. The candidate is in this list
+ * for the same reason — a decision about which plugin survives has to show
+ * what happens to the one being installed, not only to the others.
+ */
+function OutcomePreview(props: {
+  t: Translate
+  record: OperationRecord
+  choice: 'keep' | 'swap'
+  describe: DescribePlugin
+}) {
+  const { t, record, choice } = props
+  const swap = choice === 'swap'
+  const candidate = props.describe(record.name)
+  const row = (key: string, info: ReturnType<DescribePlugin>, kept: boolean, tag: string) => (
+    <div key={key} className={kept ? css.rosterRow : `${css.rosterRow} ${css.rosterRowOut}`}>
+      {info.avatar}
+      <span className={css.rosterMain}>
+        <span className={css.rosterName} title={key}>{info.title}</span>
+        {info.author !== undefined && <span className={css.rosterAuthor}>{info.author}</span>}
+      </span>
+      <span className={kept ? `${css.rosterTag} ${css.rosterTagKeep}` : `${css.rosterTag} ${css.rosterTagDrop}`}>
+        {kept ? '✓' : '✕'} {tag}
+      </span>
+    </div>
+  )
   return (
     <div className={css.roster}>
-      {props.groups.map(group => (
-        <div key={group.owner} className={css.rosterRow}>
-          <span className={css.rosterName} title={group.owner}>{group.owner}</span>
-          <span className={css.rosterIds}>{group.ids.join(', ')}</span>
-        </div>
-      ))}
+      {row(record.name, candidate, swap, t(swap ? 'conflictOutcomeInstall' : 'conflictOutcomeSkip'))}
+      <div className={css.rosterSplit} />
+      {(record.conflicts ?? []).map(group =>
+        row(group.owner, props.describe(group.owner), !swap, t(swap ? 'conflictOutcomeRemove' : 'conflictOutcomeKeep')))}
     </div>
   )
 }
@@ -72,6 +111,7 @@ function ConflictChoice(props: {
   record: OperationRecord
   replacing: boolean
   envReady: boolean
+  describe: DescribePlugin
   onResolve: (choice: 'keep' | 'swap') => void
 }) {
   const { t, record, replacing, envReady } = props
@@ -80,33 +120,44 @@ function ConflictChoice(props: {
   return (
     <div className={css.opDecision}>
       <p className={css.conflictBody}>{t('conflictBody')}</p>
-      <Roster groups={record.conflicts ?? []} />
-      <p className={css.reassure}>
-        <IconCheckOutline16 size={13} className={css.reassureOk} />
-        {t('conflictReverted')}
-      </p>
-      <div className={css.choices} role="radiogroup">
+      <OutcomePreview t={t} record={record} choice={choice} describe={props.describe} />
+      {/* Native radios: the platform already draws the control, groups it by
+          `name`, and gives arrow-key navigation. A hand-rolled ring gets the
+          look wrong and the keyboard behaviour with it. */}
+      <div className={css.choices}>
         {CHOICES.map(({ id, label, note }) => (
-          <button
+          <label
             key={id}
-            type="button"
-            role="radio"
-            aria-checked={choice === id}
-            disabled={replacing}
             className={choice === id ? `${css.choice} ${css.choiceOn}` : css.choice}
-            onClick={() => setChoice(id)}
           >
-            <span className={choice === id ? `${css.radio} ${css.radioOn}` : css.radio} />
+            <input
+              type="radio"
+              className={css.choiceRadio}
+              name={`dshm-conflict-${record.id}`}
+              checked={choice === id}
+              disabled={replacing}
+              onChange={() => setChoice(id)}
+            />
             <span className={css.choiceMain}>
               <span className={css.choiceTitle}>{t(label)}</span>
-              <span className={id === 'keep' ? `${css.choiceNote} ${css.choiceSafe}` : css.choiceNote}>
-                {t(note)}
-              </span>
+              {t(note) !== '' && <span className={css.choiceNote}>{t(note)}</span>}
             </span>
-          </button>
+          </label>
         ))}
       </div>
+      {/* Both ways out of the decision share one row: the quiet one that
+          reveals evidence, and the one that commits. */}
       <div className={css.opDecisionFoot}>
+        <button
+          type="button"
+          className={css.conflictDetailsToggle}
+          aria-expanded={whyOpen}
+          onClick={() => setWhyOpen(open => !open)}
+        >
+          {t('conflictDetails')}
+          {whyOpen ? <IconChevronUpOutline14 size={12} /> : <IconChevronDownOutline14 size={12} />}
+        </button>
+        <span className={css.grow} />
         <Button
           variant={choice === 'swap' ? 'outline' : 'primary'}
           size="sm"
@@ -115,16 +166,14 @@ function ConflictChoice(props: {
           onClick={() => props.onResolve(choice)}
         >{replacing ? t('conflictReplacing') : t('confirm')}</Button>
       </div>
-      <DisclosureRow
-        icon={<IconCodeOutline16 size={16} />}
-        title={t('conflictDetails')}
-        open={whyOpen}
-        expandable
-        expandOnRowClick
-        onToggle={() => setWhyOpen(open => !open)}
-      >
-        <div className={css.conflictWhy}>{t('conflictWhy')}</div>
-      </DisclosureRow>
+      {whyOpen && (
+        <div className={css.conflictWhy}>
+          {(record.conflicts ?? []).map(group => (
+            <div key={group.owner}>{group.owner}: {group.ids.join(', ')}</div>
+          ))}
+          <div className={css.conflictWhyText}>{t('conflictWhy')}</div>
+        </div>
+      )}
     </div>
   )
 }
@@ -162,8 +211,29 @@ function statusLine(t: Translate, record: OperationRecord, ahead: number | null)
 export function OperationsPanel(props: OperationsPanelProps) {
   const { t, records, open } = props
   const setOpen = props.onOpenChange
+  const wrapRef = useRef<HTMLDivElement | null>(null)
   const summary = summarize(records)
   const busy = summary.running + summary.queued > 0
+
+  // Dismissing a popover by pressing the control that opened it is the one
+  // route nobody looks for. Escape and an outside click are; the header also
+  // carries an explicit collapse for anyone who wants a target to aim at.
+  // The listener covers the whole wrapper, button included, so the button's
+  // own toggle is not undone by this closing first.
+  useEffect(() => {
+    if (!open) return undefined
+    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') setOpen(false) }
+    const onPointer = (event: MouseEvent) => {
+      const wrap = wrapRef.current
+      if (wrap !== null && !wrap.contains(event.target as Node)) setOpen(false)
+    }
+    document.addEventListener('keydown', onKey)
+    document.addEventListener('mousedown', onPointer)
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      document.removeEventListener('mousedown', onPointer)
+    }
+  }, [open, setOpen])
 
   // The entry label is the batch, not a verb with no object: a bare "3" says
   // nothing about what is happening to the profile.
@@ -182,7 +252,7 @@ export function OperationsPanel(props: OperationsPanelProps) {
   }
 
   return (
-    <div className={css.opWrap}>
+    <div className={css.opWrap} ref={wrapRef}>
       <button
         type="button"
         className={summary.attention > 0 ? `${css.opEntry} ${css.opEntryAlert}` : css.opEntry}
@@ -201,6 +271,14 @@ export function OperationsPanel(props: OperationsPanelProps) {
             {summary.settled > 0 && (
               <Button variant="ghost" size="sm" onClick={props.onClearSettled}>{t('opClear')}</Button>
             )}
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-label={t('opClose')}
+              title={t('opClose')}
+              className={css.opCloseBtn}
+              onClick={() => setOpen(false)}
+            ><IconChevronUpOutline14 size={14} /></Button>
           </div>
           {busy && (
             <div className={css.opAggregate}>
@@ -248,6 +326,7 @@ export function OperationsPanel(props: OperationsPanelProps) {
                       record={record}
                       replacing={props.replacing}
                       envReady={props.envReady}
+                      describe={props.describe}
                       onResolve={choice => props.onResolveConflict(record, choice)}
                     />
                   )}

@@ -534,7 +534,7 @@ describe('P1-6 structured progress', () => {
 })
 
 describe('P0-2 activation states in the Installed tab', () => {
-  it('renders the four-state chip with the server reasons', async () => {
+  it('chips only the states the switch does not already show', async () => {
     stubFetch({
       '/dsh-market/installed': {
         profile: 'web',
@@ -551,7 +551,11 @@ describe('P0-2 activation states in the Installed tab', () => {
     await screen.findByText('dsh-loop')
     fireEvent.click(screen.getByRole('button', { name: /Installed/ }))
     await screen.findByText(en.stateRestart)
-    expect(screen.getByText(en.stateLive)).toBeTruthy()
+    // "Installed but not active yet" is news and keeps its chip. "Active" is
+    // exactly what the switch beside it means, so a chip repeating it made the
+    // row state one fact twice and left the reader pairing them up.
+    expect(screen.queryByText(en.stateLive)).toBeNull()
+    expect(screen.getAllByText(en.switchOnLabel).length).toBeGreaterThan(0)
     // The reason is behind a disclosure; the chip itself must not claim success.
     expect(screen.getByText(en.stateRestart).textContent).toContain(en.stateRestart)
   })
@@ -1517,15 +1521,20 @@ describe('a loader-id clash becomes a decision in the activity panel', () => {
     await screen.findByText(re(en.conflictBody))
   }
 
-  it('names the clashing plugin and the ids it holds', async () => {
+  it('names the clashing plugin, and keeps entry ids out of the decision', async () => {
     stubFetch({ '/dsh-market/install': clash })
     await installFirstCard()
 
     expect(screen.getByText('dsh-tui-core')).toBeTruthy()
-    expect(screen.getByText('storage, terminal')).toBeTruthy()
-    // Saying the environment is untouched is what keeps this from reading as
-    // "something was removed and I do not know what".
-    expect(screen.getByText(re(en.conflictReverted))).toBeTruthy()
+    // Entry ids are evidence, not part of the choice: a reader deciding which
+    // plugin to keep does not need them, so they live behind the disclosure.
+    expect(screen.queryByText(re('storage, terminal'))).toBeNull()
+    fireEvent.click(screen.getByText(en.conflictDetails))
+    expect(screen.getByText(re('storage, terminal'))).toBeTruthy()
+    // "Nothing was changed" is what keeps this from reading as "something was
+    // removed and I do not know what" — it rides on the status line now,
+    // rather than as a row of its own inside the decision.
+    expect(screen.getByText(re(en.opNeedsChoice))).toBeTruthy()
     // The record survives a page change, which is the whole reason it moved
     // off the card.
     fireEvent.click(screen.getByRole('button', { name: en.tabInstalled }))
@@ -1545,9 +1554,51 @@ describe('a loader-id clash becomes a decision in the activity panel', () => {
     // Both owners, each with only the id it actually declares — the whole
     // point of grouping rather than listing every id against the first name.
     expect(screen.getByText('dsh-tui-core')).toBeTruthy()
-    expect(screen.getByText('storage')).toBeTruthy()
     expect(screen.getByText('dsh-panel-kit')).toBeTruthy()
-    expect(screen.getByText('panel')).toBeTruthy()
+    // Grouping still holds under the disclosure: each owner keeps only the
+    // ids it actually declares.
+    fireEvent.click(screen.getByText(en.conflictDetails))
+    expect(screen.getByText(re('dsh-tui-core: storage'))).toBeTruthy()
+    expect(screen.getByText(re('dsh-panel-kit: panel'))).toBeTruthy()
+  })
+
+  it('draws the outcome on the plugins, and flips it with the choice', async () => {
+    // Stating a consequence beside a list leaves the reader to apply it. Here
+    // the list IS the consequence: the side that loses is struck through and
+    // tagged, so the choice can be read without parsing a sentence.
+    stubFetch({ '/dsh-market/install': clash })
+    await installFirstCard()
+
+    // Scoped to the decision: the plugin name also appears on the card.
+    const decision = screen.getByText(re(en.conflictBody)).parentElement as HTMLElement
+    const rowOf = (name: string) => within(decision).getByTitle(name).closest('div')?.parentElement
+    // Default keeps what is installed: the candidate is the one dropped.
+    expect(rowOf('dsh-notify')?.textContent).toContain(en.conflictOutcomeSkip)
+    expect(rowOf('dsh-tui-core')?.textContent).toContain(en.conflictOutcomeKeep)
+
+    fireEvent.click(screen.getByRole('radio', { name: re(en.conflictSwap) }))
+    expect(rowOf('dsh-notify')?.textContent).toContain(en.conflictOutcomeInstall)
+    expect(rowOf('dsh-tui-core')?.textContent).toContain(en.conflictOutcomeRemove)
+  })
+
+  it('closes on Escape, on an outside click, and from its own header', async () => {
+    // Re-pressing the control that opened a popover is the one dismissal
+    // route nobody looks for, so it cannot be the only one.
+    stubFetch({ '/dsh-market/install': clash })
+    await installFirstCard()
+
+    fireEvent.keyDown(document, { key: 'Escape' })
+    await waitFor(() => expect(screen.queryByText(re(en.conflictBody))).toBeNull())
+
+    fireEvent.click(screen.getByRole('button', { name: re(en.opBlockedCard) }))
+    await screen.findByText(re(en.conflictBody))
+    fireEvent.mouseDown(document.body)
+    await waitFor(() => expect(screen.queryByText(re(en.conflictBody))).toBeNull())
+
+    fireEvent.click(screen.getByRole('button', { name: re(en.opBlockedCard) }))
+    await screen.findByText(re(en.conflictBody))
+    fireEvent.click(screen.getByRole('button', { name: en.opClose }))
+    await waitFor(() => expect(screen.queryByText(re(en.conflictBody))).toBeNull())
   })
 
   it('defaults to the outcome that changes nothing, and confirming it uninstalls nothing', async () => {
@@ -1557,8 +1608,8 @@ describe('a loader-id clash becomes a decision in the activity panel', () => {
     stubFetch({ '/dsh-market/install': clash, '/dsh-market/uninstall': { ok: true, installed: {} } })
     await installFirstCard()
 
-    expect(screen.getByRole('radio', { name: re(en.conflictKeep) }).getAttribute('aria-checked')).toBe('true')
-    expect(screen.getByRole('radio', { name: re(en.conflictSwap) }).getAttribute('aria-checked')).toBe('false')
+    expect((screen.getByRole('radio', { name: re(en.conflictKeep) }) as HTMLInputElement).checked).toBe(true)
+    expect((screen.getByRole('radio', { name: re(en.conflictSwap) }) as HTMLInputElement).checked).toBe(false)
 
     fireEvent.click(screen.getByRole('button', { name: en.confirm }))
     await waitFor(() => expect(screen.queryByText(en.conflictTitle)).toBeNull())
