@@ -498,3 +498,75 @@ describe('isMarketItself / visiblePlugins excludes the market from Discover', ()
       .toEqual(['dsh-loop'])
   })
 })
+
+describe('installed-state matching stays cheap as the catalog grows (#262)', () => {
+  // "插件页面非常卡". A profile from the reporter put looseMatchCount at 2.9
+  // seconds — 28% of the whole trace. It answers "how many catalog entries
+  // could this installed dependency be?", which depends only on the catalog
+  // and the name, yet it ran once per installed dependency PER RENDERED
+  // CARD, each time scanning every entry. cards × installed × catalog, on
+  // every render.
+  const catalog = (n: number): RegistryPlugin[] =>
+    Array.from({ length: n }, (_, i) => plugin({
+      name: `pkg-${i}`, npm: `pkg-${i}`, url: `https://github.com/o${i}/pkg-${i}`,
+    }))
+
+  it('makes a RE-render cheap, which is what scrolling actually costs', () => {
+    // The property to pin is not "fast" (a wall-clock budget would flake on
+    // a slow box) but "the catalog is scanned once, not once per render".
+    // Scrolling re-renders the list repeatedly; before the memo every one of
+    // those repeated the full cards × installed × catalog scan, so a second
+    // render cost exactly as much as the first.
+    //
+    // Sized and sampled for a noisy CI machine: a big catalog so the first
+    // render's work dwarfs fixed overhead, and the FASTEST of several warm
+    // renders, so one unlucky GC pause cannot decide the verdict. A first
+    // attempt at 2000 entries and a single sample measured 50x locally and
+    // 4.7x on CI — the signal was real, the sampling was not.
+    const plugins = catalog(8000)
+    const installed: Record<string, string> = {}
+    for (let i = 0; i < 24; i++) installed[`pkg-${i}`] = '^1.0.0'
+    const render = (): number => {
+      const t0 = performance.now()
+      for (const p of plugins.slice(0, 48)) isInstalled(p, installed, {}, plugins, {})
+      return performance.now() - t0
+    }
+    const first = render()
+    let warm = Infinity
+    for (let i = 0; i < 5; i++) warm = Math.min(warm, render())
+    // Real ratio is in the hundreds; anything under 10x means the
+    // per-render catalog scan is back.
+    expect(first / Math.max(warm, 0.001)).toBeGreaterThan(10)
+  })
+
+  it('still answers identically for an ambiguous name, memo or not', () => {
+    // The memo must not change WHAT is matched — two entries share the
+    // `shared` identity, so the ambiguity guard must still refuse to guess.
+    const plugins = [
+      plugin({ name: 'shared', npm: 'shared', url: 'https://github.com/a/shared' }),
+      plugin({ name: 'shared-too', npm: 'shared', url: 'https://github.com/b/shared-too' }),
+    ]
+    const installed = { shared: '^1.0.0' }
+    // Repeated calls exercise the cached path; the verdict must not drift.
+    for (let i = 0; i < 3; i++) {
+      expect(isInstalled(plugins[0]!, installed, {}, plugins, {})).toBe(false)
+      expect(isInstalled(plugins[1]!, installed, {}, plugins, {})).toBe(false)
+    }
+    // ...and a repo hint still resolves it, from the cached path too.
+    expect(isInstalled(plugins[0]!, installed, {}, plugins, { shared: ['a/shared'] })).toBe(true)
+  })
+
+  it('does not leak a count between two different catalogs', () => {
+    // Keyed on the array identity: a refetched catalog is a new array, so a
+    // stale count from the previous one must never be reused.
+    const before = [plugin({ name: 'solo', npm: 'solo', url: 'https://github.com/a/solo' })]
+    const installed = { solo: '^1.0.0' }
+    expect(isInstalled(before[0]!, installed, {}, before, {})).toBe(true)
+    const after = [
+      plugin({ name: 'solo', npm: 'solo', url: 'https://github.com/a/solo' }),
+      plugin({ name: 'solo-two', npm: 'solo', url: 'https://github.com/b/solo-two' }),
+    ]
+    // Now ambiguous in the NEW catalog — the old count of 1 must not survive.
+    expect(isInstalled(after[0]!, installed, {}, after, {})).toBe(false)
+  })
+})
