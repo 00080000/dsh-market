@@ -16,6 +16,7 @@ import { logEvent } from './log.ts'
 import { createProgressTracker, type ProgressPhase } from './ndjson.ts'
 import { pluginArgsFor } from './pnpm-compat.ts'
 import { profileDir } from './profile.ts'
+import { activeRegion, DEFAULT_NPM_REGISTRY, routesFor, type Region } from './regions.ts'
 
 // 15 min default (slow networks + git installs), overridable for CI/tests.
 // (#6 by @qichuang321.)
@@ -83,7 +84,7 @@ export const nodeBinDir = dirname(nodeExecutable())
  * reads `npm_config_noproxy` and a host excluding its own registry mirror
  * must keep excluding it.
  */
-export function proxyEnvForPnpm(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+export function proxyEnvForPnpm(env: NodeJS.ProcessEnv = process.env, region: Region = 'global'): NodeJS.ProcessEnv {
   const has = (name: string): boolean => {
     const wanted = name.toLowerCase()
     return Object.keys(env).some(key => key.toLowerCase() === wanted && (env[key] ?? '').trim() !== '')
@@ -127,6 +128,19 @@ export function proxyEnvForPnpm(env: NodeJS.ProcessEnv = process.env): NodeJS.Pr
     const npmNoProxy = pick('npm_config_noproxy')
     if (npmNoProxy !== null && stdNoProxy === null) out.NO_PROXY = npmNoProxy
   }
+  // The download region's npm mirror, when it has one.
+  //
+  // Last, and conditionally: a registry the caller already named is their
+  // statement about where packages come from, and a region setting must not
+  // overrule it. Same rule the proxy translation above follows, for the same
+  // reason — this function's job is to fill silence, not to overwrite speech.
+  const mirror = routesFor(region).npmRegistry
+  if (mirror !== DEFAULT_NPM_REGISTRY && !has('npm_config_registry')) {
+    // npm's own config convention terminates the registry with a slash;
+    // pnpm accepts either, but writing it the conventional way keeps the
+    // value recognizable to anyone reading the spawned process's env.
+    out.npm_config_registry = `${mirror}/`
+  }
   return out
 }
 
@@ -141,7 +155,7 @@ function spawnEnv(): NodeJS.ProcessEnv {
   for (const bin of candidates) {
     if (!parts.includes(bin)) parts.push(bin)
   }
-  return { ...process.env, ...proxyEnvForPnpm(), CI: 'true', PATH: parts.join(separator) }
+  return { ...process.env, ...proxyEnvForPnpm(process.env, activeRegion()), CI: 'true', PATH: parts.join(separator) }
 }
 
 const INSTALL_TIMEOUT_MS = Number(process.env.DSH_MARKET_INSTALL_TIMEOUT_MS) || 15 * 60 * 1000

@@ -11,7 +11,7 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import { loadRegistry } from './registry.ts'
+import { forgetCatalog, loadRegistry } from './registry.ts'
 import {
   cleanHotDir, hotMount, hotUnmount, listHotMounts,
   mountClientOnlyDeps, purgeMarketState, readMarketState, writeMarketState,
@@ -29,10 +29,13 @@ import { runningAgentIds, type AgentsLookup } from './agents.ts'
 import { analyzeProfile, type DuplicateName } from './check.ts'
 import { applyBundleOrder, mergeOrder, readBundleRules, readBundleStack, validateOrder } from './order.ts'
 import { trialValidate } from './trial.ts'
-import { findInstalledAlias, gitAllowBuildsKey, installTargetFor } from './sources.ts'
+import { findInstalledAlias, gitAllowBuildsKey, installTargetFor, repoOfTarget } from './sources.ts'
 import { failureDetail, groupConflictsByOwner, isStaleUpdate, parseIgnoredBuilds, parsePrepareNotAllowed, RELEASE_AGE_OVERRIDE, retargetCollections, validateAddedPlugins, withHoistRecovery } from './install.ts'
 import { asChannel, CHANNELS, DIST_TAG, resolveChannel, type Channel } from './channels.ts'
-import { checkUpdates, fetchNpmLatest, invalidateUpdates, isUpgrade, latestPublishedRecently, versionOnChannel } from './updates.ts'
+import { asRegion, REGIONS, routesFor, setActiveRegion, type Region } from './regions.ts'
+import { resolveRegion } from './region-probe.ts'
+import { acceleratedTarget } from './accelerate.ts'
+import { checkUpdates, fetchNpmLatest, invalidateUpdates, isUpgrade, latestPublishedRecently, setUpdateRegistry, versionOnChannel } from './updates.ts'
 import { createThemeManager, type LoaderEntry } from './themes.ts'
 import { readJsonBody, sameOrigin, sendJson } from './http.ts'
 import { detectedSupervisor, restartAllowed, scheduleRestart, servingPort, trustedRestartRequest, trustedDownloadRequest } from './restart.ts'
@@ -77,6 +80,8 @@ export interface MarketConfig {
   allowRestart?: boolean
   /** Which release channel the market offers ITSELF from; other plugins never follow it. */
   channel?: Channel
+  /** Which mirrors every outbound request uses; undefined until decided. */
+  region?: Region
 }
 
 const PROFILE_RE = /^[A-Za-z0-9_-]+$/
@@ -202,6 +207,41 @@ export function mountMarketRoutes(
   // composed, which is only ever a default.
   if (marketState.channel !== undefined) config.channel = marketState.channel
   const activeChannel = (): Channel => resolveChannel(config.channel, marketVersion())
+
+  // The download region: which mirrors every outbound request uses.
+  //
+  // `global` until something decides otherwise, so nothing waits on the
+  // network to start serving. A machine with no region on record gets one
+  // probed in the background below; a machine that already has one is
+  // routed immediately.
+  if (marketState.region !== undefined) config.region = marketState.region
+  let region: Region = config.region ?? 'global'
+  let regionAuto = marketState.regionAuto === true
+  const applyRegion = (next: Region): void => {
+    region = next
+    // The shared holder every reader consults, plus the one consumer that
+    // must also DROP state on a change: update answers gathered from the
+    // other registry are not this registry's answers.
+    setActiveRegion(next)
+    setUpdateRegistry(routesFor(next).npmRegistry)
+  }
+  applyRegion(region)
+  if (marketState.region === undefined) {
+    void resolveRegion(undefined).then(({ region: probed }) => {
+      applyRegion(probed)
+      regionAuto = true
+      // Persisted as the decision, not re-probed each boot: a market that
+      // silently changes routes between runs makes "it was fast yesterday"
+      // impossible to investigate.
+      marketState.region = probed
+      marketState.regionAuto = true
+      config.region = probed
+      writeMarketState(activeProfileDir, marketState)
+      // The listing was fetched before the region was known.
+      forgetCatalog()
+      invalidateUpdates()
+    }).catch(() => { /* an undecided region simply stays global */ })
+  }
   const themes = createThemeManager(host, config.profile, disabled, activeProfileDir)
 
   // Client-only packages (dsh.client without dsh.bundle) are invisible to the
@@ -1156,6 +1196,17 @@ export function mountMarketRoutes(
           version: marketVersion(),
           channel: activeChannel(),
           channels: CHANNELS,
+          region,
+          regions: REGIONS,
+          // The prefix the BROWSER should put in front of github.com URLs
+          // (avatars, README images). Sent resolved rather than derived from
+          // `region` on the client, so the routing table has one home and a
+          // change to it cannot leave the two halves disagreeing.
+          githubProxy: routesFor(region).githubProxy,
+          // Whether the region was decided by the network check rather than
+          // by the user — the card explains a choice it made on their behalf
+          // exactly once, so nobody has to wonder why downloads moved.
+          regionAuto,
           restart: restartAllowed(config),
           // Named so the UI can say WHY the button is gone. A blank
           // "no restart button" is the state #229 reported as broken.
@@ -1557,6 +1608,55 @@ export function mountMarketRoutes(
           invalidateUpdates()
           logEvent('info', 'channel', `release channel set to ${wanted}`)
           sendJson(response, 200, { ok: true, channel: wanted })
+        } catch (error) {
+          sendJson(response, 500, { error: error instanceof Error ? error.message : String(error) })
+        }
+      },
+    }),
+
+    /**
+     * Which mirrors every outbound request uses.
+     *
+     * Beside the channel route rather than in the settings namespace, and
+     * for the reason recorded there: a value the market stores in its own
+     * state.json cannot also be owned by the settings schema without the two
+     * writing over each other.
+     */
+    host.webServer.register({
+      kind: 'exact',
+      path: '/dsh-market/region',
+      handler: async (request, response) => {
+        if (request.method !== 'POST') {
+          response.writeHead(405, { allow: 'POST' })
+          response.end()
+          return
+        }
+        if (!sameOrigin(request)) {
+          sendJson(response, 403, { error: 'untrusted origin' })
+          return
+        }
+        try {
+          const body = (await readJsonBody(request)) as { region?: unknown }
+          const wanted = asRegion(body.region)
+          if (wanted === null) {
+            sendJson(response, 400, { error: 'region must be "global" or "china"' })
+            return
+          }
+          applyRegion(wanted)
+          config.region = wanted
+          marketState.region = wanted
+          // A choice made by hand is no longer the probe's choice, so the
+          // one-time explanation stops being offered.
+          marketState.regionAuto = undefined
+          regionAuto = false
+          writeMarketState(activeProfileDir, marketState)
+          // Both caches were filled from the other region's origins. The
+          // catalog validator in particular is scoped to the URL that issued
+          // it and would be meaningless against the new one.
+          forgetCatalog()
+          invalidateUpdates()
+          logEvent('info', 'region', `download region set to ${wanted}`)
+          sendJson(response, 200, { ok: true, region: wanted })
         } catch (error) {
           sendJson(response, 500, { error: error instanceof Error ? error.message : String(error) })
         }
@@ -2026,10 +2126,20 @@ export function mountMarketRoutes(
               sendJson(response, 400, { error: 'plugin is not in the curated registry' })
               return
             }
-            const target = installTargetFor(entry)
-            if (target === null) {
+            const plainTarget = installTargetFor(entry)
+            if (plainTarget === null) {
               sendJson(response, 400, { error: 'unsupported source url' })
               return
+            }
+            // Route a GitHub download through the region's mirror, when there
+            // is one and the target can express it. Applied HERE, before the
+            // guards below, so every step downstream reasons about the spec
+            // that will actually be installed — the duplicate guard and the
+            // build-script key both read targets, and both understand either
+            // spelling. Returns the original on any failure (see accelerate.ts).
+            const target = await acceleratedTarget(plainTarget, region)
+            if (target !== plainTarget) {
+              logEvent('info', 'region', `${entry.name}: downloading through the ${region} mirror`)
             }
             // Duplicate guard (#27): the same plugin listed under another name
             // (an alias entry pointing at the same repo) must never install
@@ -2053,8 +2163,20 @@ export function mountMarketRoutes(
               // Same install? The leftover's own name/spec must match what we
               // are about to add — an npm entry retries under its npm name; a
               // github entry's package.json spec equals the target.
+              // Compared as IDENTITIES, not as strings. One GitHub plugin has
+              // two spellings depending on the download region — the
+              // `github:` shortcut and a proxied codeload tarball — so a
+              // literal comparison would call a leftover from before a region
+              // switch "a different source" and refuse the retry it exists to
+              // allow. `repoOfTarget` returns null for npm names and file
+              // links, which fall through to the string comparison below.
+              const installedSpec = String(installedNow[aliasOf] ?? '').replace(/^file:/, '')
+              const wantedSpec = String(target).replace(/^file:/, '')
+              const installedRepo = repoOfTarget(installedSpec)
+              const wantedRepo = repoOfTarget(wantedSpec)
               const sameSource = aliasOf.toLowerCase() === (entry.npm ?? '').toLowerCase()
-                || String(installedNow[aliasOf] ?? '').replace(/^file:/, '').toLowerCase() === String(target).replace(/^file:/, '').toLowerCase()
+                || (installedRepo !== null && installedRepo === wantedRepo)
+                || installedSpec.toLowerCase() === wantedSpec.toLowerCase()
               let active = false
               try {
                 const manifest = JSON.parse(readFileSync(join(activeProfileDir, 'package.json'), 'utf8')) as { dsh?: { profile?: { bundles?: string[] } } }

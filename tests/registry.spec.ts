@@ -153,6 +153,64 @@ describe('loadRegistry', () => {
   })
 })
 
+describe('loadRegistry download regions', () => {
+  /** A fetch that answers per-URL rather than per-call. */
+  function byUrl(plan: Array<[RegExp, Response | Error]>): ReturnType<typeof vi.fn> {
+    const stub = vi.fn((url: unknown) => {
+      const entry = plan.find(([pattern]) => pattern.test(String(url)))
+      if (entry === undefined) return Promise.reject(new Error(`unexpected request: ${String(url)}`))
+      const answer = entry[1]
+      return answer instanceof Error ? Promise.reject(answer) : Promise.resolve(answer.clone())
+    })
+    vi.stubGlobal('fetch', stub)
+    return stub
+  }
+
+  it('reads the catalog from the official domain in the global region', async () => {
+    const stub = byUrl([[/awesome-dsh-plugin\.com/, ok(CATALOG)]])
+    await loadRegistry('global')
+    expect(String(stub.mock.calls[0]?.[0])).toContain('awesome-dsh-plugin.com')
+  })
+
+  it('reads it through the mirror in the china region', async () => {
+    const stub = byUrl([[/raw\.githubusercontent\.com/, ok(CATALOG)]])
+    await loadRegistry('china')
+    // Through the raw path, because the proxy refuses hostnames that are not
+    // github.com's own — the project domain cannot be carried through it.
+    expect(String(stub.mock.calls[0]?.[0])).toContain('raw.githubusercontent.com')
+  })
+
+  it('falls back to the official domain when the mirror is down', async () => {
+    // The catalog is the FIRST request the market makes. A free public proxy
+    // going down must mean a slow market, not an empty one.
+    const stub = byUrl([
+      [/raw\.githubusercontent\.com/, new Error('fetch failed')],
+      [/awesome-dsh-plugin\.com/, ok(CATALOG)],
+    ])
+    const registry = await loadRegistry('china')
+    expect(registry.plugins).toHaveLength(1)
+    // Two attempts at the mirror, then the official address.
+    expect(stub).toHaveBeenCalledTimes(3)
+  })
+
+  it('reports all four attempts when both addresses fail', async () => {
+    byUrl([[/./, new Error('fetch failed')]])
+    await expect(loadRegistry('china')).rejects.toThrow(/4 attempts/)
+  })
+
+  it('never sends one origin the validator another one issued', async () => {
+    // A validator is scoped to the URL that issued it. Carried across a
+    // region switch it could earn a 304 from an origin whose body we have
+    // never seen, and the market would render a catalog it never received.
+    byUrl([[/awesome-dsh-plugin\.com/, okTagged(CATALOG, 'W/"one"')]])
+    await loadRegistry('global')
+    const stub = byUrl([[/raw\.githubusercontent\.com/, ok(CATALOG)]])
+    await loadRegistry('china')
+    const headers = (stub.mock.calls[0]?.[1] ?? {}) as { headers?: Record<string, string> }
+    expect(headers.headers?.['if-none-match']).toBeUndefined()
+  })
+})
+
 describe('loadRegistry revalidation', () => {
   // Always ASK, never re-download what has not changed. This is not the
   // cache that was removed: that one skipped the request and answered from

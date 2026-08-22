@@ -99,6 +99,38 @@ export function invalidateUpdates(): void {
   updatesCache = null
 }
 
+/**
+ * The npm registry update checks read, no trailing slash.
+ *
+ * Module state driven from the routes, like `updatesCache` beside it, rather
+ * than a parameter on all five call sites: the registry is a property of the
+ * running market, not of any one question asked of it, and threading it
+ * through would put the same value in five signatures and every test that
+ * calls them.
+ */
+let registryBase = 'https://registry.npmjs.org'
+
+/**
+ * Point update checks at a registry. Called when the download region
+ * resolves and whenever it changes.
+ *
+ * Dropping the cache is the load-bearing half. A mirror can lag the official
+ * registry by minutes, so answers gathered from one are not answers from the
+ * other — keeping them across a switch would report a version this registry
+ * cannot yet serve.
+ */
+export function setUpdateRegistry(base: string): void {
+  const next = base.replace(/\/+$/, '')
+  if (next === registryBase) return
+  registryBase = next
+  updatesCache = null
+}
+
+/** A registry URL for `path`, on whichever registry is currently in force. */
+function npmUrl(path: string): string {
+  return `${registryBase}/${path}`
+}
+
 async function fetchJson(url: string): Promise<unknown> {
   // Through the proxy when one is configured: Node's global fetch ignores
   // HTTP_PROXY, so on a machine whose route out is a local proxy every
@@ -122,7 +154,7 @@ async function fetchJson(url: string): Promise<unknown> {
  */
 export async function latestPublishedRecently(name: string, windowMs = 26 * 60 * 60 * 1000): Promise<boolean | null> {
   try {
-    const doc = (await fetchJson(`https://registry.npmjs.org/${encodeURIComponent(name)}`)) as {
+    const doc = (await fetchJson(npmUrl(`${encodeURIComponent(name)}`))) as {
       'dist-tags'?: Record<string, string>
       time?: Record<string, string>
     }
@@ -182,7 +214,7 @@ const EXTRA_TAGS: Record<Channel, string[]> = {
 /** One dist-tag's version, or null when it isn't published or can't be read. */
 async function tagVersion(name: string, tag: string): Promise<string | null> {
   try {
-    const meta = (await fetchJson(`https://registry.npmjs.org/${encodeURIComponent(name)}/${tag}`)) as { version?: string }
+    const meta = (await fetchJson(npmUrl(`${encodeURIComponent(name)}/${tag}`))) as { version?: string }
     return typeof meta.version === 'string' ? meta.version : null
   } catch {
     // An unpublished tag is the ordinary case for a channel nobody has cut
@@ -194,7 +226,7 @@ async function tagVersion(name: string, tag: string): Promise<string | null> {
 
 export async function fetchNpmLatest(name: string): Promise<string | null> {
   try {
-    const meta = (await fetchJson(`https://registry.npmjs.org/${encodeURIComponent(name)}/latest`)) as { version?: string }
+    const meta = (await fetchJson(npmUrl(`${encodeURIComponent(name)}/latest`))) as { version?: string }
     return typeof meta.version === 'string' ? meta.version : null
   } catch {
     return null
@@ -243,7 +275,7 @@ export async function checkUpdates(
           updateAvailable: current !== null && latest !== null && current !== latest,
         }
       } else {
-        const meta = (await fetchJson(`https://registry.npmjs.org/${encodeURIComponent(name)}/latest`)) as { version?: string }
+        const meta = (await fetchJson(npmUrl(`${encodeURIComponent(name)}/latest`))) as { version?: string }
         const stable = typeof meta.version === 'string' ? meta.version : null
         const channel = channelFor.get(name)
         const latest = channel === undefined ? stable : await versionOnChannel(name, channel, stable)

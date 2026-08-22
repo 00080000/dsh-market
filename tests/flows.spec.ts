@@ -305,7 +305,7 @@ const REGISTRY = {
     { name: 'mono#plug-b', owner: 'm', url: 'https://github.com/m/mono/tree/main/packages/plug-b', category: 'tool', npm: null, description: {}, install: '', added: '' },
   ],
 }
-const registryModule = vi.hoisted(() => ({ loadRegistry: vi.fn() }))
+const registryModule = vi.hoisted(() => ({ loadRegistry: vi.fn(), forgetCatalog: vi.fn() }))
 vi.mock('../src/registry.ts', () => registryModule)
 registryModule.loadRegistry.mockImplementation(() => Promise.resolve(REGISTRY))
 
@@ -1981,6 +1981,47 @@ describe('self-uninstall — the market removing itself from its settings card',
     // Adding a way to remove the market must not quietly open the old one.
     const viaGeneric = await bed.dispatch('POST', '/dsh-market/uninstall', { name: 'dshmarket' })
     expect(viaGeneric.status).toBe(400)
+  })
+})
+
+describe('download region', () => {
+  it('rejects anything but the two regions', async () => {
+    expect((await bed.dispatch('POST', '/dsh-market/region', { region: 'CN' })).status).toBe(400)
+    expect((await bed.dispatch('POST', '/dsh-market/region', {})).status).toBe(400)
+    expect((await bed.dispatch('POST', '/dsh-market/region', { region: 'china' }, { crossOrigin: true })).status).toBe(403)
+  })
+
+  it('round-trips the setting and reports it on /status', async () => {
+    const set = await bed.dispatch('POST', '/dsh-market/region', { region: 'china' })
+    expect(set.status).toBe(200)
+    expect(set.json.region).toBe('china')
+    const status = (await bed.dispatch('GET', '/dsh-market/status')).json
+    expect(status.region).toBe('china')
+    // The card draws its control from this list, so a region the route would
+    // refuse must never appear in it.
+    expect(status.regions).toEqual(['global', 'china'])
+
+    const back = await bed.dispatch('POST', '/dsh-market/region', { region: 'global' })
+    expect(back.status).toBe(200)
+    expect((await bed.dispatch('GET', '/dsh-market/status')).json.region).toBe('global')
+  })
+
+  it('sends the browser a resolved proxy prefix rather than a region to interpret', async () => {
+    // The routing table has one home. A client deriving the proxy from the
+    // region name would be a second copy of it that can disagree.
+    expect((await bed.dispatch('GET', '/dsh-market/status')).json.githubProxy).toBeNull()
+    await bed.dispatch('POST', '/dsh-market/region', { region: 'china' })
+    const proxy = (await bed.dispatch('GET', '/dsh-market/status')).json.githubProxy
+    expect(typeof proxy).toBe('string')
+    expect(String(proxy).startsWith('https://')).toBe(true)
+    await bed.dispatch('POST', '/dsh-market/region', { region: 'global' })
+  })
+
+  it('stops offering the automatic explanation once the user has chosen', async () => {
+    await bed.dispatch('POST', '/dsh-market/region', { region: 'china' })
+    // The market has nothing left to explain: the answer is the user's now.
+    expect((await bed.dispatch('GET', '/dsh-market/status')).json.regionAuto).toBe(false)
+    await bed.dispatch('POST', '/dsh-market/region', { region: 'global' })
   })
 })
 

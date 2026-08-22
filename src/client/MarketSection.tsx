@@ -39,8 +39,8 @@ import { clearSettled, drop, enqueue, patch as patchRecord, recordForUrl } from 
 import type { OperationRecord } from './operations.ts'
 import { Diagnostics } from './Diagnostics.tsx'
 import {
-  avatarColor, entryForDep, groupSwitchState, humanOutput, isInstalled, looksTerminal, matchInstalledName, orderedCategories,
-  formatCount, pageItems, pluginName, pluginScreenshots, readSession, safeScreenshots, themePlugins as themePluginsOf, themeSwatch, TIME_RANGE_DAYS, visiblePlugins,
+  avatarColor, entryForDep, githubProxyInUse, githubUrl, groupSwitchState, humanOutput, isInstalled, looksTerminal, matchInstalledName, orderedCategories,
+  formatCount, pageItems, pluginName, pluginScreenshots, readSession, safeScreenshots, setGithubProxy, themePlugins as themePluginsOf, themeSwatch, TIME_RANGE_DAYS, visiblePlugins,
 } from './market-data.ts'
 import type {
 ActivationInfo, ActivationState, GistExportResult, InstalledMap, InstalledRepoHints, InstalledRepoIdentities, MarketStatus, Registry, RegistryPlugin,
@@ -292,7 +292,7 @@ function OwnerAvatar({ name, owner }: { name: string; owner: string }) {
   return (
     <img
       className={css.av}
-      src={`https://github.com/${encodeURIComponent(owner)}.png?size=96`}
+      src={githubUrl(`https://github.com/${encodeURIComponent(owner)}.png?size=96`)}
       alt=""
       loading="lazy"
       onError={() => setFailed(true)}
@@ -375,6 +375,16 @@ function useAutoCarousel(count: number, initial: number, intervalMs = 3500): [nu
  * share a cache entry with the full-size open anyway.
  */
 function thumbUrl(src: string, height: number): string {
+  // A download region with a mirror bypasses the resizer entirely.
+  //
+  // weserv is a third-party service in the Netherlands, chosen when the only
+  // question was bandwidth. For a user who has told the market their network
+  // reaches GitHub badly, it is one more far-away host between them and the
+  // image — and the whole point of the region is not to have those. Serving
+  // the original through the same mirror as everything else costs bytes the
+  // layout already constrains, and it costs them on a route that works.
+  const proxy = githubProxyInUse()
+  if (proxy !== null) return githubUrl(src)
   return `https://images.weserv.nl/?url=${encodeURIComponent(src.replace(/^https?:\/\//, ''))}&h=${String(height)}&fit=inside&we=1`
 }
 
@@ -1092,6 +1102,11 @@ export function MarketSection(props: MarketSectionProps) {
       .then(res => res.json())
       .then(status => {
         setEnvReady(status.pnpm !== false)
+        // Applied before anything renders a github.com URL. The catalog this
+        // page draws from is a larger request through the same server, so it
+        // lands later; and if it ever did not, the status poll re-renders
+        // within seconds and the images correct themselves.
+        setGithubProxy(typeof status.githubProxy === 'string' ? status.githubProxy : null)
         if (typeof status.boot === 'string') {
           setBootId(status.boot)
           // A dismissal only silences the notice for the boot it was made

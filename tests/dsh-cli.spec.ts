@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events'
 import { describe, expect, it, vi } from 'vitest'
 import { cmdCommandLine, nodeExecutable, proxyEnvForPnpm, quoteCmdArg, TARGET_RE } from '../src/dsh-cli.ts'
+import { routesFor } from '../src/regions.ts'
 
 describe('cmd.exe command line building (DEP0190 shim)', () => {
   it('keeps simple tokens unquoted', () => {
@@ -131,6 +132,36 @@ describe('proxy env translated for the pnpm subprocess (#148/#161/#188/#232/#274
 })
 
 describe('the proxy translation actually reaches spawned pnpm (#148)', () => {
+  it('points pnpm at the region mirror, and only when the region has one', () => {
+    const mirror = routesFor('china', {}).npmRegistry
+    expect(proxyEnvForPnpm({}, 'china')).toEqual({ npm_config_registry: `${mirror}/` })
+    // The global region names the default registry, so there is nothing to
+    // say — an explicit registry equal to the default is noise in the env.
+    expect(proxyEnvForPnpm({}, 'global')).toEqual({})
+  })
+
+  it('never overrules a registry the caller already named', () => {
+    // Same rule the proxy translation follows: fill silence, do not overwrite
+    // speech. Someone pointing pnpm at a company registry has said where
+    // packages come from, and a region setting is not an argument with that.
+    expect(proxyEnvForPnpm({ npm_config_registry: 'https://npm.corp/' }, 'china')).toEqual({})
+    // Windows env keys are case-insensitive, so the check has to be too.
+    expect(proxyEnvForPnpm({ NPM_CONFIG_REGISTRY: 'https://npm.corp/' }, 'china')).toEqual({})
+    // A blank value is not a statement about anything.
+    expect(proxyEnvForPnpm({ npm_config_registry: '  ' }, 'china'))
+      .toEqual({ npm_config_registry: `${routesFor('china', {}).npmRegistry}/` })
+  })
+
+  it('carries the mirror alongside a proxy rather than instead of one', () => {
+    // A user can need both: a proxy to leave their network at all, and a
+    // mirror because the origin is far away once they have.
+    expect(proxyEnvForPnpm({ HTTPS_PROXY: 'http://p:1' }, 'china')).toEqual({
+      npm_config_https_proxy: 'http://p:1',
+      npm_config_proxy: 'http://p:1',
+      npm_config_registry: `${routesFor('china', {}).npmRegistry}/`,
+    })
+  })
+
   // proxyEnvForPnpm being correct is worth nothing if spawnEnv never calls
   // it — that wiring IS the bug being fixed, so it gets its own assertion
   // against a real spawn call rather than the pure function alone.

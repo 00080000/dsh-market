@@ -42,6 +42,12 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 			setSelfUpToDateHint: "",
 			setSelfUpdate: "更新",
 			setSelfUpdatedHint: "已下载完成。重启 DeepSeek Harness 后新版本才会生效——前端页面会立即更新，服务端不会。",
+			setRegion: "下载区域",
+			setRegionGlobal: "全球",
+			setRegionChina: "中国大陆",
+			setRegionGlobalHint: "从 npm 和 GitHub 官方源下载。",
+			setRegionChinaHint: "中国大陆访问更快。仅改变下载线路，插件来源不变。",
+			setRegionAuto: "已根据网络状况自动选择，可随时切换。",
 			setChannel: "更新通道",
 			setChannelStable: "稳定版",
 			setChannelBeta: "Beta",
@@ -402,6 +408,12 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 			setSelfUpToDateHint: "",
 			setSelfUpdate: "Update",
 			setSelfUpdatedHint: "Downloaded. Restart DeepSeek Harness for it to take effect — the frontend updates at once, the server does not.",
+			setRegion: "Download region",
+			setRegionGlobal: "Global",
+			setRegionChina: "China mainland",
+			setRegionGlobalHint: "Downloads directly from npm and GitHub.",
+			setRegionChinaHint: "Faster in mainland China. Changes the download route, not the source.",
+			setRegionAuto: "Selected from a network check. Change it anytime.",
 			setChannel: "Update channel",
 			setChannelStable: "Stable",
 			setChannelBeta: "Beta",
@@ -1071,6 +1083,32 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 			];
 		}
 		/**
+		* Prefix for github.com URLs this page loads, or null to address them
+		* directly. Set from the status poll, which gets it from the download region.
+		*
+		* Module state rather than a prop: the URLs it applies to are built in four
+		* places across two files (avatars, README fetches, screenshot thumbnails),
+		* and threading one string through every card would put it in signatures
+		* that have no other reason to know about networking.
+		*
+		* Applied at the LAST moment, never stored. Extracted image URLs stay
+		* canonical, so changing region re-renders against the new route instead of
+		* leaving a page full of links to a proxy the user just switched away from.
+		*/
+		let githubProxy = null;
+		/** Point browser-side github.com requests at a proxy, or null for direct. */
+		function setGithubProxy(proxy) {
+			githubProxy = proxy;
+		}
+		/** The proxy in force, for callers that must decide between two URL shapes. */
+		function githubProxyInUse() {
+			return githubProxy;
+		}
+		/** `url` through the proxy in force, or unchanged when there is none. */
+		function githubUrl(url) {
+			return githubProxy === null ? url : `${githubProxy}/${url}`;
+		}
+		/**
 		* Image hosts screenshots may load from (#61) — GitHub's own hosting only.
 		* Any other host is dropped BEFORE an <img> is created: a screenshot URL is
 		* a request carrying the user's IP, so registry data and README content are
@@ -1146,7 +1184,7 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 			if (cached !== void 0) return cached;
 			const fetchReadme = async (path) => {
 				try {
-					const res = await fetch(`https://raw.githubusercontent.com/${owner}/${repo}/HEAD/${path === null ? "" : path + "/"}README.md`);
+					const res = await fetch(githubUrl(`https://raw.githubusercontent.com/${owner}/${repo}/HEAD/${path === null ? "" : path + "/"}README.md`));
 					return res.ok ? await res.text() : null;
 				} catch {
 					return null;
@@ -3238,7 +3276,7 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 			});
 			return /* @__PURE__ */ (0, react_jsx_runtime.jsx)("img", {
 				className: Market_module_css_default.av,
-				src: `https://github.com/${encodeURIComponent(owner)}.png?size=96`,
+				src: githubUrl(`https://github.com/${encodeURIComponent(owner)}.png?size=96`),
 				alt: "",
 				loading: "lazy",
 				onError: () => setFailed(true)
@@ -3323,6 +3361,7 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 		* share a cache entry with the full-size open anyway.
 		*/
 		function thumbUrl(src, height) {
+			if (githubProxyInUse() !== null) return githubUrl(src);
 			return `https://images.weserv.nl/?url=${encodeURIComponent(src.replace(/^https?:\/\//, ""))}&h=${String(height)}&fit=inside&we=1`;
 		}
 		/**
@@ -4049,6 +4088,7 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 				loadCatalog();
 				fetch("/dsh-market/status", { cache: "no-store" }).then((res) => res.json()).then((status) => {
 					setEnvReady(status.pnpm !== false);
+					setGithubProxy(typeof status.githubProxy === "string" ? status.githubProxy : null);
 					if (typeof status.boot === "string") {
 						setBootId(status.boot);
 						try {
@@ -7098,6 +7138,16 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 			beta: "setChannelBetaHint",
 			dev: "setChannelDevHint"
 		};
+		const REGIONS = ["global", "china"];
+		const asRegion = (value) => REGIONS.includes(value) ? value : null;
+		const REGION_LABEL = {
+			global: "setRegionGlobal",
+			china: "setRegionChina"
+		};
+		const REGION_HINT = {
+			global: "setRegionGlobalHint",
+			china: "setRegionChinaHint"
+		};
 		/**
 		* Read the server's answer, taking the list of channels FROM it.
 		*
@@ -7107,11 +7157,15 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 		*/
 		function readStatus(body) {
 			const offered = (body.channels ?? []).map(asChannel).filter((c) => c !== null);
+			const regions = (body.regions ?? []).map(asRegion).filter((r) => r !== null);
 			return {
 				version: body.version ?? null,
 				restart: body.restart === true,
 				channel: asChannel(body.channel) ?? "stable",
-				channels: offered.length > 0 ? offered : ["stable", "beta"]
+				channels: offered.length > 0 ? offered : ["stable", "beta"],
+				region: asRegion(body.region) ?? "global",
+				regions: regions.length > 0 ? regions : REGIONS,
+				regionAuto: body.regionAuto === true
 			};
 		}
 		function readUpdate(own) {
@@ -7158,12 +7212,16 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 					try {
 						const body = await (await fetch("/dsh-market/status", { cache: "no-store" })).json();
 						if (live) setStatus(readStatus(body));
+						setGithubProxy(typeof body.githubProxy === "string" ? body.githubProxy : null);
 					} catch {
 						if (live) setStatus({
 							version: null,
 							restart: false,
 							channel: "stable",
-							channels: ["stable", "beta"]
+							channels: ["stable", "beta"],
+							region: "global",
+							regions: REGIONS,
+							regionAuto: false
 						});
 					}
 					try {
@@ -7273,6 +7331,37 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 				refreshUpdate,
 				t
 			]);
+			/**
+			* Select a download region — and show the one the SERVER accepted, on the
+			* same reasoning as the channel above.
+			*
+			* A hand-made choice retires the one-time notice: the market no longer has
+			* anything to explain once the user has answered for themselves.
+			*/
+			const onRegion = (0, react.useCallback)((next) => {
+				setError(null);
+				(async () => {
+					try {
+						const body = await post("/dsh-market/region", { region: next });
+						if (body.ok !== true) {
+							setError(body.error ?? t("setSelfFailed"));
+							return;
+						}
+						const accepted = asRegion(body.region) ?? next;
+						setStatus((current) => current === null ? current : {
+							...current,
+							region: accepted,
+							regionAuto: false
+						});
+						try {
+							const status = await (await fetch("/dsh-market/status", { cache: "no-store" })).json();
+							setGithubProxy(typeof status.githubProxy === "string" ? status.githubProxy : null);
+						} catch {}
+					} catch (cause) {
+						setError(cause instanceof Error ? cause.message : String(cause));
+					}
+				})();
+			}, [post, t]);
 			/** One label + hint block with an optional action, the host's row shape. */
 			const row = (label, hint, action) => (0, react.createElement)("div", { className: Market_module_css_default.setRow }, (0, react.createElement)("div", { className: Market_module_css_default.setLabelBox }, (0, react.createElement)("div", { className: Market_module_css_default.setLabel }, label), (0, react.createElement)("div", { className: Market_module_css_default.setHint }, hint)), action);
 			const body = phase === "removed" ? row(t("setSelfRemoved"), t("setSelfRemovedHint"), null) : (0, react.createElement)(react.Fragment, null, row(update?.updateAvailable === true && update.latest !== null ? `${t("setSelfUpdateReady")} ${update.latest}` : update?.channelSwitch != null ? `${t("setChannelSwitch")} ${update.channelSwitch}` : t("setSelfUpToDate"), phase === "updated" ? t("setSelfUpdatedHint") : update?.channelSwitch != null ? t("setChannelSwitchHint") : update?.updateAvailable === true ? t("setSelfUpdateHint") : t("setSelfUpToDateHint"), phase === "updated" ? null : update?.updateAvailable === true ? (0, react.createElement)(_deepseek_ai_dsh_client_ui_primitives.Button, {
@@ -7294,7 +7383,15 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 				onClick: () => {
 					onChannel(id);
 				}
-			}, t(CHANNEL_LABEL[id]))))), row(t("setSelfRemove"), t("setSelfRemoveHint"), phase === "confirming" || busy ? null : (0, react.createElement)(_deepseek_ai_dsh_client_ui_primitives.Button, {
+			}, t(CHANNEL_LABEL[id]))))), row(t("setRegion"), status?.regionAuto === true ? `${t(REGION_HINT[status.region])} ${t("setRegionAuto")}` : t(REGION_HINT[status?.region ?? "global"]), (0, react.createElement)("div", { className: Market_module_css_default.setSeg }, (status?.regions ?? REGIONS).map((id) => (0, react.createElement)("button", {
+				key: id,
+				type: "button",
+				className: status?.region === id ? `${Market_module_css_default.setSegBtn} ${Market_module_css_default.setSegOn}` : Market_module_css_default.setSegBtn,
+				disabled: busy || status === null,
+				onClick: () => {
+					onRegion(id);
+				}
+			}, t(REGION_LABEL[id]))))), row(t("setSelfRemove"), t("setSelfRemoveHint"), phase === "confirming" || busy ? null : (0, react.createElement)(_deepseek_ai_dsh_client_ui_primitives.Button, {
 				variant: "outline",
 				size: "sm",
 				className: Market_module_css_default.setDanger,
