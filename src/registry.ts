@@ -5,7 +5,8 @@
  */
 
 import { configuredProxy, marketFetch } from './net.ts'
-import { activeRegion, routesFor, type Region } from './regions.ts'
+import { catalogFromPackage } from './catalog-npm.ts'
+import { activeRegion, routesFor, type CatalogSource, type Region } from './regions.ts'
 
 export interface RegistryPlugin {
   name: string
@@ -88,7 +89,27 @@ const FETCH_TIMEOUT_MS = 15_000
  * 0 bytes and 0.5s for a 304. The reporter whose fetch took 9.9s was
  * downloading the full 1.07 MB every time they opened the market.
  */
-let served: { url: string; etag: string | null; modified: string | null; data: Registry } | null = null
+let served: {
+  /** Which source issued this, so a validator is never sent to another one. */
+  key: string
+  etag: string | null
+  modified: string | null
+  /** The published version, for the npm route — its equivalent of an ETag. */
+  version: string | null
+  data: Registry
+} | null = null
+
+/** Identity of a catalog source, for scoping the validator to its origin. */
+function sourceKey(source: CatalogSource): string {
+  return source.kind === 'npm' ? `npm:${source.registry}/${source.pkg}` : `url:${source.url}`
+}
+
+/** A parsed catalog, or a thrown explanation of why it is not one. */
+function asRegistry(value: unknown): Registry {
+  const data = value as Registry
+  if (!Array.isArray(data.plugins) || data.plugins.length === 0) throw new Error('the catalog came back empty')
+  return data
+}
 
 /**
  * Drop what we remember, so the next call is unconditional.
@@ -122,17 +143,14 @@ export function forgetCatalog(): void {
  */
 export async function loadRegistry(region: Region = activeRegion()): Promise<Registry> {
   const started = Date.now()
-  const routes = routesFor(region)
-  // The China route reaches the catalog through a free public proxy. That
-  // proxy going down must not mean an empty market: the official address is
-  // tried after it, so the worst case is the speed we already had rather
-  // than a plugin list that will not open.
-  const urls = routes.catalogFallback === null
-    ? [routes.catalogUrl]
-    : [routes.catalogUrl, routes.catalogFallback]
   let last: unknown
   let attempts = 0
-  for (const url of urls) {
+  // Sources in order, each a fallback for the one before it. The catalog is
+  // the FIRST request the market makes, so a mirror that has gone down must
+  // mean a slow market rather than an empty one — the list ends at the
+  // address that has always worked.
+  for (const source of routesFor(region).catalog) {
+    const key = sourceKey(source)
     // Two attempts each. A catalog fetch crossing a long, lossy path fails
     // transiently often enough that one retry is worth more than the second
     // or two it costs — and with nothing behind this call any more, a
@@ -140,20 +158,30 @@ export async function loadRegistry(region: Region = activeRegion()): Promise<Reg
     for (let attempt = 0; attempt < 2; attempt++) {
       attempts += 1
       try {
+        // A validator only ever goes back to the source that issued it.
+        // Carried across a region switch it could earn a "not modified" from
+        // an origin whose body we have never seen.
+        const reusable = served?.key === key ? served : null
+        if (source.kind === 'npm') {
+          const { version, data } = await catalogFromPackage(
+            source.registry, source.pkg, reusable?.version ?? undefined,
+          )
+          // `data === null` means the published version is the one in hand.
+          if (data === null && reusable !== null) return reusable.data
+          if (data === null) throw new Error('the catalog package reported no change with nothing to reuse')
+          const parsed = asRegistry(data)
+          served = { key, etag: null, modified: null, version, data: parsed }
+          return parsed
+        }
         // ETag first: it is exact, while a date has one-second resolution and
         // a catalog republished twice within the same second would validate
         // as unchanged. Only one is sent — an origin given both must satisfy
         // both, which turns a weak ETag match into an unnecessary 200.
-        //
-        // And only to the origin that issued it. A validator is scoped to
-        // the URL it came from, so carrying one across a region switch could
-        // earn a 304 from an origin whose body we have never seen.
         const headers: Record<string, string> = {}
-        const reusable = served?.url === url ? served : null
         if (reusable?.etag != null) headers['if-none-match'] = reusable.etag
         else if (reusable?.modified != null) headers['if-modified-since'] = reusable.modified
 
-        const res = await marketFetch(url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS), headers })
+        const res = await marketFetch(source.url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS), headers })
         if (res.status === 304) {
           // Only reachable when we sent a validator, so `reusable` is present.
           // Guarded anyway: answering a 304 with nothing to reuse would
@@ -162,9 +190,10 @@ export async function loadRegistry(region: Region = activeRegion()): Promise<Reg
           return reusable.data
         }
         if (!res.ok) throw new Error(`HTTP ${String(res.status)}`)
-        const data = (await res.json()) as Registry
-        if (!Array.isArray(data.plugins) || data.plugins.length === 0) throw new Error('the catalog came back empty')
-        served = { url, etag: res.headers.get('etag'), modified: res.headers.get('last-modified'), data }
+        const data = asRegistry(await res.json())
+        served = {
+          key, etag: res.headers.get('etag'), modified: res.headers.get('last-modified'), version: null, data,
+        }
         return data
       } catch (error) {
         last = error

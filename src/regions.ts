@@ -45,8 +45,8 @@ const NPM_CHINA = 'https://mirrors.cloud.tencent.com/npm'
  *
  * Verified against gh-proxy: it serves the GitHub API and commit-pinned
  * codeload tarballs, and it refuses anything that is not a github.com
- * hostname — which is why the catalog has to travel the raw.githubusercontent
- * path rather than the project's own domain.
+ * hostname — which is why the catalog cannot be carried through it at all,
+ * and travels as a published npm package instead.
  */
 const GITHUB_PROXY_CHINA = 'https://gh-proxy.com'
 
@@ -59,13 +59,16 @@ const GITHUB_PROXY_CHINA = 'https://gh-proxy.com'
 const CATALOG_OFFICIAL = 'https://awesome-dsh-plugin.com/plugins.json'
 
 /**
- * The same file read straight from the repository that owns it.
+ * One place the catalog can be read from.
  *
- * `plugins.json` is committed source, not a build artifact — the Pages site
- * renders FROM it. That is what makes this path exist at all, and it is the
- * only form a github.com-family proxy will carry.
+ * Two kinds because the two routes are genuinely different transports, not
+ * two URLs. The npm route reads a published package — which is what lets the
+ * catalog ride the same mirror as everything else, and gives it a version
+ * number that can be rolled back when a bad build ships.
  */
-const CATALOG_RAW = 'https://raw.githubusercontent.com/awesome-dsh-plugin/awesome-dsh-plugin/HEAD/plugins.json'
+export type CatalogSource =
+  | { kind: 'url'; url: string }
+  | { kind: 'npm'; registry: string; pkg: string }
 
 /** Where one region sends each kind of request. `null` means "go direct". */
 export interface RegionRoutes {
@@ -73,30 +76,51 @@ export interface RegionRoutes {
   npmRegistry: string
   /** Prefix proxy for github.com-family URLs, or null to go direct. */
   githubProxy: string | null
-  /** Full URL of the plugin catalog. */
-  catalogUrl: string
   /**
-   * Where to fall back when `catalogUrl` fails.
+   * Where to look for the catalog, in order. Later entries are fallbacks.
    *
-   * The catalog is the FIRST request the market makes, so a dead proxy would
-   * mean an empty market rather than a slow one. `null` for the global route:
-   * it is already the fallback.
+   * The catalog is the FIRST request the market makes, so a mirror that has
+   * gone down must mean a slow market rather than an empty one — every
+   * region ends its list at an address that has always worked.
    */
-  catalogFallback: string | null
+  catalog: CatalogSource[]
 }
+
+/**
+ * The npm package carrying `plugins.json`.
+ *
+ * A package rather than a file URL, because the catalog's own host is the
+ * problem being solved: it is served from GitHub Pages, and the public
+ * GitHub proxies refuse hostnames that are not github.com's own. Published
+ * to npm, it reaches mainland China through the same mirror as every plugin
+ * — no extra service to depend on, and nothing new that can go down.
+ *
+ * Its own package rather than a file added to `awesome-dsh-plugin`: npm
+ * force-includes README files whatever the `files` field says, and that
+ * package's two generated READMEs come to ~1MB. Attaching the catalog to it
+ * would have spent on the wire exactly what this exists to save (measured:
+ * 772KB attached, 413KB standing alone — the latter matching the gzipped
+ * origin almost exactly).
+ */
+const CATALOG_PACKAGE = 'dsh-plugin-catalog'
 
 const ROUTES: Record<Region, RegionRoutes> = {
   global: {
     npmRegistry: DEFAULT_NPM_REGISTRY,
     githubProxy: null,
-    catalogUrl: CATALOG_OFFICIAL,
-    catalogFallback: null,
+    catalog: [{ kind: 'url', url: CATALOG_OFFICIAL }],
   },
   china: {
     npmRegistry: NPM_CHINA,
     githubProxy: GITHUB_PROXY_CHINA,
-    catalogUrl: `${GITHUB_PROXY_CHINA}/${CATALOG_RAW}`,
-    catalogFallback: CATALOG_OFFICIAL,
+    // The package, then the origin. There is deliberately no
+    // raw.githubusercontent step between them: `plugins.json` is a build
+    // artifact that the site publishes to Pages and never commits, so that
+    // path is a guaranteed 404 and would only spend two attempts proving it.
+    catalog: [
+      { kind: 'npm', registry: NPM_CHINA, pkg: CATALOG_PACKAGE },
+      { kind: 'url', url: CATALOG_OFFICIAL },
+    ],
   },
 }
 
@@ -113,22 +137,28 @@ function override(env: NodeJS.ProcessEnv, name: string): string | null {
  * their own network, and they are the way out when a public proxy dies.
  *
  * `DSHM_REGISTRY_URL` keeps its existing meaning — the catalog URL — and
- * when set it also clears the fallback: someone pointing the market at their
- * own catalog does not want it quietly reverting to ours.
+ * when set it REPLACES the source list rather than heading it: someone
+ * pointing the market at their own catalog does not want it quietly
+ * reverting to ours.
  */
 export function routesFor(region: Region, env: NodeJS.ProcessEnv = process.env): RegionRoutes {
   const base = ROUTES[region]
   const npmMirror = override(env, 'DSHM_NPM_MIRROR')
   const githubProxy = override(env, 'DSHM_GITHUB_PROXY')
   const catalog = override(env, 'DSHM_REGISTRY_URL')
+  const registry = npmMirror ?? base.npmRegistry
   return {
-    npmRegistry: npmMirror ?? base.npmRegistry,
-    // An empty override is how a user turns the proxy OFF while staying in
-    // the China region for the npm half — `has the variable` is not the same
-    // question as `has a value`, and only the second one routes traffic.
+    npmRegistry: registry,
     githubProxy: githubProxy ?? base.githubProxy,
-    catalogUrl: catalog ?? base.catalogUrl,
-    catalogFallback: catalog !== null ? null : base.catalogFallback,
+    // A named catalog REPLACES the list rather than joining it. Someone
+    // pointing the market at their own catalog does not want it quietly
+    // reverting to ours when theirs is briefly unreachable — that is how a
+    // fixture-backed test ends up asserting against the live registry.
+    catalog: catalog !== null
+      ? [{ kind: 'url', url: catalog }]
+      // Rebuilt against the resolved registry, so an npm override moves the
+      // catalog to the same mirror it moved everything else to.
+      : base.catalog.map(source => (source.kind === 'npm' ? { ...source, registry } : source)),
   }
 }
 

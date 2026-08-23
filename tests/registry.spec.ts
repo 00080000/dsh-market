@@ -172,28 +172,29 @@ describe('loadRegistry download regions', () => {
     expect(String(stub.mock.calls[0]?.[0])).toContain('awesome-dsh-plugin.com')
   })
 
-  it('reads it through the mirror in the china region', async () => {
-    const stub = byUrl([[/raw\.githubusercontent\.com/, ok(CATALOG)]])
+  it('asks the published package first in the china region', async () => {
+    // It rides the same mirror as the plugins themselves, so it needs no
+    // service that did not already have to work.
+    const stub = byUrl([[/mirrors\.cloud\.tencent\.com/, new Error('fetch failed')], [/./, ok(CATALOG)]])
     await loadRegistry('china')
-    // Through the raw path, because the proxy refuses hostnames that are not
-    // github.com's own — the project domain cannot be carried through it.
-    expect(String(stub.mock.calls[0]?.[0])).toContain('raw.githubusercontent.com')
+    expect(String(stub.mock.calls[0]?.[0])).toContain('mirrors.cloud.tencent.com')
+    expect(String(stub.mock.calls[0]?.[0])).toContain('dsh-plugin-catalog')
   })
 
-  it('falls back to the official domain when the mirror is down', async () => {
-    // The catalog is the FIRST request the market makes. A free public proxy
-    // going down must mean a slow market, not an empty one.
+  it('walks the whole list rather than giving up at the first dead source', async () => {
+    // The catalog is the FIRST request the market makes. A mirror going down
+    // must mean a slow market, not an empty one.
     const stub = byUrl([
-      [/raw\.githubusercontent\.com/, new Error('fetch failed')],
+      [/mirrors\.cloud\.tencent\.com/, new Error('fetch failed')],
       [/awesome-dsh-plugin\.com/, ok(CATALOG)],
     ])
     const registry = await loadRegistry('china')
     expect(registry.plugins).toHaveLength(1)
-    // Two attempts at the mirror, then the official address.
+    // Two attempts at the package, then the origin.
     expect(stub).toHaveBeenCalledTimes(3)
   })
 
-  it('reports all four attempts when both addresses fail', async () => {
+  it('reports every attempt it made when the whole list fails', async () => {
     byUrl([[/./, new Error('fetch failed')]])
     await expect(loadRegistry('china')).rejects.toThrow(/4 attempts/)
   })
@@ -204,10 +205,24 @@ describe('loadRegistry download regions', () => {
     // never seen, and the market would render a catalog it never received.
     byUrl([[/awesome-dsh-plugin\.com/, okTagged(CATALOG, 'W/"one"')]])
     await loadRegistry('global')
-    const stub = byUrl([[/raw\.githubusercontent\.com/, ok(CATALOG)]])
+    const stub = byUrl([
+      [/mirrors\.cloud\.tencent\.com/, new Error('fetch failed')],
+      [/awesome-dsh-plugin\.com/, ok(CATALOG)],
+    ])
     await loadRegistry('china')
-    const headers = (stub.mock.calls[0]?.[1] ?? {}) as { headers?: Record<string, string> }
-    expect(headers.headers?.['if-none-match']).toBeUndefined()
+    const etagOf = (call: unknown[]): string | undefined =>
+      ((call[1] ?? {}) as { headers?: Record<string, string> }).headers?.['if-none-match']
+    // The package is a DIFFERENT source, so the origin's ETag must not ride
+    // along on it — that is the request that could earn a "not modified"
+    // from something whose body we have never seen.
+    for (const call of stub.mock.calls.filter(c => String(c[0]).includes('mirrors.cloud.tencent.com'))) {
+      expect(etagOf(call)).toBeUndefined()
+    }
+    // The origin, though, is the same URL in both regions. Re-sending the
+    // validator it issued is exactly what it is for; withholding it would
+    // re-download a megabyte to be told nothing changed.
+    const originCall = stub.mock.calls.find(c => String(c[0]).includes('awesome-dsh-plugin.com'))
+    expect(etagOf(originCall!)).toBe('W/"one"')
   })
 })
 

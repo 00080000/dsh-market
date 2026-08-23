@@ -33,21 +33,27 @@ describe('routesFor', () => {
     const routes = routesFor('global', {})
     expect(routes.npmRegistry).toBe(DEFAULT_NPM_REGISTRY)
     expect(routes.githubProxy).toBeNull()
-    expect(routes.catalogUrl).toContain('awesome-dsh-plugin.com')
-    // Nothing to fall back TO: this is the fallback.
-    expect(routes.catalogFallback).toBeNull()
+    // One source and no fallbacks: this IS what everything else falls back to.
+    expect(routes.catalog).toEqual([{ kind: 'url', url: expect.stringContaining('awesome-dsh-plugin.com') }])
   })
 
-  it('sends every china route through a mirror, with the official catalog behind it', () => {
+  it('sends every china route through a mirror, ending at the address that always works', () => {
     const routes = routesFor('china', {})
     expect(routes.npmRegistry).not.toBe(DEFAULT_NPM_REGISTRY)
     expect(routes.githubProxy).not.toBeNull()
-    // The catalog has to travel the raw.githubusercontent path: the proxy
-    // refuses hostnames that are not github.com's own, so the project domain
-    // cannot be carried through it.
-    expect(routes.catalogUrl).toContain('raw.githubusercontent.com')
-    expect(routes.catalogUrl.startsWith(routes.githubProxy!)).toBe(true)
-    expect(routes.catalogFallback).toContain('awesome-dsh-plugin.com')
+    // The published package first: it rides the same mirror as the plugins,
+    // so it needs no service that did not already have to work.
+    expect(routes.catalog[0]).toEqual({ kind: 'npm', registry: routes.npmRegistry, pkg: 'dsh-plugin-catalog' })
+    // And the origin last. Nothing in between: `plugins.json` is a build
+    // artifact the site never commits, so a raw.githubusercontent step would
+    // be a guaranteed 404 that costs two attempts to discover.
+    expect(routes.catalog).toHaveLength(2)
+    expect(routes.catalog[1]).toEqual({ kind: 'url', url: expect.stringContaining('awesome-dsh-plugin.com') })
+  })
+
+  it('moves the catalog package onto whichever registry the environment named', () => {
+    const routes = routesFor('china', { DSHM_NPM_MIRROR: 'https://npm.internal' })
+    expect(routes.catalog[0]).toEqual({ kind: 'npm', registry: 'https://npm.internal', pkg: 'dsh-plugin-catalog' })
   })
 
   it('lets the environment override each route', () => {
@@ -60,12 +66,12 @@ describe('routesFor', () => {
     expect(routes.githubProxy).toBe('https://gh.internal')
   })
 
-  it('drops the fallback when the catalog itself is overridden', () => {
+  it('replaces the whole source list when the catalog itself is overridden', () => {
     // Someone pointing the market at their own catalog does not want it
-    // quietly reverting to ours when that one is briefly unreachable.
+    // quietly reverting to ours when that one is briefly unreachable — that
+    // is how a fixture-backed test ends up asserting against the live one.
     const routes = routesFor('china', { DSHM_REGISTRY_URL: 'http://127.0.0.1:9/fixture.json' })
-    expect(routes.catalogUrl).toBe('http://127.0.0.1:9/fixture.json')
-    expect(routes.catalogFallback).toBeNull()
+    expect(routes.catalog).toEqual([{ kind: 'url', url: 'http://127.0.0.1:9/fixture.json' }])
   })
 
   it('ignores blank overrides', () => {
