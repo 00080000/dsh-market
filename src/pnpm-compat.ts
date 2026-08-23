@@ -34,6 +34,14 @@ export function pluginArgsFor(profileDir: string, pluginArgs: string[]): string[
 }
 
 /** One recognized pnpm failure, with a bilingual explanation for the UI. */
+/**
+ * The namespace whose packages the dsh runtime provides rather than npm.
+ *
+ * A peer dependency on one of these is a statement about the host, not a
+ * package to download — and several of them are never published at all.
+ */
+export const HOST_NAMESPACE_RE = /^@deepseek-ai\//
+
 export interface PnpmFailure {
   code: 'adding-to-root' | 'not-a-workspace' | 'hoist-pattern-diff' | 'pnpm-missing' | 'release-age-violation'
     | 'ignored-builds' | 'git-prepare-not-allowed' | 'fetch-404' | 'transient-network' | 'fetch-timeout'
@@ -42,6 +50,17 @@ export interface PnpmFailure {
   message: string
   /** True when re-running `pnpm install` in the profile is the documented recovery. */
   recoverable: boolean
+  /**
+   * The package pnpm could not resolve, when the failure names one.
+   *
+   * Exposed because the NAME alone does not say what went wrong: the same
+   * 404 is a ghost entry the user must delete when the package is a direct
+   * dependency of the profile, and an unpublished host peer the market can
+   * retry around when it is not (#289). Only a caller holding the profile
+   * manifest can tell those apart, so the classifier reports the fact and
+   * leaves the judgement to it.
+   */
+  pkg?: string
 }
 
 /**
@@ -174,6 +193,7 @@ export function classifyPnpmFailure(output: string): PnpmFailure | null {
     return {
       code: 'fetch-404',
       recoverable: false,
+      pkg,
       message: `有一个依赖在 registry 上不存在${zh}，pnpm 因此拒绝任何安装操作。它可能是之前失败操作残留在 profile package.json 里的幽灵依赖（可手动删除该行），也可能是需要登录的私有包 / a dependency cannot be resolved from the registry${en}; pnpm refuses every install while it is present. It may be a ghost entry left in the profile's package.json by an earlier failed operation (remove that line by hand), or a private package needing registry credentials`,
     }
   }

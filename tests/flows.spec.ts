@@ -739,10 +739,37 @@ describe('install flow', () => {
     expect(cross.status).toBe(403)
   })
 
+  it('retries around a peer on an unpublished host package, and only when the profile never asked for it (#289)', async () => {
+    // pnpm auto-installs peers by default (since 8), and in this ecosystem a
+    // peer on `@deepseek-ai/*` names what the dsh runtime injects — several
+    // of those are never published. `@deepseek-ai/dsh-type-meta` is 404 on
+    // npmjs and on every mirror, so a fresh profile installing ANY plugin
+    // with such a peer died on a package nobody asked to download.
+    //
+    // Verified against pnpm 10.29.3 that `peerDependencyRules.ignoreMissing`
+    // does NOT prevent the fetch — the flag is the only thing that works.
+    fake.npm['dsh-loop'] = { latest: '1.0.0', versions: { '1.0.0': { manifest: { dsh: {}, main: 'lib/index.js' }, artifacts: ['lib/index.js'] } } }
+    fake.failNextAddStderrOnce = '[ERR_PNPM_FETCH_404] GET https://registry.npmjs.org/@deepseek-ai%2Fdsh-type-meta: Not Found - 404\n\nThis error happened while installing a direct dependency of /home/u/.dsh/profiles/web'
+    const installed = await bed.dispatch('POST', '/dsh-market/install', { url: 'https://github.com/o/dsh-loop' })
+    expect(installed.status).toBe(200)
+    const retried = fake.calls.find(call => call.includes('--config.auto-install-peers=false'))
+    expect(retried, 'the install was not retried with peers off').toBeDefined()
+    // The FIRST attempt keeps pnpm's default: a plugin whose peers really do
+    // live on npm must still get them. The flag is a recovery, not a policy.
+    expect(fake.calls[0]?.includes('--config.auto-install-peers=false')).toBe(false)
+  })
+
   it('rolls back manifest residue when the add fails after pnpm wrote package.json (#65)', async () => {
     fake.npm['dsh-loop'] = { latest: '1.0.0', versions: { '1.0.0': { manifest: { dsh: {}, main: 'lib/index.js' }, artifacts: ['lib/index.js'] } } }
     // pnpm writes the manifest, then fails resolving another (ghost/private)
-    // direct dependency — the classic #65 shape.
+    // direct dependency — the classic #65 shape. The ghost has to actually BE
+    // in the manifest for that to be what this is: an unresolvable host
+    // package the profile does not ask for is a peer pnpm auto-installed, and
+    // the market retries around that one instead (#289).
+    const ghostPath = join(profileDir('web'), 'package.json')
+    const ghosted = JSON.parse(readFileSync(ghostPath, 'utf8'))
+    ghosted.dependencies = { ...ghosted.dependencies, '@deepseek-ai/dsh-client-ui-theme-toggle': '^1.0.0' }
+    writeFileSync(ghostPath, JSON.stringify(ghosted))
     fake.failAfterWriteStderrOnce = '[ERR_PNPM_FETCH_404] GET https://registry.npmjs.org/@deepseek-ai%2Fdsh-client-ui-theme-toggle: Not Found - 404'
     const r = await bed.dispatch('POST', '/dsh-market/install', { url: 'https://github.com/o/dsh-loop' })
     expect(r.status).toBe(502)

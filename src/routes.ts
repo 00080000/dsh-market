@@ -425,7 +425,7 @@ export function mountMarketRoutes(
   }
 
   /** Every plugin command goes through the pnpm-drift recovery wrapper (#20). */
-  const runPlugin = (profile: string, args: string[]) => withHoistRecovery(commands.runPlugin, profile, args)
+  const runPlugin = (profile: string, args: string[]) => withHoistRecovery(commands.runPlugin, profile, args, activeProfileDir)
 
   /**
    * Undo a clean-exit update whose new build cannot boot. Restoring only the
