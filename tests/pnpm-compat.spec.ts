@@ -69,6 +69,20 @@ describe('classifyPnpmFailure', () => {
     expect(classifyPnpmFailure('[ERR_PNPM_FETCH_404] GET https://registry.npmjs.org/some-ghost: Not Found - 404')?.message).toContain('some-ghost')
   })
 
+  it('names a patch that no longer applies, and says the package went in unpatched (#222)', () => {
+    // pnpm exits 1 here (verified against 10.29.3) but has ALREADY written
+    // the package without the patch, so the profile keeps the pristine
+    // version the patch existed to fix — and that only shows up at the next
+    // boot. The message has to say so, or the user reads "install failed"
+    // and does not know their profile is now holding a broken bundle.
+    const failed = classifyPnpmFailure('ERR_PNPM_PATCH_FAILED  Could not apply patch /home/u/.dsh/profiles/web/patches/dsh-plugin-guardian@1.1.0.patch to /home/u/.dsh/profiles/web/node_modules/.pnpm/x/node_modules/dsh-plugin-guardian')
+    expect(failed?.code).toBe('patch-failed')
+    expect(failed?.recoverable).toBe(false)
+    expect(failed?.message).toContain('dsh-plugin-guardian@1.1.0.patch')
+    expect(failed?.message).toContain('没打补丁的原版')
+    expect(failed?.message).toContain('patchedDependencies')
+  })
+
   it('recognizes momentary network failures — and only those — as transient (#83)', () => {
     const flake = classifyPnpmFailure('FetchError: request to https://codeload.github.com/o/r/tar.gz/abc failed, reason: socket hang up')
     expect(flake?.code).toBe('transient-network')

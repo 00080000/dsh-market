@@ -45,7 +45,7 @@ export const HOST_NAMESPACE_RE = /^@deepseek-ai\//
 export interface PnpmFailure {
   code: 'adding-to-root' | 'not-a-workspace' | 'hoist-pattern-diff' | 'pnpm-missing' | 'release-age-violation'
     | 'ignored-builds' | 'git-prepare-not-allowed' | 'fetch-404' | 'transient-network' | 'fetch-timeout'
-    | 'unexpected-store'
+    | 'unexpected-store' | 'patch-failed'
   /** Bilingual, actionable message shown to the user instead of the raw wall of text. */
   message: string
   /** True when re-running `pnpm install` in the profile is the documented recovery. */
@@ -129,6 +129,28 @@ export function classifyPnpmFailure(output: string): PnpmFailure | null {
       code: 'unexpected-store',
       recoverable: false,
       message: `这个 profile 的 node_modules 链接到的 pnpm store，和当前 pnpm 默认使用的 store 不是同一个，pnpm 因此拒绝所有安装与卸载。${detail}\n在 profile 目录里执行一次 \`pnpm install --store-dir <上面第一个路径>\` 重新链接即可（dsh 运行时可能占用文件，必要时先退出 dsh）/ this profile's node_modules is linked to a different pnpm store than the one pnpm now resolves, so pnpm refuses every install and uninstall.${detail}\nRelink by running \`pnpm install --store-dir <the first path above>\` once in the profile directory (stop dsh first if files are locked)`,
+    }
+  }
+  // #222 by @MicroMilo: a patch in the profile that no longer applies.
+  //
+  // pnpm exits 1 (verified against 10.29.3) but it has ALREADY written the
+  // package — unpatched. So the profile is left holding the pristine version
+  // the patch existed to fix, and the damage shows up at the next boot as
+  // "failed to load plugins" rather than here, where it happened.
+  //
+  // Almost always the package moved the file the patch names: the reported
+  // case patched `client/client.js` in a package that had started shipping
+  // `lib/client.js`. That is not something the market can repair — the patch
+  // is the user's, and guessing a new target would be inventing a change
+  // they did not write — so it says exactly what is wrong and where.
+  if (output.includes('ERR_PNPM_PATCH_FAILED')) {
+    const patch = /Could not apply patch (\S+)/.exec(output)?.[1]
+    const which = patch === undefined ? '' : `（${patch}）`
+    const whichEn = patch === undefined ? '' : ` (${patch})`
+    return {
+      code: 'patch-failed',
+      recoverable: false,
+      message: `profile 里的一个 pnpm 补丁打不上了${which}。pnpm 会继续把这个包装上，但装的是没打补丁的原版——通常下次启动才会以「插件加载失败」暴露出来。多半是包升级后挪动了补丁指向的文件（例如补丁改的是 client/client.js，而新版本发的是 lib/client.js）。请更新或删掉这个补丁文件，以及 profile package.json 里 pnpm.patchedDependencies 中对应的那一条 / a pnpm patch in this profile no longer applies${whichEn}. pnpm still installs the package, but unpatched — which usually surfaces at the next boot as "failed to load plugins" rather than here. The usual cause is the package moving the file the patch targets (for example a patch against client/client.js when the release now ships lib/client.js). Update or remove that patch file and its entry under pnpm.patchedDependencies in the profile's package.json`,
     }
   }
   if (output.includes('ERR_PNPM_ADDING_TO_ROOT')) {
