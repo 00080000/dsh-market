@@ -3672,7 +3672,31 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 						})
 					] })
 				]
-			}), document.body);
+			}), marketPortalHost());
+		}
+		/**
+		* The one DOM node this package portals into, created on first use and kept
+		* for the life of the page.
+		*
+		* Created imperatively rather than rendered, and never removed: the point is
+		* that `document.body`'s child list stops being shared state between two
+		* React roots. A container that came and went would put the same churn back
+		* into body, just less often — and "less often" is what made this bug
+		* intermittent and hard to believe in the first place.
+		*
+		* Re-appended on every open so it stays last among body's children. That is
+		* what keeps the lightbox above the host's own portalled dialog, which is
+		* why the portal exists at all; moving a node we own is not something the
+		* host's root tracks, so it cannot disturb it.
+		*/
+		let portalHost = null;
+		function marketPortalHost() {
+			if (portalHost === null) {
+				portalHost = document.createElement("div");
+				portalHost.setAttribute("data-dsh-market-portal", "");
+			}
+			document.body.appendChild(portalHost);
+			return portalHost;
 		}
 		/**
 		* Official-style market glyph: the shared block-grid brand mark converted to

@@ -645,11 +645,27 @@ function ScreenshotLightbox({ shots, startIndex, onClose, t }: { shots: string[]
     return () => window.removeEventListener('keydown', onKey, true)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [index])
-  // The primitives' own Modal (the confirm/settings dialog underneath)
-  // portals itself to document.body too, so plain in-tree rendering here
-  // put the lightbox BEHIND it regardless of z-index — a portal only wins a
-  // stacking tie against another portal by mounting later, not by CSS alone.
+  // Into a container this package owns, never into document.body itself.
+  //
+  // In-tree rendering is not an option: the primitives' own Modal (the
+  // settings dialog underneath) portals itself to document.body, so the
+  // lightbox rendered in place sat BEHIND it whatever the z-index — a portal
+  // only wins a stacking tie against another portal by mounting later.
   // Reported on a real host: "大的预览图层级不对，现在在弹窗的后面".
+  //
+  // But sharing document.body with the host was the other half of a trap.
+  // The host's settings dialog and this package are separate React roots,
+  // and two roots appending and removing children of the SAME container
+  // interleave in an order neither one models. The host's root then calls
+  // removeChild for a node this one had already moved, React throws
+  // `NotFoundError: The node to be removed is not a child of this node`, the
+  // `settings.section` slot catches it, and the whole market panel goes
+  // blank (#293 by @Tianhao-1017, #286, #241 — the reporter of #293 traced
+  // this to the line, with the stack and a clean-reinstall check).
+  //
+  // Owning one container fixes that structurally: the host's root sees a
+  // single opaque child it never touches, and everything this package
+  // mounts or unmounts happens inside it.
   return createPortal(
     <div className={css.lightbox} onClick={onClose}>
       {/* A literal "×" rather than IconCloseOutline16: the primitives
@@ -683,8 +699,44 @@ function ScreenshotLightbox({ shots, startIndex, onClose, t }: { shots: string[]
         </>
       )}
     </div>,
-    document.body,
+    marketPortalHost(),
   )
+}
+
+/**
+ * The one DOM node this package portals into, created on first use and kept
+ * for the life of the page.
+ *
+ * Created imperatively rather than rendered, and never removed: the point is
+ * that `document.body`'s child list stops being shared state between two
+ * React roots. A container that came and went would put the same churn back
+ * into body, just less often — and "less often" is what made this bug
+ * intermittent and hard to believe in the first place.
+ *
+ * Re-appended on every open so it stays last among body's children. That is
+ * what keeps the lightbox above the host's own portalled dialog, which is
+ * why the portal exists at all; moving a node we own is not something the
+ * host's root tracks, so it cannot disturb it.
+ */
+let portalHost: HTMLElement | null = null
+
+function marketPortalHost(): HTMLElement {
+  if (portalHost === null) {
+    portalHost = document.createElement('div')
+    // Named so anyone inspecting the DOM, or a future host wanting to give
+    // plugins a real portal slot, can see who owns it.
+    portalHost.setAttribute('data-dsh-market-portal', '')
+  }
+  // appendChild on an existing child MOVES it to the end — the stacking
+  // guarantee, refreshed each time without ever creating a second container.
+  document.body.appendChild(portalHost)
+  return portalHost
+}
+
+/** Test hook: the container is module state and outlives a component unmount. */
+export function resetMarketPortalHost(): void {
+  portalHost?.remove()
+  portalHost = null
 }
 
 /**

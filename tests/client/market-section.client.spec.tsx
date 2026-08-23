@@ -8,7 +8,7 @@
 
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { MarketSection } from '../../src/client/MarketSection.tsx'
+import { MarketSection, resetMarketPortalHost } from '../../src/client/MarketSection.tsx'
 import { resetScreenshotsCache } from '../../src/client/market-data.ts'
 import { en } from '../../src/client/locales.ts'
 
@@ -2186,13 +2186,43 @@ describe('card thumbnail + lightbox (curated screenshots only)', () => {
     expect(shots[1]?.getAttribute('src')).toBe(cardThumb(SHOT_B))
   })
 
+  it('portals into a container of its own, never straight into document.body (#293)', async () => {
+    // The host's settings dialog is a separate React root that also portals
+    // to document.body. Two roots adding and removing children of the SAME
+    // container interleave in an order neither models: the host's root then
+    // calls removeChild for a node this one already moved, React throws
+    // NotFoundError, the settings.section slot catches it, and the panel
+    // goes blank. Three reporters hit that (#293, #286, #241).
+    //
+    // The fix is structural, so this asserts the structure — the crash
+    // itself depends on mount ordering that varies per host and cannot be
+    // pinned down in jsdom.
+    resetMarketPortalHost()
+    stubFetch({ '/dsh-market/registry': { source: 'live', registry: registryWithShots() } })
+    const { container } = render(<MarketSection {...props()} />)
+    await screen.findByText('dsh-loop')
+    fireEvent.click(container.querySelector('img[class*="cardShot"]')!)
+    const img = await waitFor(() => {
+      const found = document.querySelector('[class*="lightboxImg"]')
+      expect(found).toBeTruthy()
+      return found as HTMLElement
+    })
+
+    const own = document.querySelector('[data-dsh-market-portal]')
+    expect(own, 'no owned portal container was created').toBeTruthy()
+    expect(own!.contains(img), 'the lightbox mounted outside the container this package owns').toBe(true)
+    // And it is body's LAST child: the stacking guarantee the portal exists
+    // for, which a plain z-index cannot win against another portal.
+    expect(document.body.lastElementChild).toBe(own)
+  })
+
   it('opens a lightbox on click, at the clicked shot, and wraps prev/next around the ends', async () => {
     stubFetch({ '/dsh-market/registry': { source: 'live', registry: registryWithShots() } })
     const { container } = render(<MarketSection {...props()} />)
     await screen.findByText('dsh-loop')
 
     fireEvent.click(container.querySelector('img[class*="cardShot"]')!)
-    // The lightbox portals to document.body (so it always stacks above the
+    // The lightbox portals into a container this package owns (so it always stacks above the
     // Settings Modal, which portals there too) — no longer inside `container`.
     await waitFor(() => expect(document.querySelector('[class*="lightboxImg"]')).toBeTruthy())
     const img = () => document.querySelector('[class*="lightboxImg"]') as HTMLImageElement
