@@ -7,6 +7,7 @@
 import { DIST_TAG, type Channel } from './channels.ts'
 import { marketFetch } from './net.ts'
 import { profileDir, readInstalled, readInstalledVersion, readLockCommits } from './profile.ts'
+import { repoOfTarget } from './sources.ts'
 
 export interface UpdateStatus {
   kind: 'github' | 'npm' | 'linked'
@@ -264,11 +265,21 @@ export async function checkUpdates(
       result[name] = { kind: 'linked', version, current: null, latest: null, updateAvailable: false }
       return
     }
-    const gh = /^(?:github:)?([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+?)(?:#.*)?$/.exec(spec)
+    // The repo behind the spec, in EITHER spelling. A plugin installed under
+    // a download region that mirrors GitHub carries a proxied codeload URL
+    // rather than the `github:` shortcut, and asking only about the shortcut
+    // sent those through the npm branch below — where a GitHub-only plugin
+    // either 404s or, far worse, matches an unrelated package that happens
+    // to share its name.
+    const repo = repoOfTarget(spec)?.split('#')[0] ?? null
     try {
-      if (spec.startsWith('github:') && gh !== null) {
-        const current = lockCommits.get(gh[1].toLowerCase()) ?? null
-        const head = (await fetchJson(`https://api.github.com/repos/${gh[1]}/commits/HEAD`)) as { sha?: string }
+      if (repo !== null) {
+        // The pinned commit is in the spec itself for a proxied install, and
+        // in the lockfile for a `github:` one. Prefer the spec: it is the
+        // exact thing that was fetched, with no lookup in between.
+        const pinned = /codeload\.github\.com\/[^/\s]+\/[^/\s]+\/tar\.gz\/([0-9a-f]{40})/.exec(spec)
+        const current = pinned?.[1] ?? lockCommits.get(repo) ?? null
+        const head = (await fetchJson(`https://api.github.com/repos/${repo}/commits/HEAD`)) as { sha?: string }
         const latest = typeof head.sha === 'string' ? head.sha : null
         result[name] = {
           kind: 'github', version, current, latest,

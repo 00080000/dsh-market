@@ -12,7 +12,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import {
   activeRegion, asRegion, DEFAULT_NPM_REGISTRY, REGIONS, routesFor, setActiveRegion, throughProxy,
 } from '../src/regions.ts'
-import { codeloadTarball, gitAllowBuildsKey, repoOfTarget } from '../src/sources.ts'
+import { codeloadAllowBuildsKey, codeloadTarball, gitAllowBuildsKey, repoOfTarget } from '../src/sources.ts'
 import { githubProxyInUse, githubUrl, setGithubProxy } from '../src/client/market-data.ts'
 
 const SHA = 'b0e6c57ebeeb4796017864f5cd5c66e6ba0899ec'
@@ -160,6 +160,35 @@ describe('gitAllowBuildsKey', () => {
 
   it('is null for npm packages, which authorize by name', () => {
     expect(gitAllowBuildsKey('p', 'dsh-loop')).toBeNull()
+  })
+})
+
+describe('codeloadAllowBuildsKey', () => {
+  it('names the commit-pinned URL pnpm 11.7 prints in its own error', () => {
+    // The stable git+https key is the better one and does not go stale, but
+    // pnpm below 11.21 never matches it — so on the pnpm DSH Desktop bundles,
+    // "allow build scripts and retry" wrote a key pnpm would never read.
+    expect(codeloadAllowBuildsKey('p', 'github:o/r', SHA))
+      .toBe(`p@https://codeload.github.com/o/r/tar.gz/${SHA}`)
+  })
+
+  it('derives the same key from either spelling of the source', () => {
+    const fromShortcut = codeloadAllowBuildsKey('p', 'github:o/r', SHA)
+    const fromProxied = codeloadAllowBuildsKey('p', codeloadTarball('o/r', SHA, 'https://gh.test'), SHA)
+    expect(fromProxied).toBe(fromShortcut)
+  })
+
+  it('keeps the repo in its original case, like the stable key', () => {
+    expect(codeloadAllowBuildsKey('p', 'github:DeepSeek/Harness', SHA))
+      .toBe(`p@https://codeload.github.com/DeepSeek/Harness/tar.gz/${SHA}`)
+  })
+
+  it('refuses anything that is not a full commit sha', () => {
+    // A short or non-hex ref would produce a key that matches nothing, which
+    // is indistinguishable on disk from an approval that worked.
+    expect(codeloadAllowBuildsKey('p', 'github:o/r', 'b0e6c57')).toBeNull()
+    expect(codeloadAllowBuildsKey('p', 'github:o/r', 'HEAD')).toBeNull()
+    expect(codeloadAllowBuildsKey('p', 'dsh-loop', SHA)).toBeNull()
   })
 })
 

@@ -681,8 +681,14 @@ export function setAllowBuilds(profile: string, packages: string[], explicitDir?
   // Bare package names, or the server-derived stable git form
   // `name@git+https://github.com/owner/repo.git` (#68) — nothing else.
   const GIT_KEY_RE = /^[A-Za-z0-9@/_.-]+@git\+https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\.git$/
+  // The commit-pinned form pnpm below 11.21 matches instead (#285). Held to
+  // the same shape as the one above rather than loosened into "anything with
+  // a URL in it": this list is what stops a caller writing arbitrary text
+  // into a file pnpm parses, and a wider pattern would spend that guarantee
+  // to save a line.
+  const CODELOAD_KEY_RE = /^[A-Za-z0-9@/_.-]+@https:\/\/codeload\.github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/tar\.gz\/[0-9a-f]{40}$/
   for (const pkg of packages) {
-    if (/^[A-Za-z0-9@/_.-]+$/.test(pkg) || GIT_KEY_RE.test(pkg)) map[pkg] = 'true'
+    if (/^[A-Za-z0-9@/_.-]+$/.test(pkg) || GIT_KEY_RE.test(pkg) || CODELOAD_KEY_RE.test(pkg)) map[pkg] = 'true'
   }
   // Write back in the file's OWN line ending. Rewriting a CRLF workspace
   // file with LF would leave it mixed, which is the same class of mess this

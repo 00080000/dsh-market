@@ -341,7 +341,12 @@ function createTestbed(
     plugin: () => ({ await: () => Promise.resolve(), dispose: () => {} }),
     on: () => () => {},
   }
-  const dispose = mountMarketRoutes(host as never, { profile: 'web', ...config }, runtime, () => agents)
+  // Pinned so no test reaches the network to decide one. An unpinned region
+  // probes at mount and lands a few milliseconds later, which would make
+  // every install assertion depend on which registry answered first —
+  // and, as this suite proved once, would let a spec resolve a REAL commit
+  // through a REAL proxy. Specs that care about the mirrors set it.
+  const dispose = mountMarketRoutes(host as never, { profile: 'web', region: 'global', ...config }, runtime, () => agents)
   async function dispatch(method: string, path: string, body?: unknown, options?: { crossOrigin?: boolean }) {
     const handler = routes.get(path.split('?')[0])
     if (handler === undefined) throw new Error(`no route: ${path}`)
@@ -850,6 +855,66 @@ describe('update flow — no npm publishing required', () => {
     // disk, `/dsh-market/status` still reporting 1.11.3, an unchanged boot
     // id, and this route calling it hot-loaded in the same response.
     expect(r.json.activation['dsh-loop']).toMatchObject({ state: 'restart', hot: false })
+  })
+
+  it('updates a mirror-installed plugin from GitHub, not from a same-named npm package', async () => {
+    // The spelling a plugin carries under a download region that mirrors
+    // GitHub is a proxied codeload URL, not the `github:` shortcut. The
+    // update route recognised only the shortcut, so these fell through to
+    // the registry path — and `name@latest` for a GitHub-only plugin either
+    // fails outright or installs whatever unrelated package happens to own
+    // that name on npm. The second outcome is why this is a test and not a
+    // comment: it is silent, and it is somebody else's code.
+    const sha = 'b0e6c57ebeeb4796017864f5cd5c66e6ba0899ec'
+    const proxied = `https://gh-proxy.com/https://codeload.github.com/o/r/tar.gz/${sha}`
+    fake.repos['github:o/r'] = { name: 'plug-b', manifest: { dsh: {}, main: 'index.js' }, artifacts: ['index.js'] }
+    await bed.dispatch('POST', '/dsh-market/install', { url: 'https://github.com/o/r' })
+
+    // Rewrite the manifest to the spelling a China-region install produces.
+    const manifestPath = join(profileDir('web'), 'package.json')
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
+    manifest.dependencies['plug-b'] = proxied
+    writeFileSync(manifestPath, JSON.stringify(manifest))
+
+    fake.calls = []
+    const updated = await bed.dispatch('POST', '/dsh-market/update', { name: 'plug-b' })
+    expect(updated.status).toBe(200)
+    const ran = fake.calls.at(-1)?.join(' ') ?? ''
+    expect(ran, 'the update went to npm instead of the repo').toContain('github:o/r')
+    expect(ran).not.toContain('plug-b@latest')
+    // And not the pin it already had: an update that reinstalls the commit
+    // on disk is an update that can never move.
+    expect(ran).not.toContain(sha)
+  })
+
+  it('keeps a github subpath while dropping revision selectors during update (#281)', async () => {
+    const target = 'github:m/mono#path:/packages/plug-a'
+    fake.repos[target] = {
+      name: 'plug-a', manifest: { dsh: {}, main: 'index.js' }, artifacts: ['index.js'],
+    }
+    const installed = await bed.dispatch('POST', '/dsh-market/install', {
+      url: 'https://github.com/m/mono/tree/main/packages/plug-a',
+    })
+    expect(installed.status).toBe(200)
+    expect(installedSpec('plug-a')).toBe(target)
+
+    const direct = await bed.dispatch('POST', '/dsh-market/update', { name: 'plug-a' })
+    expect(direct.status).toBe(200)
+    expect(fake.calls.at(-1)).toContain(target)
+    expect(installedSpec('plug-a')).toBe(target)
+
+    // A ref and path may share pnpm's fragment. Updating still discards the
+    // ref (so HEAD is re-resolved) but must not discard the package subpath.
+    const manifestPath = join(profileDir('web'), 'package.json')
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
+    manifest.dependencies['plug-a'] = 'github:m/mono#release-1&path:/packages/plug-a'
+    writeFileSync(manifestPath, JSON.stringify(manifest))
+
+    const refreshed = await bed.dispatch('POST', '/dsh-market/update', { name: 'plug-a' })
+    expect(refreshed.status).toBe(200)
+    expect(fake.calls.at(-1)).toContain(target)
+    expect(fake.calls.at(-1)).not.toContain('release-1')
+    expect(installedSpec('plug-a')).toBe(target)
   })
 
   it('refuses an update while any agent is running, before pnpm is touched', async () => {
@@ -1468,6 +1533,32 @@ describe('build-script approval flow (#6)', () => {
     expect(approve.json.approved).not.toContain('ghost-package')
     const yaml = readFileSync(join(profileDir('web'), 'pnpm-workspace.yaml'), 'utf8')
     expect(yaml).toMatch(/allowBuilds:[\s\S]*cloudflared: true/)
+  })
+
+  it('writes both allowBuilds key forms, so pnpm below 11.21 can match one (#285)', async () => {
+    // pnpm 11.21+ matches `name@git+https://…`; 11.7.0 — what DSH Desktop
+    // bundles — matches only the commit-pinned codeload URL it names in its
+    // own error. Writing one form meant the approval button could never work
+    // on the other, and the failure was silent: the YAML looked authorized.
+    const sha = 'b0e6c57ebeeb4796017864f5cd5c66e6ba0899ec'
+    const proxied = `https://gh-proxy.com/https://codeload.github.com/o/r/tar.gz/${sha}`
+    // Laid out directly rather than installed: the point under test is what
+    // the approval route derives from a spec in this spelling, and a China
+    // install is the only thing that produces one.
+    mkdirSync(join(profileDir('web'), 'node_modules', 'plug-c'), { recursive: true })
+    writeFileSync(join(profileDir('web'), 'node_modules', 'plug-c', 'package.json'), '{"name":"plug-c"}')
+    const manifestPath = join(profileDir('web'), 'package.json')
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
+    manifest.dependencies = { ...manifest.dependencies, 'plug-c': proxied }
+    writeFileSync(manifestPath, JSON.stringify(manifest))
+
+    const approve = await bed.dispatch('POST', '/dsh-market/approve-builds', { packages: ['plug-c'] })
+    expect(approve.status).toBe(200)
+    const yaml = readFileSync(join(profileDir('web'), 'pnpm-workspace.yaml'), 'utf8')
+    expect(yaml).toContain('plug-c@git+https://github.com/o/r.git: true')
+    // The pin comes from the installed spec, with no lookup in between — an
+    // approval must not depend on reaching the network to be written.
+    expect(yaml).toContain(`plug-c@https://codeload.github.com/o/r/tar.gz/${sha}: true`)
   })
 
   it('surfaces a git-prepare rejection and approves the not-yet-installed package via the curated registry (#68)', async () => {
