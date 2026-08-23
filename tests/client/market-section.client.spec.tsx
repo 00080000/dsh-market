@@ -1306,6 +1306,67 @@ describe('uninstall confirmation Modal', () => {
   })
 })
 
+describe('installed masonry layout (#273)', () => {
+  it('packs installed rows into independent masonry columns (#273)', async () => {
+    stubFetch({
+      '/dsh-market/installed': {
+        profile: 'web',
+        installed: { alpha: '^1.0.0', beta: '^1.0.0', gamma: '^1.0.0', delta: '^1.0.0' },
+        live: [],
+      },
+      '/dsh-market/updates': { updates: {} },
+    })
+    const { container } = render(<MarketSection {...props()} />)
+    await screen.findByText('dsh-loop')
+    fireEvent.click(screen.getByRole('button', { name: /Installed/ }))
+    await screen.findByText('delta')
+
+    const columns = [...container.querySelectorAll('[class*="masonryCol"]')]
+    expect(columns).toHaveLength(2)
+    expect(columns[0]?.textContent).toContain('alpha')
+    expect(columns[0]?.textContent).toContain('gamma')
+    expect(columns[0]?.textContent).not.toContain('beta')
+    expect(columns[1]?.textContent).toContain('beta')
+    expect(columns[1]?.textContent).toContain('delta')
+    expect(columns[1]?.textContent).not.toContain('alpha')
+  })
+
+  it('keeps the mobile layout full-width and in source order (#273)', async () => {
+    const media = {
+      matches: false,
+      media: '(min-width: 681px)',
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(() => true),
+    }
+    vi.stubGlobal('matchMedia', vi.fn(() => media))
+    stubFetch({
+      '/dsh-market/installed': {
+        profile: 'web',
+        installed: { alpha: '^1.0.0', beta: '^1.0.0', gamma: '^1.0.0', delta: '^1.0.0' },
+        live: [],
+      },
+      '/dsh-market/updates': { updates: {} },
+    })
+
+    const { container } = render(<MarketSection {...props()} />)
+    await screen.findByText('dsh-loop')
+    fireEvent.click(screen.getByRole('button', { name: /Installed/ }))
+    await screen.findByText('delta')
+
+    const columns = [...container.querySelectorAll('[class*="masonryCol"]')] as HTMLElement[]
+    expect(columns).toHaveLength(1)
+    // The width is a stylesheet rule now, not an inline style, so there is
+    // nothing here for jsdom to read — the order assertion below is the part
+    // that would actually break if the single-column path regressed.
+    expect([...columns[0]!.querySelectorAll('[class*="irowNameText"]')].map(row => row.textContent?.trim()))
+      .toEqual(['alpha', 'beta', 'gamma', 'delta'])
+  })
+})
+
 describe('per-tab search boxes', () => {
   it('the installed tab has its own search that narrows the list', async () => {
     stubFetch({
