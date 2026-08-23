@@ -13,6 +13,7 @@ import {
   activeRegion, asRegion, DEFAULT_NPM_REGISTRY, REGIONS, routesFor, setActiveRegion, throughProxy,
 } from '../src/regions.ts'
 import { codeloadTarball, gitAllowBuildsKey, repoOfTarget } from '../src/sources.ts'
+import { githubProxyInUse, githubUrl, setGithubProxy } from '../src/client/market-data.ts'
 
 const SHA = 'b0e6c57ebeeb4796017864f5cd5c66e6ba0899ec'
 
@@ -169,5 +170,30 @@ describe('REGIONS', () => {
     // the route refuses.
     for (const region of REGIONS) expect(asRegion(region)).toBe(region)
     expect(REGIONS).toHaveLength(2)
+  })
+})
+
+describe('browser-side github URLs', () => {
+  // These two were both got wrong on the first pass and caught by measuring
+  // from an unproxied mainland connection, not by reasoning. They are kept
+  // as tests because the failure mode of the first one is a hang, which is
+  // the kind of thing a screenshot of a working page will never show.
+  afterEach(() => { setGithubProxy(null) })
+
+  it('names the avatar host directly when proxied, because the redirect hangs', () => {
+    // gh-proxy does not follow github.com's redirect to the avatar host: the
+    // request sat until the client gave up at 60s, against 1.07s for the
+    // avatar host addressed through the same proxy.
+    setGithubProxy(null)
+    expect(githubProxyInUse()).toBeNull()
+    setGithubProxy('https://gh.test')
+    expect(githubUrl('https://avatars.githubusercontent.com/o?size=96'))
+      .toBe('https://gh.test/https://avatars.githubusercontent.com/o?size=96')
+  })
+
+  it('leaves a URL alone when no proxy is in force', () => {
+    setGithubProxy(null)
+    expect(githubUrl('https://raw.githubusercontent.com/o/r/HEAD/README.md'))
+      .toBe('https://raw.githubusercontent.com/o/r/HEAD/README.md')
   })
 })

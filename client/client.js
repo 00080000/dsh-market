@@ -3276,7 +3276,7 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 			});
 			return /* @__PURE__ */ (0, react_jsx_runtime.jsx)("img", {
 				className: Market_module_css_default.av,
-				src: githubUrl(`https://github.com/${encodeURIComponent(owner)}.png?size=96`),
+				src: avatarUrl(owner),
 				alt: "",
 				loading: "lazy",
 				onError: () => setFailed(true)
@@ -3361,8 +3361,24 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 		* share a cache entry with the full-size open anyway.
 		*/
 		function thumbUrl(src, height) {
-			if (githubProxyInUse() !== null) return githubUrl(src);
 			return `https://images.weserv.nl/?url=${encodeURIComponent(src.replace(/^https?:\/\//, ""))}&h=${String(height)}&fit=inside&we=1`;
+		}
+		/**
+		* The owner's GitHub avatar, addressed so the region's proxy can serve it.
+		*
+		* `github.com/<owner>.png` is a redirect to the avatar host, and gh-proxy
+		* does not follow it — measured from an unproxied mainland connection, that
+		* URL hangs until the client gives up (60s), while naming the avatar host
+		* directly through the same proxy answers in 1.07s. So a proxied region
+		* addresses the destination itself.
+		*
+		* The redirect is left in place when there is no proxy: it is the form that
+		* has always worked, and this is not the release to change it on a path
+		* nobody has reported a problem with.
+		*/
+		function avatarUrl(owner) {
+			const name = encodeURIComponent(owner);
+			return githubProxyInUse() === null ? `https://github.com/${name}.png?size=96` : githubUrl(`https://avatars.githubusercontent.com/${name}?size=96`);
 		}
 		/**
 		* True once the wrapped element has scrolled within `rootMargin` of the

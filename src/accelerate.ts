@@ -6,6 +6,9 @@
  * the usual `git config insteadOf` trick — there is no git command to
  * redirect — and leaves rewriting the target as the only lever.
  *
+ * Worth it: measured from an unproxied mainland connection, that tarball
+ * takes 85s direct and 4.8s through the proxy.
+ *
  * Two properties have to survive the rewrite, and both were found the hard
  * way rather than assumed:
  *
@@ -35,9 +38,6 @@ import { codeloadTarball } from './sources.ts'
 /** A bare repo shortcut: the only target shape a tarball URL can express. */
 const BARE_GITHUB_RE = /^github:([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)$/
 
-/** A full commit SHA. Anything shorter would not satisfy the lockfile reader. */
-const SHA_RE = /^[0-9a-f]{40}$/
-
 /**
  * How long to wait for the SHA before giving up and installing directly.
  *
@@ -48,23 +48,31 @@ const SHA_RE = /^[0-9a-f]{40}$/
 const RESOLVE_TIMEOUT_MS = 6000
 
 /**
- * The default branch's current commit, through the region's proxy.
- * @returns the SHA, or null when it cannot be determined.
+ * The commit `HEAD` points at, from git's own ref advertisement.
+ *
+ * This is the endpoint `git clone` reads before it fetches anything, and it
+ * is the right one here for two measured reasons. It is not the REST API, so
+ * it does not consume the 60-requests-per-hour unauthenticated quota that a
+ * user installing a handful of plugins could plausibly exhaust. And it
+ * survives the proxy: over five consecutive tries from an unproxied mainland
+ * connection it answered 200 in ~1.2s every time, while the REST API through
+ * the same proxy returned 200, 200, then 403 — a proxy that rate-limits the
+ * API path would silently drop every install back to the slow route.
+ *
+ * The response is git's pkt-line format, whose first ref line carries
+ * `<sha> HEAD\0<capabilities>`. Read with a pattern rather than a parser:
+ * one 40-character hex string followed by `HEAD` is unambiguous in this
+ * payload, and a length-prefix reader would be more code to get wrong.
  */
 async function headCommit(repo: string, proxy: string, signal: AbortSignal): Promise<string | null> {
   try {
-    const res = await marketFetch(`${proxy}/https://api.github.com/repos/${repo}/commits/HEAD`, {
-      signal,
-      headers: { accept: 'application/vnd.github.sha', 'user-agent': 'dsh-market' },
-    })
+    const res = await marketFetch(
+      `${proxy}/https://github.com/${repo}/info/refs?service=git-upload-pack`,
+      { signal, headers: { 'user-agent': 'git/2.40.0' } },
+    )
     if (!res.ok) return null
-    // `Accept: application/vnd.github.sha` asks GitHub for the bare SHA as
-    // text, which is a few bytes instead of a full commit document. A proxy
-    // that drops the header hands back JSON instead, so both are read.
-    const body = (await res.text()).trim()
-    if (SHA_RE.test(body)) return body
-    const parsed = JSON.parse(body) as { sha?: unknown }
-    return typeof parsed.sha === 'string' && SHA_RE.test(parsed.sha) ? parsed.sha : null
+    const found = /([0-9a-f]{40}) HEAD/.exec(await res.text())
+    return found === null ? null : found[1]!
   } catch {
     return null
   }

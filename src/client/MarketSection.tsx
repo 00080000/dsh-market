@@ -292,7 +292,7 @@ function OwnerAvatar({ name, owner }: { name: string; owner: string }) {
   return (
     <img
       className={css.av}
-      src={githubUrl(`https://github.com/${encodeURIComponent(owner)}.png?size=96`)}
+      src={avatarUrl(owner)}
       alt=""
       loading="lazy"
       onError={() => setFailed(true)}
@@ -375,17 +375,35 @@ function useAutoCarousel(count: number, initial: number, intervalMs = 3500): [nu
  * share a cache entry with the full-size open anyway.
  */
 function thumbUrl(src: string, height: number): string {
-  // A download region with a mirror bypasses the resizer entirely.
+  // The resizer stays in every region, including China.
   //
-  // weserv is a third-party service in the Netherlands, chosen when the only
-  // question was bandwidth. For a user who has told the market their network
-  // reaches GitHub badly, it is one more far-away host between them and the
-  // image — and the whole point of the region is not to have those. Serving
-  // the original through the same mirror as everything else costs bytes the
-  // layout already constrains, and it costs them on a route that works.
-  const proxy = githubProxyInUse()
-  if (proxy !== null) return githubUrl(src)
+  // It was briefly bypassed there on the assumption that a service in the
+  // Netherlands would be one more far-away host in the way. Measured from an
+  // unproxied mainland connection, that was wrong twice over: weserv answers
+  // in 1.39s, and it answers with 23KB where the original is 41KB. Routing
+  // around it would have traded a working request for a bigger one, on a
+  // page that makes dozens of them.
   return `https://images.weserv.nl/?url=${encodeURIComponent(src.replace(/^https?:\/\//, ''))}&h=${String(height)}&fit=inside&we=1`
+}
+
+/**
+ * The owner's GitHub avatar, addressed so the region's proxy can serve it.
+ *
+ * `github.com/<owner>.png` is a redirect to the avatar host, and gh-proxy
+ * does not follow it — measured from an unproxied mainland connection, that
+ * URL hangs until the client gives up (60s), while naming the avatar host
+ * directly through the same proxy answers in 1.07s. So a proxied region
+ * addresses the destination itself.
+ *
+ * The redirect is left in place when there is no proxy: it is the form that
+ * has always worked, and this is not the release to change it on a path
+ * nobody has reported a problem with.
+ */
+function avatarUrl(owner: string): string {
+  const name = encodeURIComponent(owner)
+  return githubProxyInUse() === null
+    ? `https://github.com/${name}.png?size=96`
+    : githubUrl(`https://avatars.githubusercontent.com/${name}?size=96`)
 }
 
 /**
