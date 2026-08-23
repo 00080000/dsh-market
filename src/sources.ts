@@ -11,7 +11,7 @@ function validSubpath(subpath: string): boolean {
 }
 
 /** Registry tarball names must be plain npm package names, nothing fancier. */
-const NPM_NAME_RE = /^(@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*$/
+export const NPM_NAME_RE = /^(@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*$/
 
 /**
  * Parse a registry source url: a github repo, optionally with a

@@ -17,6 +17,8 @@ import { createProgressTracker, type ProgressPhase } from './ndjson.ts'
 import { pluginArgsFor } from './pnpm-compat.ts'
 import { isDshProfileName, profileDir } from './profile.ts'
 import { activeRegion, DEFAULT_NPM_REGISTRY, routesFor, type Region } from './regions.ts'
+import { NPM_NAME_RE } from './sources.ts'
+import { fetchNpmLatest } from './updates.ts'
 
 // 15 min default (slow networks + git installs), overridable for CI/tests.
 // (#6 by @qichuang321.)
@@ -331,21 +333,102 @@ export interface PluginCommandRuntime {
   cancelActive(): boolean
 }
 
-/** Structural subset of DSH Desktop's public `desktopPnpm` contract. */
+/** One running package operation, however it was started. */
+export interface DesktopPnpmHandleLike {
+  readonly stdout: NodeJS.ReadableStream
+  readonly stderr: NodeJS.ReadableStream
+  readonly done: Promise<{
+    readonly exitCode: number | null
+    readonly signal: NodeJS.Signals | null
+  }>
+  cancel(): void
+}
+
+/**
+ * Structural subset of DSH Desktop's public `desktopPnpm` contract.
+ *
+ * Anywhere Labs' DSH Desktop is ONE third-party client among several, and
+ * this interface exists only for it. Nothing here is part of the official
+ * DSH protocol — `desktopPnpm`, `installPlugin` and the install boundary
+ * below appear nowhere in `@deepseek-ai/*`. Every other client the market
+ * runs under, including other desktop apps, installs through the ordinary
+ * `dsh plugin --profile <p> add` CLI, and so does the market itself when
+ * none of these services are present.
+ *
+ * That is why every member past `runPlugin` is optional and reached by
+ * feature detection. A host that does not publish one simply never enters
+ * the branch, and the ordinary path it already used stays untouched — the
+ * cost of accommodating one vendor must not be paid by the others, or by
+ * the far larger number of people on plain `dsh web`.
+ */
 export interface DesktopPnpmLike {
   runPlugin(
     args: readonly string[],
     invokingDir: string,
     signal?: AbortSignal,
-  ): {
-    readonly stdout: NodeJS.ReadableStream
-    readonly stderr: NodeJS.ReadableStream
-    readonly done: Promise<{
-      readonly exitCode: number | null
-      readonly signal: NodeJS.Signals | null
-    }>
-    cancel(): void
-  }
+  ): DesktopPnpmHandleLike
+
+  /**
+   * Desktop 2.x refuses `add` through `runPlugin` — "plugin add must use the
+   * recoverable install boundary" (#215, #219, #272) — and offers this
+   * instead, which their launcher enables only for the selected market
+   * provider. Same arguments, same handle, no recovery receipt and no
+   * write-ahead log for the caller to reconcile.
+   *
+   * Optional because it is theirs: absent on every other host, including
+   * the other third-party desktop client in #292, which installs perfectly
+   * well through the ordinary CLI.
+   *
+   * Read from their published source rather than assumed: it accepts ONLY
+   * `add` with exactly one target of the form `name@exact.version`
+   * (`validateExternalMarketInstallArgs` in dsh-plugin-desktop/src/pnpm.ts).
+   * A `github:owner/repo` target is rejected before any process starts, so
+   * the 1085 catalog entries with no npm package — 57% of it — cannot be
+   * installed on that host by any spelling this market could send. That is
+   * a gap in their contract, not something to work around here.
+   */
+  runExternalMarketPluginInstall?(
+    args: readonly string[],
+    invokingDir: string,
+    signal?: AbortSignal,
+  ): DesktopPnpmHandleLike
+}
+
+/** An npm name with a fully pinned version — the only target their boundary takes. */
+const EXACT_NPM_TARGET_RE = /^(@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*@\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/
+
+/**
+ * Rewrite an `add` argv into the shape Anywhere Labs' install boundary
+ * accepts, or null when it cannot be expressed there.
+ *
+ * Their validator wants exactly one target of the form `name@1.2.3` — not a
+ * bare name, not `@latest`, and not a `github:` source (read from
+ * `validateExternalMarketInstallArgs`, dsh-plugin-desktop/src/pnpm.ts). The
+ * market sends a bare name for a registry plugin and `dshmarket@latest` for
+ * itself, so both need the version resolved before that boundary will take
+ * them.
+ *
+ * Returning null is a normal outcome, not a failure: a github-sourced plugin
+ * has no `name@version` spelling at all. The caller falls back to the
+ * ordinary path, which on that host reports their own refusal — an accurate
+ * message about their contract, rather than one this package invented.
+ */
+async function exactNpmArgs(args: readonly string[]): Promise<string[] | null> {
+  const targets = args.slice(1).filter(argument => !argument.startsWith('-'))
+  const target = targets[0]
+  if (targets.length !== 1 || target === undefined) return null
+  if (EXACT_NPM_TARGET_RE.test(target)) return [...args]
+  // A bare name, or one pinned to a dist-tag. Only a registry package can be
+  // resolved; `github:owner/repo` and file paths stop here.
+  const at = target.lastIndexOf('@')
+  const name = at > 0 ? target.slice(0, at) : target
+  if (!NPM_NAME_RE.test(name)) return null
+  const version = await fetchNpmLatest(name)
+  if (version === null) return null
+  const rewritten = `${name}@${version}`
+  if (!EXACT_NPM_TARGET_RE.test(rewritten)) return null
+  logEvent('info', 'install', `desktop install boundary needs an exact version: ${target} -> ${rewritten}`)
+  return args.map(argument => (argument === target ? rewritten : argument))
 }
 
 /** Desktop runtime also owns cleanup of any operation started by this fiber. */
@@ -799,9 +882,18 @@ export function createDesktopPluginRuntime(
     }
 
     const abort = new AbortController()
-    let handle: ReturnType<DesktopPnpmLike['runPlugin']>
+    let handle: DesktopPnpmHandleLike
     try {
-      handle = service.runPlugin(prepared.args, invokingDir, abort.signal)
+      // `add` goes through Anywhere Labs' install boundary when that host
+      // publishes one, because their Desktop rejects `add` on `runPlugin`
+      // outright. Feature-detected, never assumed: this method is theirs
+      // alone, and on every other client — including the other desktop app
+      // in #292 — the ordinary call below is what runs, unchanged.
+      const boundary = prepared.args[0] === 'add' ? service.runExternalMarketPluginInstall : undefined
+      const viaBoundary = boundary === undefined ? null : await exactNpmArgs(prepared.args)
+      handle = boundary === undefined || viaBoundary === null
+        ? service.runPlugin(prepared.args, invokingDir, abort.signal)
+        : boundary.call(service, viaBoundary, invokingDir, abort.signal)
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       const busy = /another desktop pnpm operation is already running/i.test(message)
