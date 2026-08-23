@@ -186,7 +186,10 @@ export function toolSearchDirs(
     dirs.push(join(home, 'Library', 'pnpm'), join(home, '.local', 'share', 'pnpm'))
   }
   dirs.push(nodeBinDir, ...extraPathDirs)
-  return dirs
+  // Deduped: PNPM_HOME usually names one of the defaults below it, and a
+  // list that says the same directory twice reads as carelessness in the
+  // one place a user goes looking for an answer.
+  return [...new Set(dirs.filter(dir => dir.trim() !== ''))]
 }
 
 function spawnEnv(): NodeJS.ProcessEnv {
@@ -553,7 +556,18 @@ export function provisionHint(corepackOutput: string, npmOutput: string, npmFoun
   if (/ETIMEDOUT|ECONNREFUSED|ENOTFOUND|EAI_AGAIN|network|proxy|certificate/i.test(`${corepackOutput}\n${npmOutput}`)) {
     return '装 pnpm 时网络失败。若你在受限网络下，corepack 的 shim 也下载不到 pnpm 本体——请改用完整安装或指定镜像：brew install pnpm（macOS/Linux），或 npm i -g pnpm --registry <你的镜像> / Network failure while installing pnpm. On a restricted network the corepack shim cannot download pnpm either — install it fully or point at a mirror: `brew install pnpm`, or `npm i -g pnpm --registry <your mirror>`'
   }
-  return undefined
+  // Everything reported success and pnpm still will not run (#228 by
+  // @ZhengXin1023: corepack exit=0, npm -g exit=0, npm found — and the
+  // install button stayed locked with nothing said).
+  //
+  // This used to return undefined, which left the case that most needs an
+  // explanation with none: the user is told "setup failed" while every step
+  // they can see succeeded, and their complaint was exactly that — "又不告诉
+  // 我怎么手动配置". Whatever the cause, the actionable question is the same
+  // one, so ask it: where is pnpm, and is that anywhere this process looks?
+  const searched = toolSearchDirs().join(process.platform === 'win32' ? ' ; ' : ' : ')
+  const locate = process.platform === 'win32' ? 'where pnpm' : 'which pnpm'
+  return `pnpm 装好了，但这个 dsh 进程仍然启动不了它——安装步骤都成功，只是装到的位置不在它搜索的范围内。已找过：${searched}。请在终端执行 \`${locate}\` 看 pnpm 实际在哪：如果它不在上面这些目录里，把该目录设为 PNPM_HOME 后重启 dsh（\`export PNPM_HOME=<那个目录>\`），或者干脆从一个能直接运行 pnpm 的终端里启动 dsh。注意必须重启——正在运行的进程读不到新设的环境变量 / pnpm is installed but this dsh process still cannot start it: every step succeeded, the binary just landed somewhere this process does not look. Searched: ${searched}. Run \`${locate}\` in a terminal to see where pnpm actually is; if that directory is not in the list above, set PNPM_HOME to it and restart dsh (\`export PNPM_HOME=<that directory>\`), or simply start dsh from a terminal where \`pnpm\` already runs. The restart matters — a running process cannot see a newly set variable`
 }
 
 /** Live progress of the running plugin command, for the status route. */

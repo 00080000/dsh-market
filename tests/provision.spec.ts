@@ -121,6 +121,22 @@ describe('provisionPnpm (#149)', () => {
     expect(provisionHint(garbled, garbled, false)).toContain('找不到 npm/corepack')
     // ...and the same bytes with npm actually present must NOT claim it is
     // missing, or every unrelated failure gets misfiled under this hint.
-    expect(provisionHint(garbled, garbled, true)).toBeUndefined()
+    expect(provisionHint(garbled, garbled, true)).not.toContain('找不到 npm/corepack')
+  })
+
+  it('still says something when every step succeeded and pnpm runs anyway (#228)', async () => {
+    // The case that most needs an explanation used to get none: corepack and
+    // npm both exit 0, npm is on disk, and the install button stays locked.
+    // The reporter's complaint was precisely the silence — "又不告诉我怎么手动
+    // 配置". Returning undefined here is what produced that.
+    const { provisionHint } = await import('../src/dsh-cli.ts')
+    const hint = provisionHint('', 'changed 1 package in 491ms', true)
+    expect(hint).toBeDefined()
+    // The actionable question, not a restatement of the failure: where is
+    // pnpm, and is that anywhere this process looks?
+    expect(hint).toMatch(/which pnpm|where pnpm/)
+    expect(hint).toContain('PNPM_HOME')
+    // And it must not misfile itself as the npm-missing case.
+    expect(hint).not.toContain('找不到 npm/corepack')
   })
 })

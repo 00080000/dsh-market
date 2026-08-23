@@ -132,8 +132,15 @@ describe('provisionHint (#142 / #108 / #32)', () => {
     // Restricted network: the corepack shim cannot fetch pnpm either.
     expect(provisionHint('', 'npm error network request to https://registry.npmjs.org failed, reason: ETIMEDOUT'))
       .toContain('镜像')
-    // Unrecognized output stays undefined rather than guessing.
-    expect(provisionHint('', 'some unknown failure')).toBeUndefined()
+    // Unrecognized output no longer stays silent (#228): every step can
+    // report success and pnpm still not run, and that is the case a user has
+    // the least chance of working out alone. It must not MISFILE itself as
+    // one of the recognized causes, though — that would send them to fix
+    // something they do not have.
+    const fallback = provisionHint('', 'some unknown failure')
+    expect(fallback).toMatch(/which pnpm|where pnpm/)
+    expect(fallback).not.toContain('找不到 npm/corepack')
+    expect(fallback).not.toContain('镜像')
   })
 })
 
