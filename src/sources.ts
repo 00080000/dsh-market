@@ -180,6 +180,32 @@ export function gitAllowBuildsKey(name: string, spec: string): string | null {
 }
 
 /**
+ * The OTHER allowBuilds key form, for pnpm below 11.21 (#285 by @omdsh-dev,
+ * following #267).
+ *
+ * The stable `name@git+https://…` key above is what pnpm 11.21+ matches, and
+ * it is the better key precisely because it does not change when the
+ * repository is pushed to. Older pnpm does not match it at all: 11.7.0 — the
+ * version DSH Desktop still bundles — matches only the commit-pinned
+ * codeload URL it names in its own `ERR_PNPM_GIT_DEP_PREPARE_NOT_ALLOWED`
+ * message. On those versions the "allow build scripts and retry" button
+ * could never work, because the key it wrote was one pnpm would never read.
+ *
+ * Both are written. The pinned form goes stale the moment the repository
+ * moves, which is why it cannot REPLACE the stable one — but a stale entry
+ * costs a line in a YAML file, and a missing one costs the user the only
+ * button that could have unblocked them.
+ *
+ * @param sha - the commit the install will actually fetch.
+ * @returns the key, or null when the spec is not github-hosted.
+ */
+export function codeloadAllowBuildsKey(name: string, spec: string, sha: string): string | null {
+  const parsed = repoFromTarget(spec)
+  if (parsed === null || !/^[0-9a-f]{40}$/.test(sha)) return null
+  return `${name}@https://codeload.github.com/${parsed.repo}/tar.gz/${sha}`
+}
+
+/**
  * The pnpm install target for a registry entry. Registry tarballs beat
  * full-repo GitHub downloads: smaller, prebuilt, and CDN/mirror served. The
  * npm name comes from our curated registry, which only maps repo-verified

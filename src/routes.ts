@@ -29,12 +29,12 @@ import { runningAgentIds, type AgentsLookup } from './agents.ts'
 import { analyzeProfile, type DuplicateName } from './check.ts'
 import { applyBundleOrder, mergeOrder, readBundleRules, readBundleStack, validateOrder } from './order.ts'
 import { trialValidate } from './trial.ts'
-import { findInstalledAlias, gitAllowBuildsKey, installTargetFor, repoOfTarget } from './sources.ts'
+import { codeloadAllowBuildsKey, findInstalledAlias, gitAllowBuildsKey, installTargetFor, repoOfTarget } from './sources.ts'
 import { failureDetail, groupConflictsByOwner, isStaleUpdate, parseIgnoredBuilds, parsePrepareNotAllowed, RELEASE_AGE_OVERRIDE, retargetCollections, validateAddedPlugins, withHoistRecovery } from './install.ts'
 import { asChannel, CHANNELS, DIST_TAG, resolveChannel, type Channel } from './channels.ts'
 import { asRegion, REGIONS, routesFor, setActiveRegion, type Region } from './regions.ts'
 import { resolveRegion } from './region-probe.ts'
-import { acceleratedTarget } from './accelerate.ts'
+import { acceleratedTarget, resolveHeadCommit } from './accelerate.ts'
 import { checkUpdates, fetchNpmLatest, invalidateUpdates, isUpgrade, latestPublishedRecently, setUpdateRegistry, versionOnChannel } from './updates.ts'
 import { createThemeManager, type LoaderEntry } from './themes.ts'
 import { readJsonBody, sameOrigin, sendJson } from './http.ts'
@@ -250,7 +250,12 @@ export function mountMarketRoutes(
     setUpdateRegistry(routesFor(next).npmRegistry)
   }
   applyRegion(region)
-  if (marketState.region === undefined) {
+  // Probe only when NOTHING has decided a region — not the saved state, and
+  // not the composition either. An operator who wrote `region:` into their
+  // profile has answered the question the probe exists to ask, and measuring
+  // over the top of that answer would quietly override a deliberate choice a
+  // few seconds after boot.
+  if (config.region === undefined) {
     void resolveRegion(undefined).then(({ region: probed }) => {
       applyRegion(probed)
       regionAuto = true
@@ -1337,14 +1342,40 @@ export function mountMarketRoutes(
             const beforeInstalled = readInstalled(config.profile, activeProfileDir)
             // Re-running add re-resolves the source: git HEAD for github specs,
             // dist-tag latest for registry installs.
-            const isGit = spec.startsWith('github:')
+            // A GitHub source in EITHER spelling. Under a download region
+            // that mirrors GitHub, an installed plugin carries a proxied
+            // codeload URL rather than the `github:` shortcut, and asking
+            // only about the shortcut sent those down the npm path below —
+            // where `name@latest` either fails or, far worse, installs an
+            // unrelated package that happens to share the plugin's name.
+            // The `github:` shortcut keeps its own handling, fragments and
+            // all — `githubUpdateTarget` is what preserves a monorepo
+            // `#path:` while dropping revision selectors (#281).
+            //
+            // A proxied codeload URL is the OTHER spelling of the same
+            // source, carried by anything installed under a region that
+            // mirrors GitHub. It has no fragment to preserve (subpath entries
+            // are never accelerated), so the canonical shortcut is rebuilt
+            // from it. Without this branch these fell through to the npm path
+            // below, where `name@latest` either fails or — far worse —
+            // installs an unrelated package that shares the plugin's name.
+            const codeloadRepo = spec.startsWith('github:') ? null : repoOfTarget(spec)
+            const gitSpec = spec.startsWith('github:')
+              ? githubUpdateTarget(spec)
+              : codeloadRepo === null ? null : `github:${codeloadRepo}`
+            const isGit = gitSpec !== null
             // `@latest` was hardcoded, so a beta subscriber would have been
             // told an update existed and then handed the stable build. The
             // dist-tag has to follow the same setting the offer came from.
             // The market follows its channel; everything else is `latest`.
             const selfChannel = SELF_NAMES.has(name) ? activeChannel() : null
             const tag = selfChannel === null ? 'latest' : DIST_TAG[selfChannel]
-            const target = isGit ? githubUpdateTarget(spec) : `${name}@${tag}`
+            // Re-accelerated from the unpinned shortcut, never from the
+            // installed URL: that one names the commit already on disk, so
+            // reusing it would be an update that can never move.
+            const target = gitSpec === null
+              ? `${name}@${tag}`
+              : await acceleratedTarget(gitSpec, region)
             // Never let `@latest` walk a profile BACKWARDS (#64 by @ZeroOrigin64):
             // a package whose latest dist-tag was left on an older release turns
             // this update into a downgrade that also rewrites an exact pin to
@@ -1880,11 +1911,36 @@ export function mountMarketRoutes(
           // is kept alongside — it authorizes the npm-sourced case.
           const specs = readInstalled(config.profile, activeProfileDir)
           const packages: string[] = []
+          /**
+           * Both key forms for one github source (#285).
+           *
+           * pnpm 11.21+ matches the stable `git+https://…` key; 11.7.0 — what
+           * DSH Desktop bundles — matches only a commit-pinned codeload URL,
+           * so on those versions the approval button wrote a key pnpm would
+           * never read and could never work. The pin is resolved here rather
+           * than assumed: `github:owner/repo` names no commit, and the one
+           * pnpm will fetch is whatever HEAD is at install time.
+           *
+           * A pin that cannot be resolved is simply omitted. The stable key
+           * still covers modern pnpm, and an approval that authorizes less
+           * than hoped is better than one that fails.
+           */
+          const buildKeys = async (name: string, spec: string): Promise<string[]> => {
+            const stable = gitAllowBuildsKey(name, spec)
+            if (stable === null) return []
+            const repo = repoOfTarget(spec)?.split('#')[0] ?? null
+            // A proxied install already carries its commit; only a bare
+            // shortcut has to go and ask.
+            const pinned = /codeload\.github\.com\/[^/\s]+\/[^/\s]+\/tar\.gz\/([0-9a-f]{40})/.exec(spec)?.[1]
+              ?? (repo === null ? null : await resolveHeadCommit(repo, region))
+            const codeload = pinned === null || pinned === undefined
+              ? null
+              : codeloadAllowBuildsKey(name, spec, pinned)
+            return codeload === null ? [stable] : [stable, codeload]
+          }
           for (const name of requested) {
             if (installed.includes(name)) {
-              packages.push(name)
-              const key = gitAllowBuildsKey(name, String(specs[name] ?? ''))
-              if (key !== null) packages.push(key)
+              packages.push(name, ...await buildKeys(name, String(specs[name] ?? '')))
               continue
             }
             if (specs[name] !== undefined) continue
@@ -1902,9 +1958,9 @@ export function mountMarketRoutes(
               continue
             }
             const target = entry === undefined ? null : installTargetFor(entry)
-            const key = target === null ? null : gitAllowBuildsKey(name, target)
-            if (key !== null) {
-              packages.push(name, key)
+            const keys = target === null ? [] : await buildKeys(name, target)
+            if (keys.length > 0) {
+              packages.push(name, ...keys)
             }
           }
           if (packages.length === 0) {

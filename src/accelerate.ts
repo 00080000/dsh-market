@@ -64,17 +64,42 @@ const RESOLVE_TIMEOUT_MS = 6000
  * one 40-character hex string followed by `HEAD` is unambiguous in this
  * payload, and a length-prefix reader would be more code to get wrong.
  */
-async function headCommit(repo: string, proxy: string, signal: AbortSignal): Promise<string | null> {
+export async function headCommit(
+  repo: string,
+  proxy: string | null,
+  signal?: AbortSignal,
+): Promise<string | null> {
+  const base = `https://github.com/${repo}/info/refs?service=git-upload-pack`
   try {
-    const res = await marketFetch(
-      `${proxy}/https://github.com/${repo}/info/refs?service=git-upload-pack`,
-      { signal, headers: { 'user-agent': 'git/2.40.0' } },
-    )
+    const res = await marketFetch(proxy === null ? base : `${proxy}/${base}`, {
+      signal,
+      headers: { 'user-agent': 'git/2.40.0' },
+    })
     if (!res.ok) return null
     const found = /([0-9a-f]{40}) HEAD/.exec(await res.text())
     return found === null ? null : found[1]!
   } catch {
     return null
+  }
+}
+
+/**
+ * The current `HEAD` commit for a repo, on whichever route the region uses.
+ *
+ * Wraps the timeout so callers outside the install path — the build-script
+ * approval below, which needs a commit-pinned key — do not each reinvent it.
+ */
+export async function resolveHeadCommit(
+  repo: string,
+  region: Region,
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<string | null> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => { controller.abort() }, RESOLVE_TIMEOUT_MS)
+  try {
+    return await headCommit(repo, routesFor(region, env).githubProxy, controller.signal)
+  } finally {
+    clearTimeout(timer)
   }
 }
 

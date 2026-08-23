@@ -287,6 +287,29 @@ describe('manifest rollback (#65)', () => {
 })
 
 describe('setAllowBuilds (#6)', () => {
+  it('accepts the commit-pinned codeload key, and only in that exact shape (#285)', async () => {
+    // The allowlist is what stops a caller writing arbitrary text into a
+    // file pnpm parses. Widening it for pnpm <11.21 must not widen it into
+    // "anything containing a URL" — so the near-misses are asserted too.
+    const { setAllowBuilds } = await import('../src/profile.ts')
+    writeProfile({})
+    const sha = 'b0e6c57ebeeb4796017864f5cd5c66e6ba0899ec'
+    const approved = setAllowBuilds('web', [
+      `p@https://codeload.github.com/o/r/tar.gz/${sha}`,
+      // A different host wearing the same shape.
+      `p@https://evil.example.com/o/r/tar.gz/${sha}`,
+      // The right host with no commit pin: matches nothing, and an entry
+      // that matches nothing is indistinguishable from one that worked.
+      'p@https://codeload.github.com/o/r/tar.gz/HEAD',
+      // A path traversal dressed as a repo.
+      `p@https://codeload.github.com/../../etc/tar.gz/${sha}`,
+      // Something else entirely, smuggled through a newline.
+      `p@https://codeload.github.com/o/r/tar.gz/${sha}\n  evil: true`,
+    ])
+    expect(approved).toContain(`p@https://codeload.github.com/o/r/tar.gz/${sha}`)
+    expect(approved).toHaveLength(1)
+  })
+
   it('merges into an existing allowBuilds block and preserves the rest of the yaml', async () => {
     const { setAllowBuilds } = await import('../src/profile.ts')
     const dir = writeProfile({})
