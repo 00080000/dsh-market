@@ -17,6 +17,7 @@ import {
   IconCordisPluginOutline14,
   IconDownloadOutline16,
   IconFolderOpen16,
+  IconFullscreenOutline16,
   IconLinkOutline14,
   IconLoadingOutline16,
   IconQuestionOutline14,
@@ -474,6 +475,62 @@ function CardShot({ plugin, onOpen }: { plugin: RegistryPlugin; onOpen: (shots: 
 }
 
 /**
+ * Themes are chosen visually, so their catalog card gets one stable, large
+ * preview instead of the generic plugin card's horizontal thumbnail strip.
+ * The full curated set remains available in the existing lightbox.
+ */
+function ThemeCover({ plugin, onOpen, t }: {
+  plugin: RegistryPlugin
+  onOpen: (shots: string[], index: number) => void
+  t: Translate
+}) {
+  const shots = safeScreenshots(plugin.screenshots)
+  const [broken, setBroken] = useState<string[]>([])
+  const visible = shots.filter(src => !broken.includes(src))
+  const [setCoverRef, near] = useNearViewport<HTMLButtonElement>()
+  const name = pluginName(plugin.name)
+
+  if (visible.length === 0) {
+    return (
+      <div className={`${css.themeCover} ${css.themeCoverEmpty}`} aria-label={`${name}: ${t('themePreviewMissing')}`}>
+        <IconSparkle16 size={20} />
+        <span>{t('themePreviewMissing')}</span>
+      </div>
+    )
+  }
+
+  const src = visible[0]!
+  return (
+    <button
+      ref={setCoverRef}
+      type="button"
+      className={css.themeCover}
+      aria-label={`${t('themePreview')} ${name}`}
+      onClick={() => onOpen(visible, 0)}
+    >
+      <img
+        src={near ? thumbUrl(src, 520) : undefined}
+        alt=""
+        loading="lazy"
+        decoding="async"
+        fetchPriority="low"
+        referrerPolicy="no-referrer"
+        onError={() => setBroken(prev => prev.includes(src) ? prev : prev.concat(src))}
+      />
+      <span className={css.themePreviewAction}>
+        <IconSearchOutline16 size={14} />
+        {t('themePreview')}
+      </span>
+      {visible.length > 1 && (
+        <span className={css.themePreviewCount}>
+          {t('themePreviewCount').replace('{0}', String(visible.length))}
+        </span>
+      )}
+    </button>
+  )
+}
+
+/**
  * Masonry columns holding items in their input order.
  *
  * Items are dealt alternately (0,2,4… left; 1,3,5… right) rather than split
@@ -854,6 +911,7 @@ export function MarketSection(props: MarketSectionProps) {
   /** Shared by every screenshot source (card thumbnail, dialog strip). */
   const [lightbox, setLightbox] = useState<{ shots: string[]; index: number } | null>(null)
   const openLightbox = (shots: string[], index: number): void => setLightbox({ shots, index })
+  const [themesFullscreen, setThemesFullscreen] = useState(false)
   const [busyUrl, setBusyUrl] = useState<string | null>(null)
   /** Consecutive idle polls with a pending install that never landed (#32). */
   const idleStrikes = useRef(0)
@@ -1092,6 +1150,21 @@ export function MarketSection(props: MarketSectionProps) {
     () => new Set([...disabledNames, ...patchDisabledNames]),
     [disabledNames, patchDisabledNames],
   )
+
+  useEffect(() => {
+    if (tab !== 'themes' && themesFullscreen) setThemesFullscreen(false)
+  }, [tab, themesFullscreen])
+
+  useEffect(() => {
+    if (!themesFullscreen || lightbox !== null) return
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      event.stopPropagation()
+      setThemesFullscreen(false)
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [lightbox, themesFullscreen])
 
   const loadCatalog = useCallback(() => {
     setLoadError(null)
@@ -2290,80 +2363,135 @@ export function MarketSection(props: MarketSectionProps) {
     ? window.__DSH_BOOT__.entries
     : []
 
-  // Unified card for the Themes tab: install → use/in-use → uninstall.
+  // Theme-native card: visual preview first, then identity and lifecycle.
+  // This deliberately does not reuse pluginCard; repository metadata is
+  // useful context here, but it must not outrank the theme itself.
   const themePluginCard = (p: RegistryPlugin) => {
     const instName = installedNameOf(p)
-    if (instName === null) return pluginCard(p)
-    // A theme switched off via the Installed-tab toggle (or a group switch)
-    // stays in the boot manifest, so the disabled set must veto the badge.
-    const mounted = (skins.includes(instName) || bootEntries.some(e => e.id === instName)) && !effectiveDisabledSet.has(instName)
     const desc = (p.description && (p.description[lang] || p.description.en)) || ''
     const replacement = replacementOf(p)
+    const done = doneUrls.includes(p.url) || hotUrls.includes(p.url)
+    const busy = busyUrl === p.url
+    const record = recordForUrl(records, p.url)
+    const blocked = record !== null && (record.state === 'input' || record.state === 'failed')
+    // A theme switched off via the Installed-tab toggle (or a group switch)
+    // stays in the boot manifest, so the disabled set must veto the badge.
+    const mounted = instName !== null
+      && (skins.includes(instName) || bootEntries.some(e => e.id === instName))
+      && !effectiveDisabledSet.has(instName)
+
     return (
-      <div key={p.url} className={css.card}>
-        <div className={css.row1}>
-          {/* Same header as the discover card, and it has to stay that way:
-              the themes tab lists the same plugins from the same catalog,
-              so a different title here would name one plugin two ways in
-              one product. */}
-          <div style={{ minWidth: 0 }}>
-            <a className={`${css.nm} ${css.nmLink}`} href={p.url} target="_blank" rel="noreferrer" title={p.name}>
-              {pluginName(p.name)}
-              {p.deprecated === true && <span className={css.depBadge}>{t('deprecatedBadge')}</span>}
-            </a>
-            <div className={css.byline}>
-              <OwnerAvatar name={p.name} owner={p.owner || ''} />
-              <span className={css.owner} title={p.owner}>{p.owner}</span>
-              {typeof p.downloads === 'number' && (
-                <Tooltip label={String(p.downloads)} side="top">
-                  <span className={css.star}>{'· ↓ ' + formatCount(p.downloads)}</span>
-                </Tooltip>
-              )}
-              {typeof p.stars === 'number' && (
-                <Tooltip label={String(p.stars)} side="top">
-                  <span className={css.star}>{'· ★ ' + formatCount(p.stars)}</span>
-                </Tooltip>
-              )}
+      <article key={p.url} className={blocked ? `${css.themeCard} ${css.cardBlocked}` : css.themeCard}>
+        <ThemeCover plugin={p} onOpen={openLightbox} t={t} />
+        <div className={css.themeCardBody}>
+          <div className={css.themeCardHead}>
+            <div className={css.themeIdentity}>
+              <a className={`${css.nm} ${css.nmLink}`} href={p.url} target="_blank" rel="noreferrer" title={p.name}>
+                {pluginName(p.name)}
+              </a>
+              <div className={css.byline}>
+                <OwnerAvatar name={p.name} owner={p.owner || ''} />
+                <span className={css.owner} title={p.owner}>{p.owner}</span>
+                {typeof p.downloads === 'number' && (
+                  <Tooltip label={String(p.downloads)} side="top">
+                    <span className={css.star}>{'· ↓ ' + formatCount(p.downloads)}</span>
+                  </Tooltip>
+                )}
+                {typeof p.stars === 'number' && (
+                  <Tooltip label={String(p.stars)} side="top">
+                    <span className={css.star}>{'· ★ ' + formatCount(p.stars)}</span>
+                  </Tooltip>
+                )}
+              </div>
+            </div>
+            {p.deprecated === true && <span className={css.depBadge}>{t('deprecatedBadge')}</span>}
+            {mounted && <span className={css.themeStatus}>{t('themeActive')}</span>}
+            {instName !== null && !mounted && (
+              <span className={css.themeStatusMuted}>
+                {effectiveDisabledSet.has(instName) ? t('disabledState') : t('alreadyInstalled')}
+              </span>
+            )}
+          </div>
+
+          <p className={css.themeDescription} title={desc}>{desc}</p>
+
+          {p.deprecated === true && (
+            <div className={css.deprecate}>
+              <div className={css.depLine}>
+                <span>⚠️ {t('deprecatedWarn')}</span>
+                {replacement !== undefined && (
+                  <a className={css.src} href={replacement.url} target="_blank" rel="noreferrer">
+                    {t('replacementHint') + ' ' + replacement.name}
+                  </a>
+                )}
+              </div>
+            </div>
+          )}
+
+          <div className={css.themeCardFooter}>
+            {instName === null && (
+              <span className={css.themeLifecycle}>{done ? t('installedBadge') : t('notInstalled')}</span>
+            )}
+            <div className={css.themeActions}>
+              {instName === null
+                ? done
+                  ? <span className={css.okState}>{t('installedBadge')}</span>
+                  : busy
+                    ? <Button variant="primary" size="sm" className={css.installBtn} disabled>{t('installing')}</Button>
+                    : blocked
+                      ? (
+                          <button type="button" className={css.cardBlockedMark} onClick={openOperations}>
+                            <IconWarningOutline16 size={13} />
+                            {t('opBlockedCard')}
+                          </button>
+                        )
+                      : (
+                          <Button
+                            variant="primary"
+                            size="sm"
+                            className={css.installBtn}
+                            disabled={busyUrl !== null || !envReady}
+                            onClick={() => setConfirming(p)}
+                          >{t('install')}</Button>
+                        )
+                : (
+                    <>
+                      {removingName === instName
+                        ? <Button variant="outline" size="sm" disabled>{t('uninstalling')}</Button>
+                        : <Button variant="ghost" size="sm" onClick={() => setRemoveConfirm(instName)}>{t('uninstall')}</Button>}
+                      {mounted
+                        ? (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled={togglingName !== null}
+                              onClick={() => doToggle(instName, false, true)}
+                            >{t('themeDeactivate')}</Button>
+                          )
+                        : <Button variant="primary" size="sm" onClick={() => doUseSkin(instName)}>{t('themeApply')}</Button>}
+                    </>
+                  )}
             </div>
           </div>
-        </div>
-        <CardDesc text={desc} t={t} />
-        <CardShot plugin={p} onOpen={openLightbox} />
-        {p.deprecated === true && (
-          <div className={css.deprecate}>
-            <div className={css.depLine}>
-              <span>⚠️ {t('deprecatedWarn')}</span>
-              {replacement !== undefined && (
-                <a className={css.src} href={replacement.url} target="_blank" rel="noreferrer">
-                  {t('replacementHint') + ' ' + replacement.name}
-                </a>
-              )}
+
+          {busy && (
+            <div className={css.progress}>
+              <span className={css.spin}><IconLoadingOutline16 size={14} /></span>
+              <code className={css.grow}>{progressText}</code>
+              {progressPct !== null && <span className={css.pct}>{progressPct}%</span>}
+              <Button variant="outline" size="sm" disabled={cancelling} onClick={doCancel}>
+                {cancelling ? t('cancelling') : t('cancelOp')}
+              </Button>
+              <div className={css.bar}>
+                <div
+                  className={progressPct !== null ? css.barFill : `${css.barFill} ${css.barWave}`}
+                  style={progressPct !== null ? { width: `${progressPct}%` } : undefined}
+                />
+              </div>
             </div>
-          </div>
-        )}
-        <div className={css.foot}>
-          {/* Published date and a source link used to live here too — both
-              redundant now that the title itself opens the repo, and the
-              date/tag pair alone was long enough in English to wrap onto its
-              own line, splitting one card's footer into two visual rows. */}
-          <span className={css.grow} />
-          {removingName === instName
-            ? <Button variant="outline" size="sm" disabled>{t('uninstalling')}</Button>
-            : <Button variant="outline" size="sm" onClick={() => setRemoveConfirm(instName)}>{t('uninstall')}</Button>}
-          {effectiveDisabledSet.has(instName) && <span className={css.spec}>{t('disabledState')}</span>}
-          {mounted
-            ? <>
-                <span className={css.okState}>{t('themeActive')}</span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={togglingName !== null}
-                  onClick={() => doToggle(instName, false, true)}
-                >{t('themeDeactivate')}</Button>
-              </>
-            : <Button variant="primary" size="sm" onClick={() => doUseSkin(instName)}>{t('themeApply')}</Button>}
+          )}
         </div>
-      </div>
+      </article>
     )
   }
 
@@ -2500,7 +2628,12 @@ export function MarketSection(props: MarketSectionProps) {
   }, [data, installed, repoIdentities, repoHints])
 
   return (
-    <div className={css.root}>
+    <div
+      className={css.root}
+      data-dsh-market-root
+      data-dsh-market-tab={tab}
+      data-dsh-market-fullscreen={tab === 'themes' && themesFullscreen ? 'true' : undefined}
+    >
       <div className={css.head}>
         <div className={css.titleRow}>
           <MarketLogo size={22} style={{ flexShrink: 0 }} />
@@ -2538,6 +2671,7 @@ export function MarketSection(props: MarketSectionProps) {
           <Button
             variant="outline"
             size="sm"
+            className={css.exportLogBtn}
             icon={<IconDownloadOutline16 size={14} />}
             disabled={exportState === 'busy'}
             onClick={doExportLog}
@@ -2979,8 +3113,30 @@ export function MarketSection(props: MarketSectionProps) {
           : tab === 'themes' && themeSnap !== null
             ? (
                 <>
-                  <div className={css.tabSearchRow}>
-                    <Input className={css.tabSearch} icon={<IconSearchOutline16 size={14} />} placeholder={t('searchPh')} value={qThemes} onChange={e => setQThemes(e.target.value)} />
+                  <div className={css.themeToolbar}>
+                    <Input className={css.themeSearch} icon={<IconSearchOutline16 size={14} />} placeholder={t('searchPh')} value={qThemes} onChange={e => setQThemes(e.target.value)} />
+                    <div className={css.themeToolbarActions}>
+                      <FilterMenu
+                        sortField={themeSortField}
+                        sortDir={themeSortDir}
+                        timeRange={themeTimeRange}
+                        onSortField={setThemeSortField}
+                        onSortDir={setThemeSortDir}
+                        onTimeRange={setThemeTimeRange}
+                        t={t}
+                      />
+                      <Tooltip label={themesFullscreen ? t('themeExitFullscreen') : t('themeFullscreen')} side="top">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className={css.themeFullscreenBtn}
+                          icon={<IconFullscreenOutline16 size={16} />}
+                          aria-label={themesFullscreen ? t('themeExitFullscreen') : t('themeFullscreen')}
+                          aria-pressed={themesFullscreen}
+                          onClick={() => setThemesFullscreen(value => !value)}
+                        />
+                      </Tooltip>
+                    </div>
                   </div>
                   {/* Light/dark/system live in the official Appearance setting; this
                     tab only shows what that setting can't: registered third-party
@@ -2993,23 +3149,6 @@ export function MarketSection(props: MarketSectionProps) {
                       </div>
                     )
                   })()}
-                  {/* No category row: every entry here already IS the 'theme'
-                    category, so there is nothing left to narrow by — just the
-                    same sort/time-range menu Discover uses, right-aligned. */}
-                  <div className={css.cats}>
-                    <div className={css.catsRow}>
-                      <span className={css.grow} />
-                      <FilterMenu
-                        sortField={themeSortField}
-                        sortDir={themeSortDir}
-                        timeRange={themeTimeRange}
-                        onSortField={setThemeSortField}
-                        onSortDir={setThemeSortDir}
-                        onTimeRange={setThemeTimeRange}
-                        t={t}
-                      />
-                    </div>
-                  </div>
                   {data === null
                     ? <div className={css.loading}><span className={css.logoMark}><MarketLogo size={26} animated /></span>{t('loading')}</div>
                     : anyThemePlugins.length === 0
@@ -3018,7 +3157,12 @@ export function MarketSection(props: MarketSectionProps) {
                         ? <div className={css.empty}>{t('empty')}</div>
                         : (
                             <>
-                              <Masonry items={themePagePlugins} render={themePluginCard} />
+                              <div className={css.themeResultBar}>
+                                <span>{t('themeResultCount').replace('{0}', String(themePlugins.length))}</span>
+                              </div>
+                              <div className={css.themeGallery}>
+                                {themePagePlugins.map(themePluginCard)}
+                              </div>
                               <Pager
                                 currentPage={themePagination.currentPage}
                                 totalPages={themePagination.totalPages}

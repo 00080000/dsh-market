@@ -78,6 +78,10 @@ function props() {
  * raw DOM would assert the layout's implementation instead of its result.
  */
 function rankedNames(container: HTMLElement): Array<string | undefined> {
+  const themeGallery = container.querySelector('[class*="themeGallery"]')
+  if (themeGallery !== null) {
+    return [...themeGallery.querySelectorAll('[class*="nm"]')].map(el => el.textContent?.trim())
+  }
   const columns = [...container.querySelectorAll('[class*="masonryCol"]')]
     .map(col => [...col.querySelectorAll('[class*="nm"]')].map(el => el.textContent?.trim()))
   const out: Array<string | undefined> = []
@@ -1402,6 +1406,53 @@ describe('per-tab search boxes', () => {
     fireEvent.change(screen.getByPlaceholderText(en.searchPh), { target: { value: 'zzz-no-match' } })
     await waitFor(() => expect(screen.queryByText('whale-skin')).toBeNull())
     expect(screen.getByText(en.empty)).toBeTruthy()
+  })
+
+  it('the themes tab uses one large preview per card and opens the full gallery', async () => {
+    const shotA = 'https://raw.githubusercontent.com/carol/whale-skin/main/assets/light.png'
+    const shotB = 'https://raw.githubusercontent.com/carol/whale-skin/main/assets/dark.png'
+    const registry = JSON.parse(JSON.stringify(REGISTRY))
+    registry.plugins[2].screenshots = [shotA, shotB]
+    stubFetch({ '/dsh-market/registry': { source: 'live', registry } })
+    const THEME_SNAPSHOT = { preference: 'light', themes: [] as Array<{ id: string }> }
+    const { container } = render(<MarketSection {...{
+      ...props(),
+      themeStore: { subscribe: () => () => {}, getSnapshot: () => THEME_SNAPSHOT },
+    }} />)
+
+    await screen.findByText('dsh-loop')
+    fireEvent.click(screen.getAllByRole('button', { name: en.tabThemes })[0])
+    await screen.findByText('whale-skin')
+
+    expect(container.querySelectorAll('[class*="themeGallery"]').length).toBe(1)
+    expect(container.querySelectorAll('img[class*="cardShot"]').length).toBe(0)
+    expect(screen.getByText(en.themePreviewCount.replace('{0}', '2'))).toBeTruthy()
+    expect(screen.getByText(en.themeResultCount.replace('{0}', '1'))).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: `${en.themePreview} whale-skin` }))
+    await waitFor(() => expect(document.querySelector('[class*="lightboxImg"]')).toBeTruthy())
+    expect((document.querySelector('[class*="lightboxImg"]') as HTMLImageElement).src).toBe(shotA)
+  })
+
+  it('lets the user enter and exit the themes full-screen gallery', async () => {
+    const THEME_SNAPSHOT = { preference: 'light', themes: [] as Array<{ id: string }> }
+    const { container } = render(<MarketSection {...{
+      ...props(),
+      themeStore: { subscribe: () => () => {}, getSnapshot: () => THEME_SNAPSHOT },
+    }} />)
+
+    await screen.findByText('dsh-loop')
+    fireEvent.click(screen.getAllByRole('button', { name: en.tabThemes })[0])
+    await screen.findByText('whale-skin')
+
+    const root = container.querySelector('[data-dsh-market-root]') as HTMLElement
+    expect(root.getAttribute('data-dsh-market-fullscreen')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: en.themeFullscreen }))
+    expect(root.getAttribute('data-dsh-market-fullscreen')).toBe('true')
+    expect(screen.getByRole('button', { name: en.themeExitFullscreen })).toBeTruthy()
+
+    fireEvent.keyDown(window, { key: 'Escape' })
+    await waitFor(() => expect(root.getAttribute('data-dsh-market-fullscreen')).toBeNull())
   })
 
   it('the themes tab sorts through the same filter menu as Discover, on its own independent state', async () => {
