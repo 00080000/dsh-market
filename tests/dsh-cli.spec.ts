@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events'
 import { describe, expect, it, vi } from 'vitest'
-import { cmdCommandLine, isCmdSafeProfileName, nodeExecutable, proxyEnvForPnpm, quoteCmdArg, TARGET_RE } from '../src/dsh-cli.ts'
+import { join } from 'node:path'
+import { cmdCommandLine, isCmdSafeProfileName, nodeExecutable, proxyEnvForPnpm, quoteCmdArg, TARGET_RE, toolSearchDirs } from '../src/dsh-cli.ts'
 import { routesFor } from '../src/regions.ts'
 
 describe('cmd.exe command line building (DEP0190 shim)', () => {
@@ -233,6 +234,45 @@ describe('TARGET_RE plugin target allowlist', () => {
       'dsh-better-sidebar &',
     ]) {
       expect(TARGET_RE.test(target)).toBe(false)
+    }
+  })
+})
+
+describe('toolSearchDirs (#292)', () => {
+  // A GUI or desktop launch inherits none of the shell profile, so the
+  // market appends the places a package manager is actually installed to.
+  // Windows used to get only the Node directory, which made the market's own
+  // advice unfollowable: it tells the user to install pnpm with the
+  // standalone installer and then did not look where that installer puts it.
+
+  it('looks where the Windows standalone installer and npm -g put pnpm', () => {
+    const dirs = toolSearchDirs('win32', { LOCALAPPDATA: 'C:\\Users\\u\\AppData\\Local', APPDATA: 'C:\\Users\\u\\AppData\\Roaming' }, 'C:\\Users\\u')
+    expect(dirs).toContain(join('C:\\Users\\u\\AppData\\Local', 'pnpm'))
+    expect(dirs).toContain(join('C:\\Users\\u\\AppData\\Roaming', 'npm'))
+  })
+
+  it('puts PNPM_HOME first, because the installer sets it even when the layout is not the default', () => {
+    const dirs = toolSearchDirs('win32', { PNPM_HOME: 'D:\\tools\\pnpm', LOCALAPPDATA: 'C:\\l' }, 'C:\\u')
+    expect(dirs[0]).toBe('D:\\tools\\pnpm')
+  })
+
+  it('honours PNPM_HOME on unix too', () => {
+    expect(toolSearchDirs('darwin', { PNPM_HOME: '/opt/pnpm' }, '/home/u')[0]).toBe('/opt/pnpm')
+  })
+
+  it('keeps the unix locations it already searched, and adds the installer ones', () => {
+    const dirs = toolSearchDirs('darwin', {}, '/home/u')
+    expect(dirs).toContain('/opt/homebrew/bin')
+    expect(dirs).toContain('/usr/local/bin')
+    expect(dirs).toContain(join('/home/u', '.local', 'bin'))
+    expect(dirs).toContain(join('/home/u', '.local', 'share', 'pnpm'))
+  })
+
+  it('never emits an empty directory when the environment is bare', () => {
+    // An empty entry in PATH means "the current directory" on Windows, which
+    // is not a place to look for a package manager.
+    for (const platform of ['win32', 'darwin', 'linux']) {
+      expect(toolSearchDirs(platform, {}, '/home/u').filter(d => d.trim() === '')).toEqual([])
     }
   })
 })

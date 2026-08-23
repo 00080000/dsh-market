@@ -144,15 +144,57 @@ export function proxyEnvForPnpm(env: NodeJS.ProcessEnv = process.env, region: Re
   return out
 }
 
+/**
+ * Directories to append to PATH so a spawned pnpm can be found (#32, #38,
+ * #167, #292).
+ *
+ * A GUI or desktop launch inherits none of the shell profile, so PATH holds
+ * whatever the launcher had — usually not the directory the user's package
+ * manager lives in. The market appends the places it is actually installed
+ * to rather than telling the user to fix their environment.
+ *
+ * Windows used to get only the Node directory, which made the market's own
+ * advice unfollowable: the error it prints recommends installing pnpm with
+ * `iwr https://get.pnpm.io/install.ps1`, and then it did not look where that
+ * installer puts it (#292). Both Windows layouts are covered now — the
+ * standalone installer's `%LOCALAPPDATA%\pnpm`, and `%APPDATA%\npm` where
+ * `npm i -g pnpm` writes `pnpm.cmd`.
+ *
+ * `PNPM_HOME` comes first on every platform: the installer sets it, so it is
+ * the one answer that is right even when the layout is not the default one.
+ *
+ * @param platform - `process.platform`, injectable for tests.
+ * @param env - environment, for PNPM_HOME and the Windows app-data roots.
+ * @param home - home directory, injectable for tests.
+ */
+export function toolSearchDirs(
+  platform: string = process.platform,
+  env: NodeJS.ProcessEnv = process.env,
+  home: string = homedir(),
+): string[] {
+  const dirs: string[] = []
+  const pnpmHome = (env.PNPM_HOME ?? '').trim()
+  if (pnpmHome !== '') dirs.push(pnpmHome)
+  if (platform === 'win32') {
+    const local = (env.LOCALAPPDATA ?? '').trim()
+    const roaming = (env.APPDATA ?? '').trim()
+    if (local !== '') dirs.push(join(local, 'pnpm'))
+    if (roaming !== '') dirs.push(join(roaming, 'npm'))
+  } else {
+    dirs.push('/opt/homebrew/bin', '/usr/local/bin', join(home, '.local', 'bin'))
+    // Where the standalone installer lands when PNPM_HOME is unset.
+    dirs.push(join(home, 'Library', 'pnpm'), join(home, '.local', 'share', 'pnpm'))
+  }
+  dirs.push(nodeBinDir, ...extraPathDirs)
+  return dirs
+}
+
 function spawnEnv(): NodeJS.ProcessEnv {
   // pnpm v10+ blocks forever on a silent interactive prompt without a TTY;
   // CI mode forces it to act or fail instead of asking.
   const separator = process.platform === 'win32' ? ';' : ':'
   const parts = (process.env.PATH ?? '').split(separator).filter(part => part !== '')
-  const candidates = process.platform === 'win32'
-    ? [nodeBinDir, ...extraPathDirs]
-    : ['/opt/homebrew/bin', '/usr/local/bin', join(homedir(), '.local', 'bin'), nodeBinDir, ...extraPathDirs]
-  for (const bin of candidates) {
+  for (const bin of toolSearchDirs()) {
     if (!parts.includes(bin)) parts.push(bin)
   }
   return { ...process.env, ...proxyEnvForPnpm(process.env, activeRegion()), CI: 'true', PATH: parts.join(separator) }
@@ -491,7 +533,13 @@ export function provisionHint(corepackOutput: string, npmOutput: string, npmFoun
   // holds on a Windows console that reports the same thing in a codepage we
   // cannot read (#167); the ENOENT match stays for callers without it.
   if (!npmFound || (/ENOENT/.test(corepackOutput) && /ENOENT/.test(npmOutput))) {
-    return `这台机器的 dsh 进程找不到 npm/corepack（图形界面或桌面端启动时不继承终端 PATH）。已在 Node 自己的目录里找过（${nodeBinDir}）也没有——多半是宿主内置的 Node 运行时不带 npm。请改从终端启动 dsh，或单独装一个 pnpm：Windows 用 iwr https://get.pnpm.io/install.ps1 -useb | iex，macOS/Linux 用 brew install pnpm / This dsh process cannot find npm/corepack (GUI and desktop launches skip your shell PATH). The directory Node itself runs from (${nodeBinDir}) was searched too — a bundled Node runtime without npm is the usual cause. Start dsh from a terminal, or install pnpm on its own: \`iwr https://get.pnpm.io/install.ps1 -useb | iex\` (Windows) or \`brew install pnpm\` (macOS/Linux)`
+    // The searched list is spelled out because the previous wording named
+    // only the Node directory, which was both incomplete and unhelpful: a
+    // user who HAD installed pnpm could not tell whether we looked in the
+    // right place (#292). And the restart note matters — the installer sets
+    // PNPM_HOME for new sessions, so a dsh already running cannot see it.
+    const searched = toolSearchDirs().join(process.platform === 'win32' ? ' ; ' : ' : ')
+    return `这台机器的 dsh 进程找不到 npm/corepack（图形界面或桌面端启动时不继承终端 PATH）——多半是宿主内置的 Node 运行时不带 npm。已找过：${searched}。请改从终端启动 dsh，或单独装一个 pnpm：Windows 用 iwr https://get.pnpm.io/install.ps1 -useb | iex，macOS/Linux 用 brew install pnpm。装完后请重启 dsh——安装器只对新开的会话生效，正在运行的进程看不到它 / This dsh process cannot find npm/corepack (GUI and desktop launches skip your shell PATH); a bundled Node runtime without npm is the usual cause. Searched: ${searched}. Start dsh from a terminal, or install pnpm on its own: \`iwr https://get.pnpm.io/install.ps1 -useb | iex\` (Windows) or \`brew install pnpm\` (macOS/Linux). Restart dsh afterwards — the installer only affects new sessions, so an already-running process cannot see it`
   }
   if (/EEXIST|already exists|--force to overwrite/i.test(npmOutput)) {
     return 'pnpm 的可执行文件已存在（通常是 corepack 先放好了同名 shim），npm 拒绝覆盖。在终端里执行其一即可：corepack prepare pnpm@latest --activate（推荐，直接激活已有 shim）或 npm i -g pnpm --force / A pnpm executable already exists (usually a corepack shim), so npm refused to overwrite it. Run one of these in a terminal: `corepack prepare pnpm@latest --activate` (preferred — activates the shim already there) or `npm i -g pnpm --force`'
