@@ -109,6 +109,30 @@ export function marketVersion(): string {
 const SELF_NAMES = new Set(['dshmarket', 'dsh-market'])
 
 /**
+ * Rebuild a GitHub target for an update: revision selectors are deliberately
+ * dropped so pnpm resolves the repository again, while one valid `path:`
+ * selector is kept because it identifies the package inside a monorepo.
+ * pnpm permits both in one fragment (`#main&path:/packages/plugin`).
+ */
+function githubUpdateTarget(spec: string): string {
+  const fragmentAt = spec.indexOf('#')
+  if (fragmentAt === -1) return spec
+  const repo = spec.slice(0, fragmentAt)
+  let subpath: string | null = null
+  for (const selector of spec.slice(fragmentAt + 1).split('&')) {
+    if (!selector.startsWith('path:/')) continue
+    const candidate = selector.slice('path:/'.length)
+    const valid = /^[A-Za-z0-9_./-]+$/.test(candidate)
+      && !candidate.split('/').some(segment => segment === '' || segment === '.' || segment === '..')
+    // Multiple path selectors are ambiguous; an invalid selector is never
+    // forwarded to the package manager from a hand-edited profile.
+    if (subpath !== null || !valid) return repo
+    subpath = candidate
+  }
+  return subpath === null ? repo : `${repo}#path:/${subpath}`
+}
+
+/**
  * Whether an installed package declares a client part (`dsh.client`). Its UI
  * is injected into the page, so toggling it needs a browser refresh to show
  * the change — the install flow prompts the same way via the hot banner.
@@ -1320,7 +1344,7 @@ export function mountMarketRoutes(
             // The market follows its channel; everything else is `latest`.
             const selfChannel = SELF_NAMES.has(name) ? activeChannel() : null
             const tag = selfChannel === null ? 'latest' : DIST_TAG[selfChannel]
-            const target = isGit ? spec.replace(/#.*$/, '') : `${name}@${tag}`
+            const target = isGit ? githubUpdateTarget(spec) : `${name}@${tag}`
             // Never let `@latest` walk a profile BACKWARDS (#64 by @ZeroOrigin64):
             // a package whose latest dist-tag was left on an older release turns
             // this update into a downgrade that also rewrites an exact pin to

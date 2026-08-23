@@ -852,6 +852,36 @@ describe('update flow — no npm publishing required', () => {
     expect(r.json.activation['dsh-loop']).toMatchObject({ state: 'restart', hot: false })
   })
 
+  it('keeps a github subpath while dropping revision selectors during update (#281)', async () => {
+    const target = 'github:m/mono#path:/packages/plug-a'
+    fake.repos[target] = {
+      name: 'plug-a', manifest: { dsh: {}, main: 'index.js' }, artifacts: ['index.js'],
+    }
+    const installed = await bed.dispatch('POST', '/dsh-market/install', {
+      url: 'https://github.com/m/mono/tree/main/packages/plug-a',
+    })
+    expect(installed.status).toBe(200)
+    expect(installedSpec('plug-a')).toBe(target)
+
+    const direct = await bed.dispatch('POST', '/dsh-market/update', { name: 'plug-a' })
+    expect(direct.status).toBe(200)
+    expect(fake.calls.at(-1)).toContain(target)
+    expect(installedSpec('plug-a')).toBe(target)
+
+    // A ref and path may share pnpm's fragment. Updating still discards the
+    // ref (so HEAD is re-resolved) but must not discard the package subpath.
+    const manifestPath = join(profileDir('web'), 'package.json')
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
+    manifest.dependencies['plug-a'] = 'github:m/mono#release-1&path:/packages/plug-a'
+    writeFileSync(manifestPath, JSON.stringify(manifest))
+
+    const refreshed = await bed.dispatch('POST', '/dsh-market/update', { name: 'plug-a' })
+    expect(refreshed.status).toBe(200)
+    expect(fake.calls.at(-1)).toContain(target)
+    expect(fake.calls.at(-1)).not.toContain('release-1')
+    expect(installedSpec('plug-a')).toBe(target)
+  })
+
   it('refuses an update while any agent is running, before pnpm is touched', async () => {
     advanceNpmLatest('1.2.0')
     const callsBefore = fake.calls.length
