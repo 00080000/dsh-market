@@ -124,7 +124,12 @@
    specificity and lose to source order. */
 .masonry > .masonryCol > *{align-self:stretch;min-width:0}
 @media (max-width:680px){
+  /* Stacked, the cross axis is horizontal and `.masonry`'s align-items keeps
+     the column shrink-to-fit — so the single column has to claim the width
+     explicitly. Both tabs render through the same component, so this belongs
+     here rather than as an inline style on one of them. */
   .masonry{flex-direction:column}
+  .masonryCol{width:100%}
 }
 @media (max-width:680px){
   .grid{grid-template-columns:minmax(0,1fr)}

@@ -493,11 +493,7 @@ function Masonry<T>({ items, render, columns = 2 }: {
 }) {
   const wide = useMediaWide()
   if (!wide || columns < 2) {
-    return (
-      <div className={css.masonry}>
-        <div className={css.masonryCol} style={{ width: '100%' }}>{items.map(render)}</div>
-      </div>
-    )
+    return <div className={css.masonry}><div className={css.masonryCol}>{items.map(render)}</div></div>
   }
   const buckets: T[][] = Array.from({ length: columns }, () => [])
   items.forEach((item, index) => { buckets[index % columns]!.push(item) })

@@ -1359,7 +1359,9 @@ describe('installed masonry layout (#273)', () => {
 
     const columns = [...container.querySelectorAll('[class*="masonryCol"]')] as HTMLElement[]
     expect(columns).toHaveLength(1)
-    expect(columns[0]?.style.width).toBe('100%')
+    // The width is a stylesheet rule now, not an inline style, so there is
+    // nothing here for jsdom to read — the order assertion below is the part
+    // that would actually break if the single-column path regressed.
     expect([...columns[0]!.querySelectorAll('[class*="irowNameText"]')].map(row => row.textContent?.trim()))
       .toEqual(['alpha', 'beta', 'gamma', 'delta'])
   })
