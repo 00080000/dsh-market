@@ -9,8 +9,6 @@ English | [中文](README.zh.md)
 [![npm](https://img.shields.io/npm/v/dshmarket)](https://www.npmjs.com/package/dshmarket)
 [![stars](https://img.shields.io/github/stars/dsh-market/dsh-market?style=flat)](https://github.com/dsh-market/dsh-market)
 
-> `dsh-market` is independent of any particular client — it works in any host that speaks the standard DeepSeek Harness protocol. We're currently in discussions with `anywhere-labs/deepseek-harness-desktop` about future cooperation, and we'll share updates here as they happen. Use [dsh-desktop](https://github.com/dataelement/dsh-desktop) or [deepseek-harness-desktop](https://github.com/hairyf/deepseek-harness-desktop) — both ship with this plugin market built in — or another excellent third-party client.
-
 The plugin market inside DeepSeek Harness. Open Settings → **Plugin Market** → browse, search, one-click install.
 
 ![dsh-market](assets/demo-en.png)
