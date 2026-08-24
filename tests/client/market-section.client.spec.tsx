@@ -714,6 +714,29 @@ describe('#60 enable/disable switches in the Installed tab', () => {
     })
   })
 
+  /** #299: the switch and the row tag both say the new state, but they sit in
+   * a row the user may have scrolled past, so a mis-click went unnoticed for
+   * half a day. The toast is fixed on screen — that is the part that catches
+   * it — and it carries the consequence, not just the new state. */
+  it('toasts the plugin name and what a disable actually did', async () => {
+    installedStub({})
+    render(<MarketSection {...props()} />)
+    await screen.findByText('dsh-loop')
+    fireEvent.click(screen.getByRole('button', { name: /Installed/ }))
+    fireEvent.click(await screen.findByRole('switch', { name: en.disable + ' dsh-loop' }))
+    expect(await screen.findByText('dsh-loop ' + en.toastToggledOff)).toBeTruthy()
+  })
+
+  it('toasts a re-enable without the stopped-working wording', async () => {
+    installedStub({ live: [], disabled: ['dsh-loop'] })
+    render(<MarketSection {...props()} />)
+    await screen.findByText('dsh-loop')
+    fireEvent.click(screen.getByRole('button', { name: /Installed/ }))
+    fireEvent.click(await screen.findByRole('switch', { name: en.enable + ' dsh-loop' }))
+    expect(await screen.findByText('dsh-loop ' + en.toastToggledOn)).toBeTruthy()
+    expect(screen.queryByText('dsh-loop ' + en.toastToggledOff)).toBeNull()
+  })
+
   it('shows the disabled state with an off switch and hides the restart label', async () => {
     installedStub({
       live: [],

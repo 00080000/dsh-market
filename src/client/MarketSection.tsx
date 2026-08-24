@@ -1169,6 +1169,12 @@ export function MarketSection(props: MarketSectionProps) {
   const [removedCount, setRemovedCount] = useState(0)
   /** Toggles whose live fiber did not follow the switch — restart to apply. */
   const [toggleRestart, setToggleRestart] = useState(0)
+  /** Last completed toggle, shown as a toast (#299). The switch and the row
+   * tag already say the new state, but both live in a row the user may have
+   * scrolled past — a mis-click there goes unnoticed. The toast is fixed on
+   * screen, so it is the part that actually catches an accident. */
+  const [toggled, setToggled] = useState<{ name: string; enabled: boolean } | null>(null)
+  const toggledDone = useCallback(() => setToggled(null), [])
   /**
    * Dismissal of the host-reported restart notice, keyed to the current boot
    * so it reappears after a restart that did not happen and after any new
@@ -1995,6 +2001,9 @@ export function MarketSection(props: MarketSectionProps) {
           // A client-part plugin's UI is already in the page — refresh to
           // show the change (mirrors the install hot banner).
           if (body.refresh === true) setRefreshNames(names => names.includes(name) ? names : names.concat(name))
+          // Not on the reload path: the page is about to go away, and the
+          // theme flow lands its own toast on the other side.
+          if (!reload) setToggled({ name, enabled })
           refreshInstalled()
           if (reload) {
             // Land back in the Themes tab with the stock look on screen.
@@ -3902,6 +3911,13 @@ export function MarketSection(props: MarketSectionProps) {
       )}
       {exportState === 'fail' && (
         <Toast text={t('exportLogFail')} icon={<IconWarningOutline16 size={14} />} onDone={exportToastDone} />
+      )}
+      {toggled !== null && (
+        <Toast
+          text={toggled.name + ' ' + t(toggled.enabled ? 'toastToggledOn' : 'toastToggledOff')}
+          icon={toggled.enabled ? <IconCheckOutline16 size={14} /> : <IconWarningOutline16 size={14} />}
+          onDone={toggledDone}
+        />
       )}
     </div>
   )

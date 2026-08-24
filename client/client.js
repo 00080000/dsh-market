@@ -280,6 +280,8 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 			progressHint: "首次安装需要下载与解析依赖，大型插件可能需要 1-3 分钟",
 			toastReady: "已安装并已生效",
 			toastTheme: "已启用。可在 设置 → 插件市场 → 主题 中随时切换",
+			toastToggledOn: "已启用",
+			toastToggledOff: "已停用，功能立即停止",
 			gotIt: "知道了",
 			stateLive: "已生效",
 			stateRestart: "已安装，重启后生效",
@@ -653,6 +655,8 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 			progressHint: "First installs download and resolve dependencies — large plugins can take 1-3 minutes",
 			toastReady: "installed and live",
 			toastTheme: "is now active. Switch any time in Settings → Plugin Market → Themes",
+			toastToggledOn: "is now on",
+			toastToggledOff: "is now off — it stopped working right away",
 			gotIt: "Got it",
 			stateLive: "Active",
 			stateRestart: "Installed — restart to apply",
@@ -4292,6 +4296,12 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 			const [removedCount, setRemovedCount] = (0, react.useState)(0);
 			/** Toggles whose live fiber did not follow the switch — restart to apply. */
 			const [toggleRestart, setToggleRestart] = (0, react.useState)(0);
+			/** Last completed toggle, shown as a toast (#299). The switch and the row
+			* tag already say the new state, but both live in a row the user may have
+			* scrolled past — a mis-click there goes unnoticed. The toast is fixed on
+			* screen, so it is the part that actually catches an accident. */
+			const [toggled, setToggled] = (0, react.useState)(null);
+			const toggledDone = (0, react.useCallback)(() => setToggled(null), []);
 			/**
 			* Dismissal of the host-reported restart notice, keyed to the current boot
 			* so it reappears after a restart that did not happen and after any new
@@ -5057,6 +5067,10 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 						}));
 						if (body.restart === true) setToggleRestart((n) => n + 1);
 						if (body.refresh === true) setRefreshNames((names) => names.includes(name) ? names : names.concat(name));
+						if (!reload) setToggled({
+							name,
+							enabled
+						});
 						refreshInstalled();
 						if (reload) {
 							sessionStorage.removeItem("dshm-toast");
@@ -7531,6 +7545,11 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 						text: t("exportLogFail"),
 						icon: /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconWarningOutline16, { size: 14 }),
 						onDone: exportToastDone
+					}),
+					toggled !== null && /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Toast, {
+						text: toggled.name + " " + t(toggled.enabled ? "toastToggledOn" : "toastToggledOff"),
+						icon: toggled.enabled ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconCheckOutline16, { size: 14 }) : /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconWarningOutline16, { size: 14 }),
+						onDone: toggledDone
 					})
 				]
 			});
