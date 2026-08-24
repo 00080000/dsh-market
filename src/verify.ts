@@ -28,7 +28,7 @@ import { readFileSync } from 'node:fs'
 import { Script } from 'node:vm'
 import { join } from 'node:path'
 import { listHotMounts, parseSimplePatch } from './hot.ts'
-import { bundlePatchInsertedIds, hasDshManifest, hasLoadableEntry, profileDir } from './profile.ts'
+import { bundlePatchInsertedIds, hasDshManifest, hasLoadableEntry, profileDir, readInstalled } from './profile.ts'
 
 export type ActivationState = 'live' | 'restart' | 'inert' | 'broken' | 'missing' | 'disabled'
 
@@ -367,6 +367,60 @@ export interface BundleCheck {
  * silent, because a false "your plugin is corrupt" is the one outcome worse
  * than not checking.
  */
+/**
+ * V8's wording when a classic-script parse trips over module syntax.
+ *
+ * Matched on the message because there is no flag-free way to compile a
+ * module here (`SourceTextModule` needs --experimental-vm-modules, which the
+ * host process does not set). If V8 ever rewords these, the failure mode is
+ * the false positive we had before rather than a missed real break — the
+ * safer direction of the two.
+ */
+const MODULE_SYNTAX_ERROR = /Unexpected token 'export'|Cannot use import statement outside a module|await is only valid in async functions and the top level bodies of modules/
+
+/**
+ * Every installed plugin whose client bundle will not parse (#222 by
+ * @MicroMilo).
+ *
+ * The per-package check above only ever looked at what an operation added,
+ * which misses the failure that was actually reported: pnpm re-extracts the
+ * WHOLE tree on any install, so updating one plugin can restore another
+ * plugin's pristine — and broken — bundle, or fail to re-apply a patch that
+ * was holding it together. The damage then surfaces at the next boot as
+ * "failed to load plugins", with nothing connecting it to the install that
+ * caused it.
+ *
+ * Cheap enough to run on every operation: 0.40ms per plugin including the
+ * read (measured on a 385KB bundle), so a 30-plugin profile costs ~12ms
+ * against an install that takes seconds.
+ *
+ * Silent on ESM bundles, like the per-package check it calls — see there for
+ * why. Widening the sweep is exactly what would have turned that one false
+ * "corrupt" into one per ESM plugin in the profile.
+ *
+ * Callers compare a before-list with an after-list rather than reporting
+ * this one directly — a profile can carry a broken bundle indefinitely, and
+ * re-reporting a problem the user already had would put them in front of
+ * something this operation did not cause and cannot undo.
+ */
+export function brokenClientBundles(profile: string, explicitDir?: string): { name: string; reason: string }[] {
+  const broken: { name: string; reason: string }[] = []
+  for (const name of Object.keys(readInstalled(profile, explicitDir))) {
+    const check = checkClientBundle(profile, name, explicitDir)
+    if (!check.ok) broken.push({ name, reason: check.reason ?? 'parse failed' })
+  }
+  return broken
+}
+
+/** Bundles broken after an operation that were intact before it. */
+export function newlyBrokenBundles(
+  before: readonly { name: string; reason: string }[],
+  after: readonly { name: string; reason: string }[],
+): { name: string; reason: string }[] {
+  const seen = new Set(before.map(entry => entry.name))
+  return after.filter(entry => !seen.has(entry.name))
+}
+
 export function checkClientBundle(profile: string, name: string, explicitDir?: string): BundleCheck {
   const root = join(profileDir(profile, explicitDir), 'node_modules', name)
   let manifest: { dsh?: { client?: unknown }; exports?: unknown }
@@ -394,6 +448,17 @@ export function checkClientBundle(profile: string, name: string, explicitDir?: s
     new Script(source, { filename: relative })
     return { ok: true, reason: null }
   } catch (error) {
-    return { ok: false, reason: error instanceof Error ? error.message : String(error) }
+    const message = error instanceof Error ? error.message : String(error)
+    // `new Script` compiles a CLASSIC script, so perfectly valid module
+    // syntax is a SyntaxError to it: `export`, `import`, and top-level
+    // `await` all throw. This package ships CJS, which is why nobody noticed
+    // — but a plugin whose client bundle is ESM was being told its file was
+    // corrupt, and offered a rollback for a file that is fine.
+    //
+    // That is the exact outcome this check's own contract forbids: a false
+    // "your plugin is corrupt" is worse than not checking. Module syntax
+    // means "cannot judge with this parser", not "broken".
+    if (MODULE_SYNTAX_ERROR.test(message)) return { ok: true, reason: null }
+    return { ok: false, reason: message }
   }
 }

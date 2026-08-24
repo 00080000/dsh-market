@@ -9,7 +9,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { profileDir } from '../src/profile.ts'
-import { checkClientBundle, clientBundlePath, verifyActivation } from '../src/verify.ts'
+import { brokenClientBundles, checkClientBundle, clientBundlePath, newlyBrokenBundles, verifyActivation } from '../src/verify.ts'
 
 let home: string
 beforeEach(() => {
@@ -296,6 +296,53 @@ describe('clientBundlePath', () => {
   })
 })
 
+describe('brokenClientBundles — the whole profile, not just what was added (#222)', () => {
+  /** A profile whose manifest actually lists its dependencies. */
+  function withDeps(names: string[]): void {
+    const dir = profileDir('web')
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(join(dir, 'package.json'), JSON.stringify({
+      dependencies: Object.fromEntries(names.map(name => [name, '^1.0.0'])),
+      dsh: { profile: { bundles: [] } },
+    }))
+  }
+
+  it('finds a plugin nobody touched', () => {
+    // The reported shape: updating ONE plugin re-extracts the whole tree, so
+    // an unrelated plugin comes back pristine-and-broken. Checking only what
+    // the operation added is exactly what missed it.
+    profile([])
+    withDeps(['untouched-ui', 'fine-ui'])
+    pkg('untouched-ui', {
+      name: 'untouched-ui', dsh: { client: {} }, exports: { './client': './client/client.js' },
+    }, { 'client/client.js': 'function ( { syntax error' })
+    pkg('fine-ui', {
+      name: 'fine-ui', dsh: { client: {} }, exports: { './client': './client/client.js' },
+    }, { 'client/client.js': 'module.exports = { ok: 1 }' })
+
+    const broken = brokenClientBundles('web')
+    expect(broken.map(entry => entry.name)).toEqual(['untouched-ui'])
+    expect(broken[0]?.reason).toBeTruthy()
+  })
+
+  it('reports only what an operation broke, never what the profile already carried', () => {
+    // A profile can hold a broken bundle indefinitely. Re-reporting it would
+    // put the user in front of something this operation neither caused nor
+    // can undo — the same rule introducedRisks follows.
+    const before = [{ name: 'already-bad', reason: 'old' }]
+    const after = [{ name: 'already-bad', reason: 'old' }, { name: 'just-broke', reason: 'new' }]
+    expect(newlyBrokenBundles(before, after).map(entry => entry.name)).toEqual(['just-broke'])
+    expect(newlyBrokenBundles(after, after)).toEqual([])
+  })
+
+  it('costs nothing on a profile with no client bundles at all', () => {
+    profile([])
+    withDeps(['host-only'])
+    pkg('host-only', { name: 'host-only', dsh: { bundle: {} }, exports: { '.': './lib/index.js' } })
+    expect(brokenClientBundles('web')).toEqual([])
+  })
+})
+
 describe('checkClientBundle (#222)', () => {
   it('reports a client bundle that no longer parses', () => {
     profile([])
@@ -316,6 +363,43 @@ describe('checkClientBundle (#222)', () => {
       name: 'good-ui', dsh: { client: {} }, exports: { './client': './client/client.js' },
     }, { 'client/client.js': 'throw new Error("must never run")' })
     expect(checkClientBundle('web', 'good-ui')).toEqual({ ok: true, reason: null })
+  })
+
+  it('does not call an ESM bundle corrupt (module syntax is not a break)', () => {
+    // `new Script` compiles a CLASSIC script, so valid module syntax throws
+    // SyntaxError. This package ships CJS, which is why it went unnoticed —
+    // but a plugin with an ESM client bundle was told its file was corrupt
+    // and offered a rollback for a file that is fine. A false "your plugin
+    // is corrupt" is the one outcome this check must never produce.
+    profile([])
+    for (const [name, source] of [
+      ['esm-export', 'export const ok = 1'],
+      ['esm-import', 'import x from "y"\nconsole.log(x)'],
+      ['esm-default', 'export default function () {}'],
+      ['esm-tla', 'const x = await Promise.resolve(1)\nconsole.log(x)'],
+    ] as const) {
+      pkg(name, {
+        name, dsh: { client: {} }, exports: { './client': './client/client.js' },
+      }, { 'client/client.js': source })
+      expect(checkClientBundle('web', name), `${name} was reported broken`).toEqual({ ok: true, reason: null })
+    }
+    // The limit this buys, stated rather than hidden: an ESM bundle is not
+    // checked AT ALL, including one that really is broken. V8 reports the
+    // `export` token before it reaches the stray brace, and there is no
+    // flag-free way to compile a module here. Silence on ESM is the price of
+    // never crying corrupt on a file that is fine — the direction this
+    // check's contract already chose.
+    pkg('broken-esm', {
+      name: 'broken-esm', dsh: { client: {} }, exports: { './client': './client/client.js' },
+    }, { 'client/client.js': 'export const a = 1\n}' })
+    expect(checkClientBundle('web', 'broken-esm').ok).toBe(true)
+
+    // CJS — what this package and most plugins ship — is still checked, and
+    // a real break in one is still caught.
+    pkg('broken-cjs', {
+      name: 'broken-cjs', dsh: { client: {} }, exports: { './client': './client/client.js' },
+    }, { 'client/client.js': 'module.exports = { a: 1 }\n}' })
+    expect(checkClientBundle('web', 'broken-cjs').ok).toBe(false)
   })
 
   it('stays silent for everything it cannot judge', () => {
