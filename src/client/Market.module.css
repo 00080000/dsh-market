@@ -141,7 +141,13 @@
 /* Themes are a visual choice, not a repository list. Their page therefore
    owns a stable gallery instead of inheriting the generic masonry cards. */
 .themeToolbar{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:8px;padding:0 4px 12px}
-.themeSearch{width:100%;min-width:0}
+/* border-box, not the sheet's default content-box: the primitives' Input
+   renders a span with 8px padding and a 1px border, so `width:100%` resolved
+   to the grid cell (438px) and then rendered 18px WIDER than it — straight
+   under the filter and full-screen buttons (#305 by @lcthe). The same class
+   on the Discover tab never showed it: that row is flex, and a flex item
+   shrinks to fit where a grid item does not. */
+.themeSearch{width:100%;min-width:0;box-sizing:border-box}
 .themeToolbarActions{display:flex;align-items:center;justify-content:flex-end;gap:8px}
 .themeFullscreenBtn.themeFullscreenBtn{width:28px;min-width:28px;padding:0}
 .themeResultBar{display:flex;align-items:center;min-height:24px;padding:0 4px 8px;color:var(--dsw-alias-label-tertiary,#8b93a1);font-size:12px;line-height:18px}
