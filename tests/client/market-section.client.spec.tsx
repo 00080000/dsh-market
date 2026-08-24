@@ -355,6 +355,30 @@ describe('MarketSection (jsdom)', () => {
     expect(fetchMock.mock.calls.some(([url]) => url === '/dsh-market/restore')).toBe(false)
   })
 
+  it('shows a running update in the Tasks panel (#295)', async () => {
+    // The panel answers "what is running right now", and an update is one of
+    // the things that runs. `OperationKind` has carried 'update' since the
+    // panel was written — only the enqueue was missing, so "update all" left
+    // the panel empty while several plugins were mid-flight.
+    stubFetch({
+      '/dsh-market/installed': { profile: 'web', installed: { 'dsh-loop': '^1.0.0' }, live: [] },
+      '/dsh-market/updates': { updates: { 'dsh-loop': { kind: 'npm', version: '1.0.0', current: '1.0.0', latest: '1.2.0', updateAvailable: true } } },
+      '/dsh-market/update': { ok: true, activation: {} },
+    })
+    render(<MarketSection {...props()} />)
+    await screen.findByText('dsh-loop')
+    fireEvent.click(screen.getByRole('button', { name: /Installed/ }))
+    fireEvent.click(await screen.findByRole('button', { name: en.update }))
+
+    // The panel names the plugin being updated, not just "something running".
+    fireEvent.click(await screen.findByRole('button', { name: new RegExp(en.opTitle) }))
+    await waitFor(() => {
+      const panel = document.querySelector('[class*="opPanel"]')
+      expect(panel, 'the Tasks panel did not open').toBeTruthy()
+      expect(panel!.textContent).toContain('dsh-loop')
+    })
+  })
+
   it('a stale update response arms the Update-now button (#22 flow)', async () => {
     stubFetch({
       '/dsh-market/installed': { profile: 'web', installed: { 'dsh-loop': '^1.0.0' }, live: [] },

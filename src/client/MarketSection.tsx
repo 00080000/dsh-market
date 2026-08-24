@@ -1763,6 +1763,13 @@ export function MarketSection(props: MarketSectionProps) {
     // progress was lost on reopen. The marker survives the unmount and lets a
     // reopen restore the row while the status poll converges the outcome.
     sessionStorage.setItem('dshm-updating', JSON.stringify({ name }))
+    // The Tasks panel exists to answer "what is running right now", and an
+    // update is one of the things that runs. `OperationKind` has carried
+    // 'update' since the panel was written; only the enqueue was missing, so
+    // "update all" left the panel empty while several plugins were mid-flight
+    // (#295 by @sanyecao88). One record per attempt, like the install flow.
+    const updateRecordId = nextRecordId()
+    setRecords(list => enqueue(list, { id: updateRecordId, kind: 'update', name, state: 'running' }))
     return fetch('/dsh-market/update', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -1776,11 +1783,13 @@ export function MarketSection(props: MarketSectionProps) {
         sessionStorage.removeItem('dshm-updating')
         setUpdatingName(null)
         if (body.cancelled === true) {
+          setRecords(list => drop(list, updateRecordId))
           refreshInstalled()
           if (body.partial === true) setInstallError(t('partialNote'))
           return
         }
         if (status === 200 && body.ok) {
+          setRecords(list => patchRecord(list, updateRecordId, { state: 'done' }))
           setUpdatedNames(names => names.concat(name))
           if (body.activation && typeof body.activation === 'object') {
             setActivations(prev => ({ ...prev, ...body.activation }))
@@ -1793,9 +1802,11 @@ export function MarketSection(props: MarketSectionProps) {
           if (status === 409) {
             if (body.agentsBusy === true) {
               const running = Array.isArray(body.runningAgents) && body.runningAgents.length > 0 ? ` (${body.runningAgents.join(', ')})` : ''
+              setRecords(list => patchRecord(list, updateRecordId, { state: 'failed', reason: t('agentBusyUpdate') + running }))
               setInstallError(t('agentBusyUpdate') + running)
               return
             }
+            setRecords(list => patchRecord(list, updateRecordId, { state: 'failed', reason: t('busyWait') }))
             setInstallError(t('busyWait'))
             return
           }
@@ -1807,6 +1818,7 @@ export function MarketSection(props: MarketSectionProps) {
           }
           const text = (v: unknown) => typeof v === 'string' ? v : (v && typeof (v as any).text === 'string') ? (v as any).text : v == null ? '' : JSON.stringify(v)
           const detail = text(body.error) || humanOutput([text(body.stderr), text(body.stdout)].filter(Boolean).join('\n')) || ('exit ' + body.exitCode)
+          setRecords(list => patchRecord(list, updateRecordId, { state: 'failed', reason: detail.trim().slice(-600) }))
           setInstallError(t('updateFail') + ': ' + name + ' — ' + detail.trim().slice(-600))
         }
       })

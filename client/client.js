@@ -4704,6 +4704,13 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 				setUpdatingName(name);
 				updateIdleStrikes.current = 0;
 				sessionStorage.setItem("dshm-updating", JSON.stringify({ name }));
+				const updateRecordId = nextRecordId();
+				setRecords((list) => enqueue(list, {
+					id: updateRecordId,
+					kind: "update",
+					name,
+					state: "running"
+				}));
 				return fetch("/dsh-market/update", {
 					method: "POST",
 					headers: { "content-type": "application/json" },
@@ -4718,11 +4725,13 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 					sessionStorage.removeItem("dshm-updating");
 					setUpdatingName(null);
 					if (body.cancelled === true) {
+						setRecords((list) => drop(list, updateRecordId));
 						refreshInstalled();
 						if (body.partial === true) setInstallError(t("partialNote"));
 						return;
 					}
 					if (status === 200 && body.ok) {
+						setRecords((list) => patch(list, updateRecordId, { state: "done" }));
 						setUpdatedNames((names) => names.concat(name));
 						if (body.activation && typeof body.activation === "object") setActivations((prev) => ({
 							...prev,
@@ -4734,9 +4743,17 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 						if (status === 409) {
 							if (body.agentsBusy === true) {
 								const running = Array.isArray(body.runningAgents) && body.runningAgents.length > 0 ? ` (${body.runningAgents.join(", ")})` : "";
+								setRecords((list) => patch(list, updateRecordId, {
+									state: "failed",
+									reason: t("agentBusyUpdate") + running
+								}));
 								setInstallError(t("agentBusyUpdate") + running);
 								return;
 							}
+							setRecords((list) => patch(list, updateRecordId, {
+								state: "failed",
+								reason: t("busyWait")
+							}));
 							setInstallError(t("busyWait"));
 							return;
 						}
@@ -4747,6 +4764,10 @@ window.__ModuleLoader__.load({ id: "dshmarket", factory: (require) => {
 						});
 						const text = (v) => typeof v === "string" ? v : v && typeof v.text === "string" ? v.text : v == null ? "" : JSON.stringify(v);
 						const detail = text(body.error) || humanOutput([text(body.stderr), text(body.stdout)].filter(Boolean).join("\n")) || "exit " + body.exitCode;
+						setRecords((list) => patch(list, updateRecordId, {
+							state: "failed",
+							reason: detail.trim().slice(-600)
+						}));
 						setInstallError(t("updateFail") + ": " + name + " — " + detail.trim().slice(-600));
 					}
 				}).catch(() => {});
