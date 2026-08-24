@@ -65,15 +65,56 @@ describe('local GitHub source identity (#141)', () => {
 })
 
 describe('installTargetFor', () => {
-  it('prefers curated npm, targets subpaths via #path:, falls back to github, refuses the rest', () => {
-    expect(installTargetFor({ url: 'https://github.com/o/r', npm: 'dsh-loop' })).toBe('dsh-loop')
+  const tarball = 'https://github.com/o/r/releases/download/v1.2.3/dsh-loop-1.2.3.tgz'
+
+  it('prefers curated npm, then a prebuilt release tarball, before github source', () => {
+    expect(installTargetFor({ url: 'https://github.com/o/r', npm: 'dsh-loop', tarball })).toBe('dsh-loop')
     expect(installTargetFor({ url: 'https://github.com/o/r', npm: '@scope/pkg' })).toBe('@scope/pkg')
-    // A malformed npm name never reaches pnpm — fall back to the repo.
-    expect(installTargetFor({ url: 'https://github.com/o/r', npm: 'evil;rm -rf' })).toBe('github:o/r')
+    expect(installTargetFor({ url: 'https://github.com/o/r', tarball })).toBe(tarball)
+    // A malformed npm name is not a way past the tarball rules: it fails the
+    // name check, and the archive still has to be this repo's own.
+    expect(installTargetFor({ url: 'https://github.com/o/r', npm: 'evil;rm -rf', tarball })).toBe(tarball)
     expect(installTargetFor({ url: 'https://github.com/o/r/tree/main/packages/x' }))
       .toBe('github:o/r#path:/packages/x')
     expect(installTargetFor({ url: 'https://github.com/o/r' })).toBe('github:o/r')
-    expect(installTargetFor({ url: 'https://gitlab.com/o/r' })).toBeNull()
+    expect(installTargetFor({ url: 'https://gitlab.com/o/r', tarball })).toBeNull()
+  })
+
+  it('refuses non-release, foreign, insecure, and malformed tarball targets', () => {
+    for (const rejected of [
+      'https://github.com/o/r/archive/main.tar.gz',
+      'https://example.com/dsh-loop.tgz',
+      'http://github.com/o/r/releases/download/v1/dsh-loop.tgz',
+      'https://github.com/o/r/releases/download/v1/dsh-loop.zip',
+      '--config.ignore-scripts=false',
+    ]) {
+      expect(installTargetFor({ url: 'https://github.com/o/r', tarball: rejected })).toBe('github:o/r')
+    }
+  })
+
+  /** The npm branch is repo-verified against name squatting; the tarball
+   * branch has to be too, or a trusted-looking entry installs a stranger's
+   * archive. Each of these is a real archive at a real GitHub Release — the
+   * only thing wrong with it is whose. */
+  it('refuses a release archive that is not the entry repo own', () => {
+    for (const foreign of [
+      'https://github.com/evil/repo/releases/download/v1/p.tgz',
+      'https://github.com/o/other/releases/download/v1/p.tgz',
+      'https://github.com/evil/r/releases/download/v1/p.tgz',
+      // No owner or repo anywhere in the path, so nothing to bind to.
+      'https://objects.githubusercontent.com/whatever/x.tgz',
+      'https://release-assets.githubusercontent.com/github-production-release-asset/file.tar.gz',
+    ]) {
+      expect(installTargetFor({ url: 'https://github.com/o/r', tarball: foreign })).toBe('github:o/r')
+    }
+  })
+
+  it('accepts the entry own release archive whatever the case, as GitHub does', () => {
+    const mixed = 'https://github.com/O/R/releases/download/v1/p.tgz'
+    expect(installTargetFor({ url: 'https://github.com/o/r', tarball: mixed })).toBe(mixed)
+    // A monorepo entry still binds on the repo, not the subpath.
+    const own = 'https://github.com/o/r/releases/latest/download/x.tgz'
+    expect(installTargetFor({ url: 'https://github.com/o/r/tree/main/packages/x', tarball: own })).toBe(own)
   })
 })
 
