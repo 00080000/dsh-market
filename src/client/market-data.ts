@@ -640,53 +640,219 @@ const SCREENSHOT_HOSTS = new Set([
 
 const MAX_SCREENSHOTS = 6
 
+/** A README image together with the evidence used to rank it as a preview. */
+export interface ScreenshotCandidate {
+  src: string
+  semanticScore: number
+  order: number
+  curated: boolean
+}
+
+/** Dimensions observed from a low-resolution, no-upscale image probe. */
+export interface ScreenshotMeasurement {
+  src: string
+  width: number
+  height: number
+}
+
+/** Return one safe screenshot URL without applying the public list limit. */
+function safeScreenshot(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  let parsed: URL
+  try { parsed = new URL(value) } catch { return null }
+  if (parsed.protocol !== 'https:' || !SCREENSHOT_HOSTS.has(parsed.hostname)) return null
+  if (/\.svg$/iu.test(parsed.pathname)) return null
+  return value
+}
+
 /** Keep only https URLs on allowlisted image hosts; SVG dropped (logos/badges). */
 export function safeScreenshots(urls: unknown): string[] {
   if (!Array.isArray(urls)) return []
   const safe: string[] = []
   for (const value of urls) {
-    if (typeof value !== 'string') continue
-    let parsed: URL | null = null
-    try { parsed = new URL(value) } catch { continue }
-    if (parsed.protocol !== 'https:' || !SCREENSHOT_HOSTS.has(parsed.hostname)) continue
-    if (/\.svg$/i.test(parsed.pathname)) continue
-    if (!safe.includes(value)) safe.push(value)
+    const src = safeScreenshot(value)
+    if (src === null) continue
+    if (!safe.includes(src)) safe.push(src)
     if (safe.length >= MAX_SCREENSHOTS) break
   }
   return safe
 }
 
-/**
- * Image URLs extracted from a repo README, in document order — the fallback
- * when an entry has no curated screenshots (#61). Markdown and <img> forms;
- * relative paths resolve against the README's directory on
- * raw.githubusercontent.com; badges fall out naturally (shields.io etc. are
- * not allowlisted) and SVG is skipped as logo/badge noise.
- */
-export function extractReadmeImages(markdown: string, owner: string, repo: string, subpath: string | null): string[] {
-  const base = `https://raw.githubusercontent.com/${owner}/${repo}/HEAD/${subpath === null ? '' : subpath + '/'}`
-  const found: string[] = []
-  const push = (raw: string) => {
-    const src = raw.trim().replace(/^<|>$/g, '')
-    if (src === '' || src.startsWith('data:')) return
-    let absolute: string
-    if (/^https?:\/\//i.test(src)) {
-      absolute = src
-    } else if (src.startsWith('/')) {
-      absolute = `https://raw.githubusercontent.com/${owner}/${repo}/HEAD${src}`
-    } else {
-      try { absolute = new URL(src, base).href } catch { return }
-    }
-    found.push(absolute)
-  }
-  // One pass over both forms so the result keeps document order.
-  for (const m of markdown.matchAll(/!\[[^\]]*\]\(\s*([^)\s]+)(?:\s+"[^"]*")?\s*\)|<img[^>]*\ssrc=["']([^"']+)["']/gi)) {
-    push(m[1] ?? m[2]!)
-  }
-  return safeScreenshots(found)
+const PREVIEW_WORDS = /(?:preview|screen[ -]?shots?|shots?|demo|showcase|gallery|theme|skin|appearance|效果|预览|截图|演示|展示|界面|主题|皮肤)/iu
+const FULL_PREVIEW_WORDS = /(?:full|overview|home|main|conversation|chat|workspace|dashboard|完整|主页|首页|全景|主界面)/iu
+const PARTIAL_PREVIEW_WORDS = /(?:settings?|panel|dialog|modal|picker|menu|controls?|fragment|crop|detail|配置|设置|面板|弹窗|局部|细节)/iu
+const NON_PREVIEW_WORDS = /(?:badge|shield|logo|icon|avatar|sponsor|donat|fund|qr(?:code)?|wechat|qq(?:group)?|npm|build|coverage|license|status|button|favicon|徽章|图标|头像|赞助|捐赠|二维码|微信|交流群)/iu
+
+interface ReadmeImageParts {
+  src: string
+  alt: string
+  title: string
+  width: number | null
+  height: number | null
 }
 
-const readmeShotsCache = new Map<string, Promise<string[]>>()
+/** A quoted or unquoted HTML attribute; README HTML is data, never rendered. */
+function htmlAttribute(html: string, name: string): string {
+  const match = new RegExp(`\\b${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`, 'iu').exec(html)
+  return match?.[1] ?? match?.[2] ?? match?.[3] ?? ''
+}
+
+function numericDimension(raw: string): number | null {
+  if (!/^\d+(?:\.\d+)?$/u.test(raw.trim())) return null
+  const value = Number(raw)
+  return Number.isFinite(value) && value > 0 ? value : null
+}
+
+/** Resolve one README image path to the canonical GitHub-hosted URL. */
+function resolveReadmeImage(raw: string, owner: string, repo: string, base: string): string | null {
+  const src = raw.trim().replace(/^<|>$/g, '')
+  if (src === '' || src.startsWith('data:')) return null
+  let absolute: string
+  if (/^https?:\/\//iu.test(src)) {
+    absolute = src
+  } else if (src.startsWith('/')) {
+    absolute = `https://raw.githubusercontent.com/${owner}/${repo}/HEAD${src}`
+  } else {
+    try { absolute = new URL(src, base).href } catch { return null }
+  }
+  return safeScreenshot(absolute)
+}
+
+/** Score evidence available without downloading the image itself. */
+function readmeSemanticScore(
+  image: ReadmeImageParts,
+  heading: string,
+  nearby: string,
+  order: number,
+  offset: number,
+): number {
+  const label = `${image.alt} ${image.title}`
+  const path = (() => {
+    try {
+      const parsed = new URL(image.src)
+      // Do not count owner/repository names as image evidence: practically
+      // every entry here contains "theme" or "skin" in its repo name.
+      if (parsed.hostname === 'raw.githubusercontent.com') {
+        return '/' + parsed.pathname.split('/').slice(4).join('/')
+      }
+      return parsed.pathname
+    } catch { return image.src }
+  })()
+  let score = 20 + Math.max(0, 8 - order)
+  if (PREVIEW_WORDS.test(label)) score += 55
+  if (PREVIEW_WORDS.test(path)) score += 40
+  if (PREVIEW_WORDS.test(heading)) score += 32
+  if (PREVIEW_WORDS.test(nearby)) score += 12
+  if (FULL_PREVIEW_WORDS.test(`${label} ${path}`)) score += 35
+  if (PARTIAL_PREVIEW_WORDS.test(`${label} ${path}`)) score -= 30
+  if (NON_PREVIEW_WORDS.test(label)) score -= 140
+  if (NON_PREVIEW_WORDS.test(path)) score -= 120
+  if (NON_PREVIEW_WORDS.test(heading)) score -= 55
+  if (NON_PREVIEW_WORDS.test(nearby)) score -= 18
+  // A title-block image with no screenshot evidence is usually branding.
+  if (offset < 500 && !PREVIEW_WORDS.test(`${label} ${path} ${heading}`)) score -= 20
+  if (image.width !== null && image.height !== null) {
+    score += previewDimensionScore(image.width, image.height) ?? -500
+  } else if ((image.width ?? image.height ?? Number.POSITIVE_INFINITY) < 240) {
+    score -= 100
+  }
+  return score
+}
+
+/**
+ * Ranked README image candidates for use when the catalog has no curated
+ * screenshots. Ranking uses the image label/path, nearest heading, nearby
+ * prose, declared dimensions and document position. This prevents a title
+ * logo or a row of tiny badges from consuming the six-candidate limit before
+ * a later Screenshots section is reached.
+ */
+export function extractReadmeImageCandidates(
+  markdown: string,
+  owner: string,
+  repo: string,
+  subpath: string | null,
+): ScreenshotCandidate[] {
+  const base = `https://raw.githubusercontent.com/${owner}/${repo}/HEAD/${subpath === null ? '' : subpath + '/'}`
+  const headings = [...markdown.matchAll(/^#{1,6}\s+(.+?)\s*#*\s*$/gmu)]
+    .map(match => ({ offset: match.index, text: match[1] ?? '' }))
+  const found = new Map<string, ScreenshotCandidate>()
+  let headingIndex = -1
+  let order = 0
+  // Markdown and HTML image forms stay in one pass, preserving position.
+  const imagePattern = /!\[([^\]]*)\]\(\s*(?:<([^>]+)>|([^\s)]+))(?:\s+(?:"([^"]*)"|'([^']*)'|\(([^)]*)\)))?\s*\)|<img\b([^>]*?)\/?\s*>/gimu
+  for (const match of markdown.matchAll(imagePattern)) {
+    while (headingIndex + 1 < headings.length && headings[headingIndex + 1]!.offset < match.index) headingIndex += 1
+    const html = match[7] ?? ''
+    const rawSrc = match[2] ?? match[3] ?? htmlAttribute(html, 'src')
+    const src = resolveReadmeImage(rawSrc, owner, repo, base)
+    if (src === null) continue
+    const image: ReadmeImageParts = {
+      src,
+      alt: match[1] ?? htmlAttribute(html, 'alt'),
+      title: match[4] ?? match[5] ?? match[6] ?? htmlAttribute(html, 'title'),
+      width: numericDimension(htmlAttribute(html, 'width')),
+      height: numericDimension(htmlAttribute(html, 'height')),
+    }
+    const heading = headings[headingIndex]?.text ?? ''
+    const nearby = markdown.slice(Math.max(0, match.index - 100), Math.min(markdown.length, match.index + match[0].length + 100))
+    const candidate: ScreenshotCandidate = {
+      src,
+      semanticScore: readmeSemanticScore(image, heading, nearby, order, match.index),
+      order,
+      curated: false,
+    }
+    const previous = found.get(src)
+    if (previous === undefined || candidate.semanticScore > previous.semanticScore) found.set(src, candidate)
+    order += 1
+  }
+  return [...found.values()]
+    .filter(candidate => candidate.semanticScore >= 20)
+    .sort((a, b) => b.semanticScore - a.semanticScore || a.order - b.order)
+    .slice(0, MAX_SCREENSHOTS)
+}
+
+/** Ranked README image URLs; retained as the simple public extraction API. */
+export function extractReadmeImages(markdown: string, owner: string, repo: string, subpath: string | null): string[] {
+  return extractReadmeImageCandidates(markdown, owner, repo, subpath).map(candidate => candidate.src)
+}
+
+/**
+ * Score dimensions from a 240px-high, no-upscale probe.
+ *
+ * A theme preview should resemble a complete desktop surface: landscape,
+ * neither a narrow crop nor a panoramic strip, and large enough to inspect.
+ * Small square logos and portrait fragments intentionally return null.
+ */
+export function previewDimensionScore(width: number, height: number): number | null {
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return null
+  const ratio = width / height
+  const area = width * height
+  if (width < 280 || height < 150 || area < 48_000 || ratio < 1.05 || ratio > 3.2) return null
+  let score = Math.min(28, Math.round(area / 4_000))
+  if (ratio >= 1.35 && ratio <= 2.05) score += 48
+  else if (ratio >= 1.18 && ratio <= 2.4) score += 28
+  else score += 8
+  if (width >= 320 && height >= 180) score += 14
+  return score
+}
+
+/** Combine README semantics with measured geometry and return the best set. */
+export function rankThemeScreenshots(
+  candidates: ScreenshotCandidate[],
+  measurements: ScreenshotMeasurement[],
+): string[] {
+  const bySrc = new Map(measurements.map(item => [item.src, item]))
+  return candidates.flatMap(candidate => {
+    const measured = bySrc.get(candidate.src)
+    if (measured === undefined) return []
+    const dimensionScore = previewDimensionScore(measured.width, measured.height)
+    return dimensionScore === null ? [] : [{ candidate, score: candidate.semanticScore + dimensionScore }]
+  }).sort((a, b) => b.score - a.score || a.candidate.order - b.candidate.order)
+    .slice(0, MAX_SCREENSHOTS)
+    .map(item => item.candidate.src)
+}
+
+const readmeShotsCache = new Map<string, Promise<ScreenshotCandidate[]>>()
 
 /** Test hook: the cache is module-level and outlives component unmounts. */
 export function resetScreenshotsCache(): void {
@@ -694,14 +860,14 @@ export function resetScreenshotsCache(): void {
 }
 
 /**
- * Screenshots for a plugin: the registry's curated list when present,
- * otherwise lazily extracted from the repo README. Only ever called AFTER
- * the user opens the detail dialog — browsing the list must make zero
- * external requests. Failures resolve to [] (silent degradation).
+ * Screenshot candidates for a plugin: the registry's curated list when
+ * present, otherwise lazily extracted and semantically ranked from README.
  */
-export function pluginScreenshots(plugin: RegistryPlugin): Promise<string[]> {
+export function pluginScreenshotCandidates(plugin: RegistryPlugin): Promise<ScreenshotCandidate[]> {
   const curated = safeScreenshots(plugin.screenshots)
-  if (curated.length > 0) return Promise.resolve(curated)
+  if (curated.length > 0) {
+    return Promise.resolve(curated.map((src, order) => ({ src, order, semanticScore: 1_000 - order, curated: true })))
+  }
   const m = /^https:\/\/github\.com\/([^/]+)\/([^/]+?)(?:\/tree\/[^/]+\/(.+?))?\/?$/.exec(plugin.url)
   if (m === null) return Promise.resolve([])
   const [, owner, repo, subpath = null] = m
@@ -720,12 +886,17 @@ export function pluginScreenshots(plugin: RegistryPlugin): Promise<string[]> {
     // Monorepo subpath entries prefer their own README, falling back to the
     // repo root; shots in the subpath README resolve against its directory.
     const sub = subpath === null ? null : await fetchReadme(subpath)
-    if (sub !== null) return extractReadmeImages(sub, owner!, repo!, subpath)
+    if (sub !== null) return extractReadmeImageCandidates(sub, owner!, repo!, subpath)
     const root = await fetchReadme(null)
-    return root === null ? [] : extractReadmeImages(root, owner!, repo!, null)
-  })().catch(() => [] as string[])
+    return root === null ? [] : extractReadmeImageCandidates(root, owner!, repo!, null)
+  })().catch(() => [] as ScreenshotCandidate[])
   readmeShotsCache.set(cacheKey, task)
   return task
+}
+
+/** Screenshot URLs for dialogs; theme covers use the richer candidate API. */
+export async function pluginScreenshots(plugin: RegistryPlugin): Promise<string[]> {
+  return (await pluginScreenshotCandidates(plugin)).map(candidate => candidate.src)
 }
 
 /**

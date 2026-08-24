@@ -8,8 +8,8 @@
 
 import { describe, expect, it } from 'vitest'
 import {
-  entryForDep, extractReadmeImages, formatCount, groupSwitchState, isInstalled, isMarketItself, looksTerminal, matchInstalledName, orderedCategories, pageItems, safeScreenshots, themePlugins, visiblePlugins, humanOutput} from '../src/client/market-data.ts'
-import type { RegistryPlugin } from '../src/client/market-data.ts'
+  entryForDep, extractReadmeImageCandidates, extractReadmeImages, formatCount, groupSwitchState, isInstalled, isMarketItself, looksTerminal, matchInstalledName, orderedCategories, pageItems, previewDimensionScore, rankThemeScreenshots, safeScreenshots, themePlugins, visiblePlugins, humanOutput} from '../src/client/market-data.ts'
+import type { RegistryPlugin, ScreenshotCandidate } from '../src/client/market-data.ts'
 
 function plugin(partial: Partial<RegistryPlugin>): RegistryPlugin {
   return { name: 'x', owner: 'o', url: 'https://github.com/o/x', category: 'tool', ...partial }
@@ -401,27 +401,48 @@ describe('screenshots (#61)', () => {
     expect(safeScreenshots(many)).toHaveLength(6)
   })
 
-  it('extractReadmeImages handles markdown + html forms and resolves relative paths', () => {
+  it('extractReadmeImages ranks screenshot evidence ahead of title logos and keeps scanning past six images', () => {
     const md = [
       '# my-plugin',
       '[![npm](https://img.shields.io/npm/v/x)](https://npmjs.com/x)', // badge → host filtered
-      '![demo](assets/demo.png)',
-      '![abs](/docs/abs.png)',
-      '<img src="./assets/two.png" width="600">',
-      '![ext](https://user-images.githubusercontent.com/1/ext.png)',
-      '![logo](assets/logo.svg)', // svg filtered
+      ...Array.from({ length: 7 }, (_, i) => `![project logo](assets/logo-${i}.png)`),
+      '## Screenshots / 截图',
+      '<img src="./assets/settings-fragment.png" alt="settings screenshot" width="420" height="900">',
+      '![Full theme preview](/docs/full-preview.png "Showcase")',
+      '![Conversation screen](https://user-images.githubusercontent.com/1/conversation.png)',
     ].join('\n')
     expect(extractReadmeImages(md, 'o', 'r', null)).toEqual([
-      'https://raw.githubusercontent.com/o/r/HEAD/assets/demo.png',
-      'https://raw.githubusercontent.com/o/r/HEAD/docs/abs.png',
-      'https://raw.githubusercontent.com/o/r/HEAD/assets/two.png',
-      'https://user-images.githubusercontent.com/1/ext.png',
+      'https://raw.githubusercontent.com/o/r/HEAD/docs/full-preview.png',
+      'https://user-images.githubusercontent.com/1/conversation.png',
     ])
+    expect(extractReadmeImageCandidates(md, 'o', 'r', null).every(candidate => !candidate.src.includes('logo'))).toBe(true)
     // Monorepo subpath README: relative paths resolve against the subdir.
     expect(extractReadmeImages('![s](shot.png)', 'o', 'r', 'packages/plug-a')).toEqual([
       'https://raw.githubusercontent.com/o/r/HEAD/packages/plug-a/shot.png',
     ])
     expect(extractReadmeImages('no images here', 'o', 'r', null)).toEqual([])
+  })
+
+  it('dimension ranking rejects logos, portrait fragments, tiny images, and panoramic strips', () => {
+    const candidates: ScreenshotCandidate[] = [
+      { src: 'portrait', semanticScore: 150, order: 0, curated: false },
+      { src: 'logo', semanticScore: 140, order: 1, curated: false },
+      { src: 'strip', semanticScore: 130, order: 2, curated: false },
+      { src: 'full', semanticScore: 90, order: 3, curated: false },
+      { src: 'full-43', semanticScore: 70, order: 4, curated: false },
+      { src: 'tiny', semanticScore: 200, order: 5, curated: false },
+    ]
+    const ranked = rankThemeScreenshots(candidates, [
+      { src: 'portrait', width: 180, height: 240 },
+      { src: 'logo', width: 240, height: 240 },
+      { src: 'strip', width: 640, height: 150 },
+      { src: 'full', width: 427, height: 240 },
+      { src: 'full-43', width: 320, height: 240 },
+      { src: 'tiny', width: 260, height: 146 },
+    ])
+    expect(ranked).toEqual(['full', 'full-43'])
+    expect(previewDimensionScore(427, 240)).not.toBeNull()
+    expect(previewDimensionScore(240, 240)).toBeNull()
   })
 })
 

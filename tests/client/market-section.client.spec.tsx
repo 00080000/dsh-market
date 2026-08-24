@@ -8,7 +8,7 @@
 
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { MarketSection, resetMarketPortalHost } from '../../src/client/MarketSection.tsx'
+import { MarketSection, resetMarketPortalHost, resetThemePreviewCache } from '../../src/client/MarketSection.tsx'
 import { resetScreenshotsCache } from '../../src/client/market-data.ts'
 import { en } from '../../src/client/locales.ts'
 
@@ -91,7 +91,7 @@ function rankedNames(container: HTMLElement): Array<string | undefined> {
   return out
 }
 
-beforeEach(() => { stubFetch(); resetScreenshotsCache() })
+beforeEach(() => { stubFetch(); resetScreenshotsCache(); resetThemePreviewCache() })
 afterEach(() => {
   cleanup()
   vi.unstubAllGlobals()
@@ -1456,6 +1456,74 @@ describe('per-tab search boxes', () => {
     fireEvent.click(screen.getByRole('button', { name: `${en.themePreview} whale-skin` }))
     await waitFor(() => expect(document.querySelector('[class*="lightboxImg"]')).toBeTruthy())
     expect((document.querySelector('[class*="lightboxImg"]') as HTMLImageElement).src).toBe(shotA)
+  })
+
+  it('fills a missing theme cover from README and chooses the complete landscape screenshot', async () => {
+    const logo = 'https://raw.githubusercontent.com/carol/whale-skin/HEAD/assets/logo.png'
+    const fragment = 'https://raw.githubusercontent.com/carol/whale-skin/HEAD/assets/settings-screenshot.png'
+    const complete = 'https://raw.githubusercontent.com/carol/whale-skin/HEAD/docs/theme-preview.png'
+    const readmeUrl = 'https://raw.githubusercontent.com/carol/whale-skin/HEAD/README.md'
+    const readme = [
+      '# whale-skin',
+      '![project logo](assets/logo.png)',
+      '## Screenshots',
+      '![settings screenshot](assets/settings-screenshot.png)',
+      '![Full theme preview](docs/theme-preview.png)',
+    ].join('\n')
+    vi.stubGlobal('fetch', vi.fn((url: string) => {
+      const path = String(url).split('?')[0]
+      const payload =
+        path === '/dsh-market/registry' ? { source: 'live', registry: REGISTRY }
+        : path === '/dsh-market/installed' ? { profile: 'web', installed: {}, live: [], disabled: [] }
+        : path === '/dsh-market/status' ? { active: false, pnpm: true, boot: 'boot-1', installed: {} }
+        : path === '/dsh-market/updates' ? { updates: {} }
+        : null
+      if (payload !== null) return Promise.resolve(new Response(JSON.stringify(payload), { status: 200 }))
+      if (path === readmeUrl) return Promise.resolve(new Response(readme, { status: 200 }))
+      return Promise.reject(new Error(`unstubbed fetch: ${String(url)}`))
+    }))
+    class ProbeImage {
+      naturalWidth = 0
+      naturalHeight = 0
+      onload: (() => void) | null = null
+      onerror: (() => void) | null = null
+      referrerPolicy = ''
+      decoding = ''
+      set src(value: string) {
+        if (value.includes(encodeURIComponent(fragment.replace(/^https?:\/\//, '')))) {
+          this.naturalWidth = 150
+          this.naturalHeight = 240
+        } else if (value.includes(encodeURIComponent(complete.replace(/^https?:\/\//, '')))) {
+          this.naturalWidth = 427
+          this.naturalHeight = 240
+        } else if (value.includes(encodeURIComponent(logo.replace(/^https?:\/\//, '')))) {
+          this.naturalWidth = 240
+          this.naturalHeight = 240
+        }
+        queueMicrotask(() => this.onload?.())
+      }
+    }
+    vi.stubGlobal('Image', ProbeImage)
+    const THEME_SNAPSHOT = { preference: 'light', themes: [] as Array<{ id: string }> }
+    const { container } = render(<MarketSection {...{
+      ...props(),
+      themeStore: { subscribe: () => () => {}, getSnapshot: () => THEME_SNAPSHOT },
+    }} />)
+
+    await screen.findByText('dsh-loop')
+    expect((fetch as ReturnType<typeof vi.fn>).mock.calls.some(([url]) => url === readmeUrl)).toBe(false)
+    fireEvent.click(screen.getAllByRole('button', { name: en.tabThemes })[0])
+    const cover = await screen.findByRole('button', { name: `${en.themePreview} whale-skin` })
+    await waitFor(() => {
+      const image = cover.querySelector('img')
+      expect(image?.src).toContain(encodeURIComponent(complete.replace(/^https?:\/\//, '')))
+      expect(image?.src).not.toContain(encodeURIComponent(fragment.replace(/^https?:\/\//, '')))
+    })
+    expect(container.querySelectorAll('[class*="themeCoverEmpty"]').length).toBe(0)
+
+    fireEvent.click(cover)
+    await waitFor(() => expect(document.querySelector('[class*="lightboxImg"]')).toBeTruthy())
+    expect((document.querySelector('[class*="lightboxImg"]') as HTMLImageElement).src).toBe(complete)
   })
 
   it('lets the user enter and exit the themes full-screen gallery', async () => {

@@ -41,11 +41,11 @@ import type { OperationRecord } from './operations.ts'
 import { Diagnostics } from './Diagnostics.tsx'
 import {
   avatarColor, entryForDep, githubProxyInUse, githubUrl, groupSwitchState, humanOutput, isInstalled, looksTerminal, matchInstalledName, orderedCategories,
-  formatCount, pageItems, pluginName, pluginScreenshots, readSession, safeScreenshots, setGithubProxy, themePlugins as themePluginsOf, themeSwatch, TIME_RANGE_DAYS, visiblePlugins,
+  formatCount, pageItems, pluginName, pluginScreenshotCandidates, pluginScreenshots, rankThemeScreenshots, readSession, safeScreenshots, setGithubProxy, themePlugins as themePluginsOf, themeSwatch, TIME_RANGE_DAYS, visiblePlugins,
 } from './market-data.ts'
 import type {
 ActivationInfo, ActivationState, GistExportResult, InstalledMap, InstalledRepoHints, InstalledRepoIdentities, MarketStatus, Registry, RegistryPlugin,
-  SharedHostPackageDependencyFinding, SortDir, SortField, ThemeSnapshot, TimeRange, Translate, UpdateStatus,
+  ScreenshotCandidate, ScreenshotMeasurement, SharedHostPackageDependencyFinding, SortDir, SortField, ThemeSnapshot, TimeRange, Translate, UpdateStatus,
 } from './market-data.ts'
 
 function isHostDependencyFinding(value: unknown): value is SharedHostPackageDependencyFinding {
@@ -475,27 +475,117 @@ function CardShot({ plugin, onOpen }: { plugin: RegistryPlugin; onOpen: (shots: 
 }
 
 /**
+ * Read dimensions through the same low-resolution, no-upscale route used by
+ * card thumbnails. Large originals therefore stay off the wire, while a
+ * genuinely tiny image remains tiny and can be rejected by the scorer.
+ */
+function measureThemeCandidates(candidates: ScreenshotCandidate[]): Promise<ScreenshotMeasurement[]> {
+  if (typeof Image === 'undefined') return Promise.resolve([])
+  return Promise.all(candidates.map(candidate => new Promise<ScreenshotMeasurement | null>((resolve) => {
+    const probe = new Image()
+    let settled = false
+    const finish = (measurement: ScreenshotMeasurement | null) => {
+      if (settled) return
+      settled = true
+      window.clearTimeout(timer)
+      probe.onload = null
+      probe.onerror = null
+      resolve(measurement)
+    }
+    const timer = window.setTimeout(() => finish(null), 6_000)
+    probe.onload = () => finish({ src: candidate.src, width: probe.naturalWidth, height: probe.naturalHeight })
+    probe.onerror = () => finish(null)
+    probe.referrerPolicy = 'no-referrer'
+    probe.decoding = 'async'
+    probe.src = thumbUrl(candidate.src, 240)
+  }))).then(results => results.filter((result): result is ScreenshotMeasurement => result !== null))
+}
+
+const measuredThemePreviewTasks = new Map<string, Promise<string[]>>()
+const measuredThemePreviewResults = new Map<string, string[]>()
+
+/** Test hook and an explicit boundary for this page-lifetime media cache. */
+export function resetThemePreviewCache(): void {
+  measuredThemePreviewTasks.clear()
+  measuredThemePreviewResults.clear()
+}
+
+/** README fetch + geometry probes, shared across search/page remounts. */
+function measuredThemePreview(plugin: RegistryPlugin): Promise<string[]> {
+  const cached = measuredThemePreviewTasks.get(plugin.url)
+  if (cached !== undefined) return cached
+  const task = pluginScreenshotCandidates(plugin).then(async (candidates) => {
+    const measurements = await measureThemeCandidates(candidates)
+    const ranked = rankThemeScreenshots(candidates, measurements)
+    measuredThemePreviewResults.set(plugin.url, ranked)
+    return ranked
+  }).catch(() => {
+    measuredThemePreviewResults.set(plugin.url, [])
+    return []
+  })
+  measuredThemePreviewTasks.set(plugin.url, task)
+  return task
+}
+
+/**
  * Themes are chosen visually, so their catalog card gets one stable, large
  * preview instead of the generic plugin card's horizontal thumbnail strip.
- * The full curated set remains available in the existing lightbox.
+ * Curated screenshots keep their declared order. A missing curated set is
+ * filled lazily from README only when the card nears the viewport, then
+ * ranked by both README semantics and measured image geometry.
  */
 function ThemeCover({ plugin, onOpen, t }: {
   plugin: RegistryPlugin
   onOpen: (shots: string[], index: number) => void
   t: Translate
 }) {
-  const shots = safeScreenshots(plugin.screenshots)
+  const curated = safeScreenshots(plugin.screenshots)
+  const curatedKey = curated.join('\n')
+  const cachedFallback = curated.length === 0 ? measuredThemePreviewResults.get(plugin.url) : undefined
+  const [fallback, setFallback] = useState<{ loading: boolean; shots: string[] }>({
+    loading: curated.length === 0 && cachedFallback === undefined,
+    shots: cachedFallback ?? [],
+  })
   const [broken, setBroken] = useState<string[]>([])
-  const visible = shots.filter(src => !broken.includes(src))
   const [setCoverRef, near] = useNearViewport<HTMLButtonElement>()
+  useEffect(() => {
+    setBroken([])
+    if (curated.length > 0) {
+      setFallback({ loading: false, shots: [] })
+      return
+    }
+    const cached = measuredThemePreviewResults.get(plugin.url)
+    if (cached !== undefined) {
+      setFallback({ loading: false, shots: cached })
+      return
+    }
+    setFallback({ loading: true, shots: [] })
+    if (!near) return
+    let live = true
+    void measuredThemePreview(plugin).then(shots => { if (live) setFallback({ loading: false, shots }) })
+    return () => { live = false }
+  // `plugin.url` identifies a card; registry objects are deliberately not a
+  // dependency because polling may recreate one without changing its media.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [curatedKey, near, plugin.url])
+  const shots = curated.length > 0 ? curated : fallback.shots
+  const visible = shots.filter(src => !broken.includes(src))
   const name = pluginName(plugin.name)
 
   if (visible.length === 0) {
     return (
-      <div className={`${css.themeCover} ${css.themeCoverEmpty}`} aria-label={`${name}: ${t('themePreviewMissing')}`}>
-        <IconSparkle16 size={20} />
-        <span>{t('themePreviewMissing')}</span>
-      </div>
+      <button
+        ref={setCoverRef}
+        type="button"
+        className={`${css.themeCover} ${css.themeCoverEmpty}`}
+        aria-label={`${name}: ${fallback.loading ? t('themePreviewLoading') : t('themePreviewMissing')}`}
+        disabled
+      >
+        {fallback.loading
+          ? <span className={css.spin}><IconLoadingOutline16 size={20} /></span>
+          : <IconSparkle16 size={20} />}
+        <span>{fallback.loading ? t('themePreviewLoading') : t('themePreviewMissing')}</span>
+      </button>
     )
   }
 
