@@ -1335,15 +1335,20 @@ export function mountMarketRoutes(
               // the write (subject to the maxSnapshots quota), so the change is
               // recoverable from the snapshots tab; the in-process backup above
               // stays as the immediate rollback net (double protection).
-              const snapshot = createProfileSnapshot(activeProfileDir, maxSnapshots)
+              const captured = createProfileSnapshot(activeProfileDir, maxSnapshots)
+              if (!captured.ok) {
+                sendJson(response, 400, { error: captured.error })
+                return
+              }
+              const snapshot = captured.snapshot
               const applied = applyBundleOrder(activeProfileDir, order)
               if (!applied.ok) {
                 sendJson(response, 400, { error: applied.error })
                 return
               }
               invalidateUpdates()
-              logEvent('info', 'bundle-order', 'applied new community order' + (snapshot !== null ?  (snapshot ) : ''))
-              sendJson(response, 200, { ok: true, bundles: applied.bundles, snapshot: snapshot?.id ?? null })
+              logEvent('info', 'bundle-order', `applied new community order (snapshot ${snapshot.id})`)
+              sendJson(response, 200, { ok: true, bundles: applied.bundles, snapshot: snapshot.id })
           })
         } catch (error) {
           // The write threw mid-flight: restore the pre-write profile so a
@@ -1446,13 +1451,9 @@ export function mountMarketRoutes(
           }
           try {
             await withMutationLock(response, 'write', async () => {
-              const snapshot = createProfileSnapshot(activeProfileDir, maxSnapshots)
-              sendJson(response, snapshot !== null ? 200 : 400, {
-                ok: snapshot !== null,
-                ...(snapshot !== null
-                  ? { snapshot }
-                  : { error: 'profile package.json is missing or unparseable / profile 的 package.json 缺失或无法解析' }),
-              })
+              const captured = createProfileSnapshot(activeProfileDir, maxSnapshots)
+              if (captured.ok) sendJson(response, 200, { ok: true, snapshot: captured.snapshot })
+              else sendJson(response, 400, captured)
             })
           } catch (error) {
             sendJson(response, 500, { error: error instanceof Error ? error.message : String(error) })
