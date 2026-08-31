@@ -328,6 +328,17 @@ export function mountMarketRoutes(
     Object.assign(groups, fresh.groups)
     groupOrder.length = 0
     groupOrder.push(...fresh.groupOrder)
+    // The three above are aliased objects other closures hold, so they are
+    // mutated in place. These three are read off `marketState` itself and
+    // were not being refreshed at all — which is #435: a note written
+    // through this route reached disk, but `marketState.notes` still held
+    // the empty object from boot, and the next write from that object put
+    // the empty one back. The note survived a page reload (disk was right)
+    // and vanished later, which is exactly what the reporter described.
+    marketState.notes = fresh.notes
+    marketState.channel = fresh.channel
+    marketState.region = fresh.region
+    marketState.regionAuto = fresh.regionAuto
   }
 
   // Client-only packages (dsh.client without dsh.bundle) are invisible to the
