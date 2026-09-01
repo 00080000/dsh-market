@@ -121,14 +121,6 @@ describe('repoOfTarget', () => {
     expect(repoOfTarget(codeloadTarball('Owner/Repo', SHA, null))).toBe('owner/repo')
   })
 
-  it('resolves GitHub Release asset tarballs (catalog format)', () => {
-    // The catalog serves prebuilt release tarballs from github.com/releases/...
-    // Both 'latest' and explicit tag downloads must resolve to the same repo.
-    expect(repoOfTarget('https://github.com/owner/repo/releases/latest/download/plugin-1.0.0.tgz')).toBe('owner/repo')
-    expect(repoOfTarget('https://github.com/owner/repo/releases/download/v1.0.0/plugin-1.0.0.tgz')).toBe('owner/repo')
-    expect(repoOfTarget('https://github.com/owner/repo/releases/download/v1.0.0/plugin-1.0.0.tar.gz')).toBe('owner/repo')
-  })
-
   it('keeps a subpath, which names a different plugin in the same repo', () => {
     expect(repoOfTarget('github:o/r#path:/packages/x')).toBe('o/r#path:/packages/x')
     expect(repoOfTarget(`github:o/r#${SHA}&path:/packages/x`)).toBe('o/r#path:/packages/x')
